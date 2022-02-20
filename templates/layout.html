@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>{{title|safe}}</title>
+  <meta name="referrer" content="origin-when-cross-origin" />
+  <link rel="shortcut icon" href="{{url_for('static', filename=view.icon_folder+'favicon.ico')}}" />
+  <link rel="apple-touch-icon" href="{{url_for('static', filename=view.icon_folder+'apple-touch-icon.png')}}" />
+  <link rel="apple-touch-icon-precomposed" href="{{url_for('static', filename=view.icon_folder+'apple-touch-icon-precomposed.png')}}" />
+  <meta name="theme-color" content="{{view.theme_color|safe}}" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no" />
+  <link rel="stylesheet" href="https://bootswatch.com/4/{{view.theme|safe}}/bootstrap.min.css" crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" />
+  <style type="text/css">.selectee:hover{background-color: rgba(128,128,128,0.25);}</style>
+{% block scripts %}{% endblock %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+<script src="{{url_for('static', filename='bootstrap.min.js')}}" type="text/javascript"></script>
+<script>
+function setCookie(name, value, days=3650) {
+  var expires = "";
+  if (days) {
+      var date = new Date();
+      date.setTime(date.getTime() + (days*24*60*60*1000));
+      expires = "; expires=" + date.toUTCString();
+  }
+  document.cookie = name + "=" + (value || "")  + expires + "; path=/";
+}
+</script>
+</head>
+<body>
+  <div id="loadOverlay" style="background-color:{{view.theme_color|safe}}; position:absolute; top:0px; left:0px; width:100%; height:100%; z-index:2000;"></div>
+  <div id="mainOverlay" style="display:none;">
+  {% include 'nav.html' %}
+  {% block main %}{% endblock %}
+  {% include 'footer.html' %}
+  </div>
+</body>
+</html>

@@ -1,0 +1,322 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+<div class="container-fluid m-0 px-2" style="max-width:96vw">
+  <div class="row justify-content-center my-2">
+    <div class="col" style="width:420px;max-width:500px;min-height:97vh;">
+      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
+        <p class="pr-2 m-0">Mode</p>
+        <div class="btn-group btn-group-toggle">
+          <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
+          <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
+          <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
+        </div>
+      </div>
+      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
+        <p class="pr-2 m-0">Update</p>
+        <div class="btn-group btn-group-toggle">
+          <button id="update_frequency_1" class="btn btn-secondary" onclick="update_frequency(1);">Fast</button>
+          <button id="update_frequency_2" class="btn btn-secondary" onclick="update_frequency(2);">Medium</button>
+          <button id="update_frequency_3" class="btn btn-secondary" onclick="update_frequency(3);">Slow</button>
+          <button id="update_frequency_0" class="btn btn-secondary" onclick="update_frequency(0);">Never</button>
+        </div>
+      </div>
+      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
+        <span class="pr-2 m-0">Filter scores</span>
+        <div class="btn-group btn-group-toggle">
+          <button id="filter_score_0" class="btn btn-primary" type="button" onclick="filter_score(0);">All</button>
+          <button id="filter_score_20" class="btn btn-secondary" type="button" onclick="filter_score(20);">20+</button>
+          <button id="filter_score_40" class="btn btn-warning" type="button" onclick="filter_score(40);">40+</button>
+          <button id="filter_score_60" class="btn btn-danger" type="button" onclick="filter_score(60);">60+</button>
+        </div>
+      </div>
+      <div id="tournament_settings" class="mb-1">
+        <div class="card border-0">
+          <div class="d-flex flex-row justify-content-between align-items-baseline p-0" id="set_tournaments" style="box-shadow: none;">
+            <p class="pr-2 m-0">Chats</p>
+            <div class="btn-group" role="group">
+              <button id="tab_tournaments" class="btn btn-secondary px-2" type="button" data-toggle="collapse" data-target="#collapse_tournaments" aria-expanded="false" aria-controls="collapse_tournaments" onclick="check_collapse('tournaments');">Monitored</button>
+              <button id="tab_started" class="btn btn-secondary px-2" type="button" data-toggle="collapse" data-target="#collapse_started" aria-expanded="false" aria-controls="collapse_started" onclick="check_collapse('started');">Ongoing</button>
+              <button id="tab_created" class="btn btn-secondary px-2" type="button" data-toggle="collapse" data-target="#collapse_created" aria-expanded="false" aria-controls="collapse_created" onclick="check_collapse('created');">Created</button>
+              <button id="tab_finished" class="btn btn-secondary px-2" type="button" data-toggle="collapse" data-target="#collapse_finished" aria-expanded="false" aria-controls="collapse_finished" onclick="check_collapse('finished');">Finished</button>
+            </div>
+          </div>
+          <div style="max-height:50vh;overflow-y:auto;">
+            <div id="collapse_tournaments" class="collapse" aria-labelledby="set_tournaments" data-parent="#tournament_settings">
+              <div class="card-body px-2">
+                <div class="d-flex flex-row">
+                  <label for="tournament_link" class="m-0 mr-1">Link:</label>
+                  <input id="tournament_link" type="text" class="flex-grow-1 py-0 mr-1">
+                  <button class="btn btn-primary flex-grow-0 py-0" onclick="add_tournament()">Add</button>
+                </div>
+                <fieldset id="tournaments_tournaments">
+                </fieldset>
+              </div>
+            </div>
+            <div id="collapse_started" class="collapse" aria-labelledby="set_tournaments" data-parent="#tournament_settings">
+              <div class="card-body px-2">
+                <fieldset id="tournaments_started">
+                </fieldset>
+              </div>
+            </div>
+            <div id="collapse_created" class="collapse" aria-labelledby="set_tournaments" data-parent="#tournament_settings">
+              <div class="card-body px-2">
+                <fieldset id="tournaments_created">
+                </fieldset>
+              </div>
+            </div>
+            <div id="collapse_finished" class="collapse" aria-labelledby="set_tournaments" data-parent="#tournament_settings">
+              <div class="card-body px-2">
+                <fieldset id="tournaments_finished">
+                </fieldset>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex row align-content-start flex-wrap">
+        <div id="selected_messages" class="col-md-12 my-3">
+        </div>
+      </div>
+    </div>
+    <div id="chat_downloading" class="col d-flex justify-content-center mt-5">
+      <div class="spinner-border spinner-blue-only text-secondary" role="status"></div>
+      <span class="ml-3 text-secondary">Downloading chats&hellip;</span>
+    </div>
+    <div id="clean_messages" class="col d-none justify-content-center mt-5">
+      <h5 class="text-success">Everything is clean as of <span id="chat_clean">now</span> UTC.<br>Thank you for your great work! <i class="far fa-heart"></i></h5>
+    </div>
+    <div id="dubious_messages" class="col">
+      <h6 class="text-center mb-1">Dubious messages</h6>
+      <div id="chat_reports" class="d-flex align-content-start flex-wrap"></div>
+    </div>
+    <div id="multiline_messages" class="col">
+      <h6 class="text-center mb-1">Multi-line messages</h6>
+      <div id="multiline_chat_reports" class="d-flex align-content-start flex-wrap">
+      </div>
+    </div>
+  </div>
+</div>
+{#<div class="container-fluid px-0">
+  <iframe id="embed_frame" class="container-fluid px-0" style="min-width:60vw; min-height:96vh;" src="https://lichess.org/mod/public-chat" allowtransparency="true" frameborder="0"></iframe>
+</div>#}
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js" type="text/javascript"></script>
+  <script>
+  $(document).ready(function() {
+    update_mode({{view.mode|safe}}, false);
+    if (window.matchMedia)
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+        if ($('#mode_0').is('.active'))
+          update_mode(event.matches ? -1 : -2);
+      });
+    update_frequency({{update_frequency}}, false);
+    filter_score(0, false);
+    $("#tournament_settings").css("display","none");
+    $("#dubious_messages").css("display","none");
+    $("#multiline_messages").css("display","none");
+    $("#loadOverlay").css("display","none");
+    $("#mainOverlay").css("display","block");
+    refresh();
+  });
+  var state_tournaments = 0;
+  var state_reports = 0;
+  var last_update = new Date().getTime();
+  function is_clickable() {
+    return (new Date().getTime()) >= last_update + 1000;
+  }
+  const sleeping = ms => new Promise(res => setTimeout(res, ms));
+  async function refresh(to_wait=false) {
+    if (to_wait)
+      await sleeping(1000);
+    if ($('#update_frequency_0').is('.active')) {
+      console.log('chat:refresh wait');
+      refresh(true);
+    }
+    else {
+      await $.ajax({url: `/chat/update/`, type: "post"})
+        .done(function(data, textStatus, jqXHR) {
+          console.log('update:done');
+          $.ajax({url: `/chat/process/`, type: "post"})
+            .done(function(data_chats, textStatus, jqXHR) {
+              console.log('refresh:done');
+              $("#chat_downloading").removeClass("d-flex").addClass("d-none");
+              is_new = update_data(data_chats);
+              if (is_new)
+                last_update = new Date().getTime();
+              refresh(!is_new);
+            });
+          $("#tournament_settings").css("display","block");
+          update_tournament_list(data);
+        });
+    }
+  }
+  {#String.prototype.format = function() {
+     var content = this;
+     for (var i=0; i < arguments.length; i++) {
+          var replacement = '{' + i + '}';
+          content = content.replace(replacement, arguments[i]);
+     }
+     return content;
+  };
+  #}function update_data(data_chats) {
+    if (data_chats['state'] == state_reports)
+      return false;
+    state_reports = data_chats['state'];
+    if (data_chats["reports"] || data_chats["multiline-reports"]) {
+      $("#dubious_messages").css("display","block");
+      $("#multiline_messages").css("display","block");
+      $("#clean_messages").removeClass("d-flex").addClass("d-none");
+    } else {
+      $("#dubious_messages").css("display","none");
+      $("#multiline_messages").css("display","none");
+      $("#clean_messages").removeClass("d-none").addClass("d-flex");
+    }
+    $('#chat_reports').html(data_chats["reports"]);
+    $('#multiline_chat_reports').html(data_chats["multiline-reports"]);
+    $('#chat_clean').html(data_chats["time"]);
+    if (!$('#filter_score_0').is('.active')) {
+      const filter_values = [20, 40, 60];
+      for (const i of filter_values) {
+        if ($(`#filter_score_${i}`).is('.active'))
+          filter_score(i);
+      }
+    }
+    $('#selected_messages').html(data_chats["selected-messages"]);
+    return true;
+  }
+  function update_tournament_list(data) {
+    if (data['state'] == state_tournaments)
+      return;
+    state_tournaments = data['state'];
+    $('#tournaments_tournaments').html(data['tournaments']);
+    $('#tournaments_created').html(data['created']);
+    $('#tournaments_started').html(data['started']);
+    $('#tournaments_finished').html(data['finished']);
+  }
+  function set_ok(msg_id) {
+    if (!is_clickable()) return;
+    if (!msg_id.startsWith('C'))
+      $(`#msg${msg_id}`).css("display","none");
+    $.ajax({url: `/chat/set_msg_ok/${msg_id}`, type: "post"})
+        .done(function(data_chats, textStatus, jqXHR) {
+          update_data(data_chats);
+        });
+    /*if (msg_id.startsWith('C'))
+      $.ajax({url: `/chat/select_message/${msg_id}`, type: "post"})
+        .done(function(data, textStatus, jqXHR){
+          $('#selected_messages').html(data);
+        });*/
+  }
+  function timeout(msg_id, reason=0) {
+    if (reason == 0 && !is_clickable()) return;
+    if (!msg_id.startsWith('C') && !msg_id.startsWith('B'))
+      $(`#msg${msg_id}`).css("display","none");
+    $.ajax({url: `/chat/timeout/${msg_id}/${reason}`, type: "post"})
+      .done(function(data_chats, textStatus, jqXHR) {
+        update_data(data_chats);
+      });
+  }
+  function timeout_multi(msg_id, reason=0) {
+    if (reason == 0 && !is_clickable()) return;
+    $.ajax({url: `/chat/timeout_multi/${msg_id}/${reason}`, type: "post"})
+      .done(function(data_chats, textStatus, jqXHR) {
+        update_data(data_chats);
+      });
+  }
+  function set_multi_ok(msg_id) {
+    if (!is_clickable()) return;
+    $(`#mmsg${msg_id}`).css("display","none");
+    $.ajax({url: `/chat/set_multi_msg_ok/${msg_id}`, type: "post"});
+  }
+  function update_mode(val, to_request=true) {
+    if (val == 0)
+      val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
+    for (var i = 0; i < 3; i++) {
+      if (val == i || (val < 0 && i == 0))
+        $(`#mode_${i}`).addClass("active");
+      else
+        $(`#mode_${i}`).removeClass("active");
+    }
+    if (to_request && val != "{{view.mode}}") {
+      setCookie('theme_mode', val);
+      $.ajax({url: `/set_mode/${val}`, type: "post"});
+      location.reload();
+    }
+  }
+  function update_frequency(val, to_request=true) {
+    for (var i = 0; i < 4; i++) {
+      if (val == i)
+        $(`#update_frequency_${i}`).addClass("active");
+      else
+        $(`#update_frequency_${i}`).removeClass("active");
+    }
+    if (to_request)
+      $.ajax({url: `/chat/set_update/${val}`, type: "post"});
+  }
+  function select_message(event, msg_id) {
+    event = event || window.event;
+    if (event && (event.target.tagName == "BUTTON" || event.target.tagName == "A") && msg_id != "--" && !msg_id.startsWith('T'))
+      return;
+    $.ajax({url: `/chat/select_message/${msg_id}`, type: "post"})
+      .done(function(data, textStatus, jqXHR) {
+        $('#selected_messages').html(data);
+      });
+  }
+  function prevent_click(event) {
+    event = event || window.event;
+    event.cancelBubble = true;
+    if (event.stopPropagation)
+      event.stopPropagation();
+  }
+  function filter_score(val, to_filter=true) {
+    const filter_values = [0, 20, 40, 60];
+    for (const i of filter_values) {
+      if (val == i)
+        $(`#filter_score_${i}`).addClass("active");
+      else
+        $(`#filter_score_${i}`).removeClass("active");
+    }
+    if (to_filter){
+      $("div").filter(function() {
+        return parseInt($(this).attr("data-mscore")) < val;
+      }).css("display","none");
+      $("div").filter(function() {
+        return parseInt($(this).attr("data-mscore")) >= val;
+      }).css("display","block");
+    }
+  }
+  function check_collapse(val) {
+    const collapse = ["tournaments", "started", "created", "finished"];
+    for (const i of collapse) {
+      if (i == val && !$(`#collapse_${val}`).hasClass("show"))
+        $(`#tab_${i}`).addClass("active");
+      else
+        $(`#tab_${i}`).removeClass("active");
+    }
+  }
+  function set_tournament(tourn_id) {
+    checked = $(`#t_${tourn_id}`).is(':checked') ? 1 : 0;
+    $.ajax({url: `/chat/set_tournament/${tourn_id}/${checked}`, type: "post"});
+  }
+  function set_tournament_group(group) {
+    checked = $(`#t_${group}`).is(':checked') ? 1 : 0;
+    $.ajax({url: `/chat/set_tournament_group/${group}/${checked}`, type: "post"})
+      .done(function(data, textStatus, jqXHR) {
+        update_tournament_list(data);
+      });
+  }
+  function add_tournament() {
+    $.ajax({
+      url: "/chat/add_tournament",
+      type: "post",
+      data: {page: $("#tournament_link")[0].value}})
+        .done(function(data, textStatus, jqXHR) {
+          $("#tournament_link")[0].value = "";
+          update_tournament_list(data);
+        });
+  }
+  </script>
+{% endblock %}

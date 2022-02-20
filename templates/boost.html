@@ -1,0 +1,142 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+<div class="container-fluid m-0">
+  <div class="justify-content-around">
+    <div class="d-flex d-row justify-content-between">
+      <div class="column mr-3" style="min-width:370px;">
+        <div class="d-flex flex-row mt-3">
+          <label for="userlink" class="m-0 mr-1">User:</label>
+          <input id="userlink" type="text" class="flex-grow-1 py-0 mr-1">
+          <button class="btn btn-primary flex-grow-0 py-0" onclick="go_username()">Go</button>
+        </div>
+        <div id="user_downloading" class="d-none justify-content-center align-items-center mt-2 mb-3">
+          <div class="spinner-border spinner-blue-only text-secondary" role="status"></div>
+          <span id="downloading_text" class="ml-3 text-secondary">Downloading user data&hellip;</span>
+        </div>
+        <div id="boost_user">
+        </div>
+        <div class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2">
+          <p class="pr-2 m-0">Mode</p>
+          <div class="btn-group btn-group-toggle">
+            <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
+            <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
+            <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
+          </div>
+        </div>
+      </div>
+      <div class="container-fluid px-0">
+        <iframe id="embed_frame" class="container-fluid px-0" style="min-width:60vw; min-height:96vh;" src="https://lichess.org/report/list/boost" allowtransparency="true" frameborder="0"></iframe>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+  <script>
+  $(document).ready(function() {
+    update_mode({{view.mode|safe}}, false);
+    if (window.matchMedia)
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+        if ($('#mode_0').is('.active'))
+          update_mode(event.matches ? -1 : -2);
+      });
+    $("#loadOverlay").css("display","none");
+    $("#mainOverlay").css("display","block");
+    $("#userlink").on('change input', username_changed);
+    $("#userlink").on('keypress', username_entered);
+    {% if boost_user %} set_user('{{boost_user}}'); {% endif %}
+  });
+  function username_changed(e) {
+    check_username(e.target.value);
+  }
+  function username_entered(e) {
+    if (!e) e = window.event;
+    var keyCode = e.code || e.key;
+    if (keyCode == 'Enter') {
+      go_username();
+    }
+  }
+  function check_username(data) {
+    if (data.startsWith("https://lichess.org/@/")) {
+      var i2 = data.indexOf('?');
+      var username = (i2 < 0) ? data : data.substr(0, i2);
+      var i1 = username.lastIndexOf('/');
+      username = username.substr(i1 + 1).trim();
+      if (username)
+        set_user(username)
+    }
+  }
+  function go_username() {
+    set_user($("#userlink")[0].value);
+    $("#userlink")[0].value = "";
+  }
+  var current_user = "";
+  function set_user(username) {
+    current_user = username;
+    if (!username)
+      return;
+    $("#user_downloading").removeClass("d-none").addClass("d-flex");
+    $("#downloading_text").html(`Downloading ${username}&hellip;`);
+    $.ajax({url: `/boost/${username}`, type: "post"})
+      .done(function(data, textStatus, jqXHR) {
+        $("#user_downloading").removeClass("d-flex").addClass("d-none");
+        $("#downloading_text").html("Downloading user data&hellip;");
+        $('#boost_user').html(data);
+        $('#embed_frame')[0].src = `https://lichess.org/@/${username}?mod`;
+        $.ajax({url: `/boost/${username}/tournaments/`})
+          .done(function(data, textStatus, jqXHR) {
+            $("#tournaments_downloading").css("display","none");
+            $("#tournaments").css("display","block");
+            $('#tournaments').html(data);
+          });
+      });
+  }
+  function copyTextToClipboard(text) {
+    var textArea = document.createElement("textarea");
+    textArea.style.position = 'fixed';
+    textArea.style.top = 0;
+    textArea.style.left = 0;
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = 0;
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      var successful = document.execCommand('copy');
+    } catch (err) {
+      console.log('Oops, unable to copy');
+    }
+    document.body.removeChild(textArea);
+  }
+  function update_mode(val, to_request=true) {
+    if (val == 0)
+      val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
+    for (var i = 0; i < 3; i++) {
+      if (val == i || (val < 0 && i == 0))
+        $(`#mode_${i}`).addClass("active");
+      else
+        $(`#mode_${i}`).removeClass("active");
+    }
+    if (to_request && val != "{{view.mode}}") {
+      setCookie('theme_mode', val);
+      $.ajax({url: `/set_mode/${val}`, type: "post"});
+      if (current_user) {
+        var form = $(`<form action="/boost" method="post"><input type="hidden" name="user" value="${current_user}" /></form>`);
+        $('body').append(form);
+        form.submit();
+      } else {
+        location.reload();
+      }
+    }
+  }
+  </script>
+{% endblock %}

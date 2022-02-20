@@ -1,0 +1,8 @@
+app.spec
+.idea/
+__pycache__/
+_install_/
+build/
+dist/
+log/
+venv/
