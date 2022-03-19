@@ -189,7 +189,8 @@ class Message:
                 else f"{abs(int(round(ds / 60)))}m"
             str_time = f"&minus;{dt} " if ds < 0 else f'+{dt} ' if ds > 0 else "== "
             str_time = f'<span class="user-select-none">{str_time}</span>'
-        score_theme = ' text-danger' if self.score > 50 else ' text-warning' if self.score > 10 else ""
+        score_theme = "" if self.score is None else ' text-danger' if self.score > 50 \
+            else ' text-warning' if self.score > 10 else ""
         score = f'<span class="user-select-none{score_theme}">{self.score}</span>' if self.score > 0 else ""
         username = f"<b><u>{self.username}</u></b>" if highlight_user is True or highlight_user == self.username \
             else self.username
@@ -347,7 +348,7 @@ class Tournament:
         if self.is_finished(now_utc):
             finishes_at = self.finish_time_estimated()
             if finishes_at is not None:
-                return monitored + 99999 + max(0, deltaseconds(finishes_at, now_utc))
+                return monitored + 99999 + min(0, deltaseconds(finishes_at, now_utc))
             return monitored + 99999 + deltaseconds(self.startsAt, now_utc)
         return monitored + deltaseconds(now_utc, self.startsAt)
 
