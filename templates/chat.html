@@ -3,8 +3,8 @@
 {% block main %}
 <div class="container-fluid m-0 px-2" style="max-width:96vw">
   <div class="row justify-content-center my-2">
-    <div class="col" style="width:420px;max-width:500px;min-height:97vh;">
-      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
+    <div class="col" style="width:420px;min-height:97vh;">
+      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1" style="max-width:500px;">
         <p class="pr-2 m-0">Mode</p>
         <div class="btn-group btn-group-toggle">
           <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
@@ -12,7 +12,7 @@
           <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
         </div>
       </div>
-      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
+      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1" style="max-width:500px;">
         <p class="pr-2 m-0">Update</p>
         <div class="btn-group btn-group-toggle">
           <button id="update_frequency_1" class="btn btn-secondary" onclick="update_frequency(1);">Fast</button>
@@ -21,16 +21,16 @@
           <button id="update_frequency_0" class="btn btn-secondary" onclick="update_frequency(0);">Never</button>
         </div>
       </div>
-      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
+      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1" style="max-width:500px;">
         <span class="pr-2 m-0">Filter scores</span>
         <div class="btn-group btn-group-toggle">
-          <button id="filter_score_0" class="btn btn-primary" type="button" onclick="filter_score(0);">All</button>
+          <button id="filter_score_0" class="btn btn-secondary" type="button" onclick="filter_score(0);">All</button>
           <button id="filter_score_20" class="btn btn-secondary" type="button" onclick="filter_score(20);">20+</button>
           <button id="filter_score_40" class="btn btn-warning" type="button" onclick="filter_score(40);">40+</button>
           <button id="filter_score_60" class="btn btn-danger" type="button" onclick="filter_score(60);">60+</button>
         </div>
       </div>
-      <div id="tournament_settings" class="mb-1">
+      <div id="tournament_settings" class="mb-1" style="max-width:500px;">
         <div class="card border-0">
           <div class="d-flex flex-row justify-content-between align-items-baseline p-0" id="set_tournaments" style="box-shadow: none;">
             <p class="pr-2 m-0">Chats</p>
@@ -74,8 +74,42 @@
           </div>
         </div>
       </div>
-      <div class="d-flex row align-content-start flex-wrap">
-        <div id="selected_messages" class="col-md-12 my-3">
+      <div class="d-flex flex-row align-content-start flex-wrap mt-3">
+        <div class="col align-content-start px-0 mr-2 mb-3" style="min-width:350px;max-width:500px;">
+          <div id="selection_header" class="d-none user-select-none justify-content-between py-1" style="background-color:rgba(128,128,128,0.2);">
+            <span>
+              <button id="btn_filter_msgs" class="btn btn-outline-success align-baseline py-0 px-1 mr-1" type="button" onclick="filter_toggle()">Process</button>
+              <b>Messages</b> in <span id="selected_tournament">Tournament</span>:
+            </span>
+            <button class="btn btn-primary align-baseline flex-grow-0 py-0" onclick="select_message(event,'--')">Close</button>
+          </div>
+          <div id="selected_messages" class="d-none" style="max-height:65vh;overflow-y:auto;">
+          </div>
+          <div id="filtered_section" class="d-none">
+            <span id="notes_title" class="mt-2">Messages of <b id="selected_user">the player of interest</b>:</span>
+            <div id="filtered_messages" class="mb-3" style="max-height:60vh;overflow-y:auto;">
+            </div>
+            <textarea id="notes" class="form-control mt-1" rows="3" oninput='update_notes()' readonly></textarea>
+            <div id="btn_notes" class="d-none user-select-none justify-content-between px-1 py-1">
+              <span id="notes_username" class="align-self-center mr-2"></span>
+              <button class="btn btn-secondary nav-item dropdown-toggle align-baseline flex-grow-1 mr-1 px-1 py-1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">Ban</button>
+              <span class="dropdown-menu" style="">
+                <button class="dropdown-item btn-primary" onclick="custom_timeout(1);">Public Shaming</button>
+                <button class="dropdown-item btn-primary" onclick="custom_timeout(2);">Offensive Language</button>
+                <button class="dropdown-item btn-primary" onclick="custom_timeout(3);">Spamming</button>
+                <button class="dropdown-item btn-primary" onclick="custom_timeout(4);">Inappropriate Behaviour</button>
+              </span>
+              <button class="btn btn-warning align-baseline flex-grow-1 px-1 py-1 mr-1" onclick="send_note()">Add note</button>
+              <button class="btn btn-secondary align-baseline flex-grow-1 px-1 py-1 mr-1" onclick="copyTextToClipboard($('#notes').val())">Copy</button>
+              <button class="btn btn-secondary align-baseline flex-grow-1 px-1 py-1" onclick="clear_notes()">Clear</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div id="mod-notes" class="col d-none flex-wrap align-content-start px-0 mr-2" style="min-width:350px;max-width:500px;">
+          </div>
+          <div id="mod-log" class="col d-none align-content-start px-0 mr-2 mb-2" style="min-width:350px;max-width:500px;">
+          </div>
         </div>
       </div>
     </div>
@@ -119,8 +153,11 @@
     $("#multiline_messages").css("display","none");
     $("#loadOverlay").css("display","none");
     $("#mainOverlay").css("display","block");
+    clear_notes();
     refresh();
   });
+  var notes_user = "";
+  var notes_msgs = [];
   var state_tournaments = 0;
   var state_reports = 0;
   var last_update = new Date().getTime();
@@ -184,7 +221,8 @@
           filter_score(i);
       }
     }
-    $('#selected_messages').html(data_chats["selected-messages"]);
+    set_selection(data_chats);
+    filter_messages();
     return true;
   }
   function update_tournament_list(data) {
@@ -198,21 +236,16 @@
   }
   function set_ok(msg_id) {
     if (!is_clickable()) return;
-    if (!msg_id.startsWith('C'))
+    if (!msg_id.startsWith('C') && !msg_id.startsWith('F'))
       $(`#msg${msg_id}`).css("display","none");
     $.ajax({url: `/chat/set_msg_ok/${msg_id}`, type: "post"})
         .done(function(data_chats, textStatus, jqXHR) {
           update_data(data_chats);
         });
-    /*if (msg_id.startsWith('C'))
-      $.ajax({url: `/chat/select_message/${msg_id}`, type: "post"})
-        .done(function(data, textStatus, jqXHR){
-          $('#selected_messages').html(data);
-        });*/
   }
   function timeout(msg_id, reason=0) {
     if (reason == 0 && !is_clickable()) return;
-    if (!msg_id.startsWith('C') && !msg_id.startsWith('B'))
+    if (!msg_id.startsWith('C') && !msg_id.startsWith('F') && !msg_id.startsWith('B'))
       $(`#msg${msg_id}`).css("display","none");
     $.ajax({url: `/chat/timeout/${msg_id}/${reason}`, type: "post"})
       .done(function(data_chats, textStatus, jqXHR) {
@@ -256,14 +289,79 @@
     if (to_request)
       $.ajax({url: `/chat/set_update/${val}`, type: "post"});
   }
+  function set_selection(data_chats) {
+    $('#selected_messages').html(data_chats["selected-messages"]);
+    $('#filtered_messages').html(data_chats["filtered-messages"]);
+    $('#selected_tournament').html(data_chats["selected-tournament"]);
+    var username = data_chats["selected-user"];
+    update_user_button(username);
+    user_link = username ? `<a class="text-success" href="https://lichess.org/@/${username.toLowerCase()}?mod" target="_blank">${username}</a>` : "the user";
+    $('#selected_user').html(user_link);
+    if (data_chats["selected-tournament"]) {
+      $('#selection_header').removeClass("d-none").addClass("d-flex");
+    } else {
+      $('#selection_header').removeClass("d-flex").addClass("d-none");
+    }
+    update_mod_notes(data_chats);
+    update_mod_log(data_chats);
+  }
+  function update_mod_notes(data) {
+    $('#mod-notes').html(data["mod-notes"]);
+    if (data["mod-notes"])
+      $('#mod-notes').removeClass("d-none").addClass("d-flex");
+    else
+      $('#mod-notes').removeClass("d-flex").addClass("d-none");
+  }
+  function update_mod_log(data) {
+    $('#mod-log').html(data["mod-log"]);
+    if (data["mod-log"])
+      $('#mod-log').removeClass("d-none").addClass("d-flex");
+    else
+      $('#mod-log').removeClass("d-flex").addClass("d-none");
+  }
   function select_message(event, msg_id) {
     event = event || window.event;
     if (event && (event.target.tagName == "BUTTON" || event.target.tagName == "A") && msg_id != "--" && !msg_id.startsWith('T'))
       return;
+    username = (msg_id == "--" || msg_id.startsWith('T') || $(`#msg${msg_id} a`).length == 0) ? "" : $(`#msg${msg_id} a`)[0].text;
+    update_user_button(username);
+    if (msg_id.startsWith('F')) {
+      var selection = $(`#msg${msg_id}`).attr("data-selection");
+      if (selection && !notes_msgs.includes(msg_id) && username != "lichess") {
+        var notes = $('#notes').val();
+        if (notes)
+          $('#notes').val((username != notes_user) ? selection : `${notes}\n${selection}`);
+        else
+          $('#notes').val(selection);
+        if (username == notes_user)
+          notes_msgs.push(msg_id);
+        else
+          notes_msgs = [msg_id];
+        notes_user = username;
+        update_username();
+        update_notes();
+      }
+    }
     $.ajax({url: `/chat/select_message/${msg_id}`, type: "post"})
       .done(function(data, textStatus, jqXHR) {
-        $('#selected_messages').html(data);
+        set_selection(data);
+        filter_messages(!msg_id.startsWith('F'));
+        var active_element = $('#selected_messages .selectee-center');
+        if (active_element.length) {
+          active_element[0].scrollIntoView({block: "center"});
+          window.scrollTo(0, 0);
+        }
       });
+  }
+  function update_username() {
+    $('#notes_username').html(notes_user ? `<a class="text-success" href="https://lichess.org/@/${notes_user.toLowerCase()}?notes" target="_blank">${notes_user}</a>:` : "");
+  }
+  function update_user_button(username) {
+    num_messages = $('#filtered_messages .selectee').length;
+    var text = username ? username : "Process";
+    if (num_messages > 0)
+      text = `<b>${num_messages}</b>: ${text}`;
+    $('#btn_filter_msgs').html(text);
   }
   function prevent_click(event) {
     event = event || window.event;
@@ -287,6 +385,29 @@
         return parseInt($(this).attr("data-mscore")) >= val;
       }).css("display","block");
     }
+  }
+  function filter_messages(to_reset=false) {
+    if (to_reset)
+      $('#btn_filter_msgs').removeClass("btn-success").addClass("btn-outline-success");
+    if ($('#btn_filter_msgs').hasClass("btn-success")) {
+      $('#filtered_section').removeClass("d-none").addClass("d-block");
+      $('#selected_messages').removeClass("d-block").addClass("d-none");
+      var active_element = $('#filtered_section .selectee-center');
+      if (active_element.length) {
+        active_element[0].scrollIntoView({block: "center"});
+        window.scrollTo(0, 0);
+      }
+    } else {
+      $('#filtered_section').removeClass("d-block").addClass("d-none");
+      $('#selected_messages').removeClass("d-none").addClass("d-block");
+    }
+  }
+  function filter_toggle() {
+    if ($('#btn_filter_msgs').hasClass("btn-success"))
+      $('#btn_filter_msgs').removeClass("btn-success").addClass("btn-outline-success");
+    else
+      $('#btn_filter_msgs').removeClass("btn-outline-success").addClass("btn-success");
+    filter_messages();
   }
   function check_collapse(val) {
     const collapse = ["tournaments", "started", "created", "finished"];
@@ -316,6 +437,43 @@
         .done(function(data, textStatus, jqXHR) {
           $("#tournament_link")[0].value = "";
           update_tournament_list(data);
+        });
+  }
+  function update_notes() {
+    $("#notes")[0].style.height = "50px";
+    $("#notes")[0].style.height = (Math.max(40, $("#notes")[0].scrollHeight + 5)) + "px";
+    if ($('#notes').val())
+      $("#btn_notes").removeClass("d-none").addClass("d-flex");
+    else
+      $("#btn_notes").removeClass("d-flex").addClass("d-none");
+  }
+  function clear_notes() {
+    $('#notes').val('');
+    notes_user = "";
+    notes_msgs = [];
+    update_username();
+    update_notes();
+  }
+  function send_note() {
+    $.ajax({
+      url: `/chat/send_note`,
+      type: "post",
+      data: {note: $('#notes').val(), user: notes_user}})
+        .done(function(data, textStatus, jqXHR) {
+          if (data["mod-notes"]) {
+            if (notes_user && data["selected-user"] == notes_user)
+              update_mod_notes(data);
+            clear_notes();
+          }
+        });
+  }
+  function custom_timeout(reason) {
+    $.ajax({
+      url: `/chat/custom_timeout`,
+      type: "post",
+      data: {reason: reason, ids: notes_msgs}})
+        .done(function(data_chats, textStatus, jqXHR) {
+          update_data(data_chats);
         });
   }
   </script>

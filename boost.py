@@ -5,6 +5,8 @@ from dateutil import tz
 import time
 import traceback
 from elements import get_token, get_ndjson, country_flags, country_names, timestamp_to_ago, shorten
+from elements import get_notes, add_note, load_mod_log, get_mod_log, ModActionType, WarningStats
+from elements import warn_sandbagging, warn_boosting, mark_booster
 
 
 BOOST_UPDATE_PERIOD = 5 * 60  # seconds
@@ -20,11 +22,12 @@ BOOST_STREAK_REPORTABLE = 3
 BOOST_SUS_STREAK = 3
 BOOST_NUM_PLAYED_GAMES = [100, 250]
 BOOST_CREATED_DAYS_AGO = [30, 60]
+BOOST_ANALYSIS_SCORE = 2
 NUM_FIRST_GAMES_TO_EXCLUDE = 6
 MAX_NUM_TOURNEY_PLAYERS = 20
 STD_NUM_TOURNEYS = 5
 MIN_NUM_TOURNEY_GAMES = 4
-MAX_LEN_TOURNEY_NAME = 15
+MAX_LEN_TOURNEY_NAME = 22
 API_TOURNEY_DELAY = 0.5  # [s]
 
 
@@ -112,7 +115,7 @@ class VariantPlayed:
         if self.num_recent_games > 0:
             link = f'https://lichess.org/@/{{username}}/perf/{self.name}'
             name = f'<button class="btn btn-primary p-0" style="min-width: 120px;" ' \
-                   f'onclick="copyTextToClipboard(\'{link}\')">{name}</button>'
+                   f'onclick="add_to_notes(this)" data-selection=\'{link}\'>{name}</button>'
         row = f'''<tr{row_class}>
                     <td class="text-left">{name}</td>
                     <td class="text-left">{self.get_rating()}</td>
@@ -246,6 +249,8 @@ class GameAnalysis:
         self.out_of_time = StatsData()
         self.is_sandbagging = is_sandbagging
         self.skip_atomic_streaks = is_sandbagging
+        self.score = 0
+        self.row = ""
 
     def check_variants(self, variants):
         if not self.skip_atomic_streaks:
@@ -258,9 +263,9 @@ class GameAnalysis:
                 self.skip_atomic_streaks = variant.stable_rating_range[0] < 1800 and variant.stable_rating_range[1] < 2000
                 return
 
-    def get_num_and_rating(self, stats, *, limits=None, text_classes=None, exclude_variants=None, precision=10):
+    def get_num_and_score(self, stats, *, limits=None, text_classes=None, exclude_variants=None, precision=10):
         if stats.num == 0:
-            return '&ndash;'
+            return '&ndash;', 0
         mean = int(round(stats.mean / precision)) * precision
         median = int(round(stats.median / precision)) * precision
         str_mean = f"+{mean}" if mean > 0 else f"&minus;{abs(mean)}" if mean < 0 else "0"
@@ -279,37 +284,48 @@ class GameAnalysis:
         else:
             color = ' class="text-danger"' if stats_num >= limits[1] else ' class="text-warning"' \
                 if stats_num >= limits[0] else ""
-        return f'<abbr title="{str_info}"{color} style="text-decoration:none;">{stats_num:,}</abbr>'
+        score = (10 * stats_num / limits[1]) if stats_num >= limits[1] \
+            else 1 + (stats_num - limits[0]) / (limits[1] - limits[0]) if stats_num >= limits[0] else 0
+        return f'<abbr title="{str_info}"{color} style="text-decoration:none;">{stats_num:,}</abbr>', score
 
-    def get_table_row(self):
+    def calc(self):
+        self.score = 0
         if self.is_empty():
-            return ""
-        num_bad_games = self.get_num_and_rating(self.bad_games)
+            self.row = ""
+            return
+        num_bad_games, s_bad_games = self.get_num_and_score(self.bad_games)
         exclude_variants = ['atomic'] if self.skip_atomic_streaks and self.max_num_moves > 1 else None
-        streak = self.get_num_and_rating(self.streak, limits=[BOOST_SUS_STREAK, BOOST_SUS_STREAK],
+        streak, s_streak = self.get_num_and_score(self.streak, limits=[BOOST_SUS_STREAK, BOOST_SUS_STREAK],
                                          exclude_variants=exclude_variants)
-        resign = self.get_num_and_rating(self.resign)
-        timeout = self.get_num_and_rating(self.timeout)
+        resign, s_resign = self.get_num_and_score(self.resign)
+        timeout, s_timeout = self.get_num_and_score(self.timeout)
         if self.max_num_moves <= 1:
-            out_of_time = self.get_num_and_rating(self.out_of_time, text_classes=["text-success", "text-success"])
+            out_of_time, _ = self.get_num_and_score(self.out_of_time, text_classes=["text-success", "text-success"])
+            s_out_of_time = 0
         else:
-            out_of_time = self.get_num_and_rating(self.out_of_time)
+            out_of_time, s_out_of_time = self.get_num_and_score(self.out_of_time)
+        self.score = s_bad_games + s_streak + s_resign + s_timeout + s_out_of_time
+        if self.max_num_moves > 10:
+            self.score /= 2
         num_moves = 1 if self.max_num_moves == 0 else self.max_num_moves
         link = f"https://lichess.org/@/{{username}}/search?turnsMax={num_moves}&mode=1&players.a={{user_id}}" \
                f"&players.{{winner_loser}}={{user_id}}&sort.field=d&sort.order=desc"
+        link_open = f'<a class="ml-2" href="{link}" target="_blank">open</a>'
         if self.streak.num >= BOOST_STREAK_REPORTABLE:
             str_incl = "including" if self.streak.num < self.bad_games.num else "i.e."
             link = f'{link} {str_incl} {self.streak.num} games streak'
-        row = f'''<tr>
+        self.row = f'''<tr>
                     <td class="text-left"><button class="btn btn-primary p-0" style="min-width: 120px;" 
-                        onclick="copyTextToClipboard('{link}')">{self.max_num_moves}</button></td>
+                        onclick="add_to_notes(this)" data-selection=\'{link}\'>{self.max_num_moves}</button>{link_open}</td>
                     <td class="text-right pr-2">{num_bad_games}</td>
                     <td class="text-center px-2">{streak}</td>
                     <td class="text-right pr-2">{resign}</td>
                     <td class="text-right pr-2">{timeout}</td>
                     <td class="text-right pr-2">{out_of_time}</td>
                   </tr>'''
-        return row
+
+    def set_best_row(self):
+        self.row = self.row.replace("btn-primary", "btn-warning")
 
     def is_empty(self):
         return sum((self.bad_games.num, self.streak.num, self.resign.num, self.timeout.num, self.out_of_time.num)) == 0
@@ -453,11 +469,17 @@ class Games:
         self.swiss_tournaments = {}
         self.median_rating = {}
         self.all_user_ratings = {}
+        self.since: int = None
 
-    def download(self):
-        ts_6months_ago = int((datetime.now() - timedelta(days=182)).timestamp() * 1000)
+    def download(self, since=None):
+        ts_6months_ago = int((datetime.now(tz=tz.tzutc()) - timedelta(days=182)).timestamp() * 1000)
+        if since is None:
+            since = ts_6months_ago
+        else:
+            since = max(ts_6months_ago, int(since.timestamp() * 1000))
         url = f"https://lichess.org/api/games/user/{self.user_id}?rated=true&finished=true&max={BOOST_NUM_GAMES[0]}" \
-              f"&since={ts_6months_ago}"
+              f"&since={since}"
+        self.since = None if since == ts_6months_ago else since
         self.games = get_ndjson(url)
 
     def get_num(self):
@@ -471,7 +493,10 @@ class Games:
             last_createdAt = datetime.fromtimestamp(self.games[0]['createdAt'] // 1000, tz=tz.tzutc())
             num_days = (last_createdAt - first_createdAt).days
             str_num = f'{str_num} for <b>{num_days} day{"" if num_days == 1 else "s"}</b>'
-        if self.games:
+        if self.since:
+            since = datetime.fromtimestamp(self.since // 1000, tz=tz.tzutc())
+            str_num = f'{str_num} from <abbr title="Date/Time of the last manual warning">{since:%Y-%m-%d %H:%M}</abbr>'
+        elif self.games:
             str_num = f'{str_num} from {first_createdAt:%Y-%m-%d %H:%M}'
         return f'<div class="mb-3">{str_num}</div>'
 
@@ -563,7 +588,15 @@ class Games:
             analysis.out_of_time.calc(out_of_time, self.median_rating)
             analysis.resign.calc(resign, self.median_rating)
             analysis.streak.calc(best_streak, self.median_rating)
+            analysis.calc()
             analyses.append(analysis)
+        best_row_analysis = None
+        for analysis in analyses:
+            if analysis.score > BOOST_ANALYSIS_SCORE \
+                    and (best_row_analysis is None or analysis.score > best_row_analysis.score):
+                best_row_analysis = analysis
+        if best_row_analysis is not None:
+            best_row_analysis.set_best_row()
         return analyses
 
 
@@ -589,6 +622,14 @@ class Boost:
         self.boosting = []
         self.tournaments = []
         self.last_update_tournaments: datetime = None
+        self.enable_sandbagging = False
+        self.enable_boosting = False
+        self.prefer_marking = False
+        self.mod_log: ModLogData = None
+        self.mod_log_out = ""
+
+    def is_titled(self):
+        return self.title and self.title != "BOT"
 
     def get_name(self):
         if self.title:
@@ -658,10 +699,10 @@ class Boost:
     def get_created(self):
         if not self.createdAt:
             return ""
-        now = datetime.now()
-        created_ago = timestamp_to_ago(self.createdAt, now)
-        t = datetime.fromtimestamp(self.createdAt // 1000)
-        days = (now - t).days
+        now_utc = datetime.now(tz=tz.tzutc())
+        created_ago = timestamp_to_ago(self.createdAt, now_utc)
+        t = datetime.fromtimestamp(self.createdAt // 1000, tz=tz.tzutc())
+        days = (now_utc - t).days
         class_created = ' class="text-danger"' if days <= BOOST_CREATED_DAYS_AGO[0] \
             else ' class="text-warning"' if days <= BOOST_CREATED_DAYS_AGO[1] else ""
         return f'<abbr{class_created} title="Account created {created_ago}" style="text-decoration:none;">' \
@@ -715,6 +756,17 @@ class Boost:
             profile = f'<div class="my-3">{profile}</div>'
         return f"{variants}{profile}"
 
+    def get_mod_notes(self, mod_log_data):
+        mod_notes = get_notes(self.username, mod_log_data)
+        header_notes = "Notes:" if mod_notes else "No notes"
+        return {'mod-notes': mod_notes, 'notes-header': header_notes}
+
+    def get_enabled_buttons(self):
+        return {'enable-sandbagging': 1 if self.enable_sandbagging and not self.prefer_marking else 0,
+                'enable-boosting': 1 if self.enable_boosting and not self.prefer_marking else 0,
+                'enable-marking': 1 if self.prefer_marking and (self.enable_sandbagging or self.enable_boosting)
+                                       else -1 if self.is_titled() else 0}
+
     def set(self, user):
         self.username = user['username']
         self.disabled = user.get('disabled', False)
@@ -736,12 +788,13 @@ class Boost:
                     self.variants.append(VariantPlayed(variant_name, perf))
             self.variants.sort(key=lambda variant: (-999999 if variant.name == "puzzle" else 0) + variant.num_games,
                                reverse=True)
+        self.update_mod_log()
         self.analyse_games()
 
     def analyse_games(self):
         exc: Exception = None
         try:
-            self.games.download()
+            self.games.download(self.mod_log.time_last_manual_warning)
         except Exception as e:
             exc = e
         self.sandbagging = self.games.analyse(True)
@@ -751,6 +804,11 @@ class Boost:
             sandbag.check_variants(self.variants)
         if exc:
             raise exc
+
+    def update_mod_log(self):
+        mod_log_data = load_mod_log(self.username)
+        self.mod_log = ModLogData(mod_log_data)
+        self.mod_log_out = self.mod_log.prepare()
 
     def analyse_tournaments(self):
         try:
@@ -815,7 +873,7 @@ class Boost:
         tables = [("Sandbagging", "loser", self.sandbagging), ("Boosting", "winner", self.boosting)]
         output = []
         for table_name, winner_loser, analyses in tables:
-            rows = [analysis.get_table_row() for analysis in analyses if not analysis.is_empty()]
+            rows = [analysis.row for analysis in analyses if not analysis.is_empty()]
             str_rows = "".join(rows).format(username=self.username, user_id=self.user_id, winner_loser=winner_loser)
             if rows:
                 table = f'''<table id="{table_name.lower()}_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
@@ -839,14 +897,21 @@ class Boost:
         return '\n'.join(output)
 
     def get_tournaments(self):
+        if not self.prefer_marking and not self.is_titled():
+            for tourney in self.tournaments:
+                if tourney.is_official and tourney.name.startswith('<') and 1 <= tourney.place <= 3:
+                    self.prefer_marking = True
+                    break
+        output = self.get_enabled_buttons()
         if not self.tournaments:
-            return '<p class="mt-3">No tournaments</p>'
+            output['tournaments'] = '<p class="mt-3">No tournaments</p>'
+            return output
         rows = [tourney.get_table_row() for tourney in self.tournaments]
-        links = f'https://lichess.org/@/{self.username}/tournaments/recent'
+        link = f'https://lichess.org/@/{self.username}/tournaments/recent'
         table = f'''<table id="tournaments_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
               <thead><tr>
                 <th class="text-left" style="cursor:default;"><button class="btn btn-primary p-0" style="min-width:120px;" 
-                    onclick="copyTextToClipboard('{links}')">Tournaments</button></th>
+                    onclick="add_to_notes(this)" data-selection=\'{link}\'>Tournaments</button></th>
                 <th class="text-center" style="cursor:default;">
                     <abbr title="Place" style="text-decoration:none;"><i class="fas fa-trophy"></i></abbr></th>
                 <th class="text-right" style="cursor:default;">
@@ -860,7 +925,57 @@ class Boost:
               </tr></thead>
               {"".join(rows)}
             </table>'''
-        return table
+        output['tournaments'] = table
+        return output
+
+    def enable_buttons(self, mod_log):
+        self.enable_sandbagging = False
+        now_utc = datetime.now(tz=tz.tzutc())
+        t = datetime.fromtimestamp(self.createdAt // 1000, tz=tz.tzutc())
+        days = (now_utc - t).days
+        for sandbag in self.sandbagging:
+            if sandbag.score >= BOOST_ANALYSIS_SCORE:
+                self.enable_sandbagging = True
+                break
+        self.enable_boosting = False
+        for boost in self.boosting:
+            if boost.score >= BOOST_ANALYSIS_SCORE:
+                self.enable_boosting = True
+                break
+        if not self.title or self.title == "BOT":
+            if mod_log.sandbag_manual.active > 0 or mod_log.boost_manual.active \
+               or mod_log.sandbag_auto.active >= 10 or mod_log.boost_auto.active >= 10:
+                self.prefer_marking = True
+            elif self.num_rated_games <= BOOST_NUM_PLAYED_GAMES[0] or days <= BOOST_CREATED_DAYS_AGO[0]:
+                self.prefer_marking = True
+            else:
+                for variant in self.variants:
+                    if not variant.stable_rating_range:
+                        continue
+                    rating_diff = variant.stable_rating_range[1] - variant.stable_rating_range[0]
+                    if rating_diff >= BOOST_SUS_RATING_DIFF[1]:
+                        self.prefer_marking = True
+                        break
+        if self.enable_sandbagging and not self.prefer_marking \
+           and mod_log.sandbag_manual.total == 0 and mod_log.sandbag_auto.active == 1 and mod_log.sandbag_auto.total == 1:
+            self.enable_sandbagging = False
+        if self.enable_boosting and not self.prefer_marking \
+           and mod_log.boost_manual.total == 0 and mod_log.boost_auto.active == 1 and mod_log.boost_auto.total == 1:
+            self.enable_boosting = False
+
+    def disable_buttons(self):
+        self.enable_sandbagging = False
+        self.enable_boosting = False
+
+    def get_output(self):
+        output = {'part-1': self.get_info_1(), 'part-2': self.get_info_2()}
+        if not self.mod_log:
+            self.update_mod_log()
+        self.enable_buttons(self.mod_log)
+        output['mod-log'] = self.mod_log_out
+        output.update(self.get_mod_notes(self.mod_log.data))
+        output.update(self.get_enabled_buttons())
+        return output
 
 
 def add_variant_rating(ratings, variant, rating):
@@ -896,3 +1011,157 @@ def get_boost_data(username):
     except:
         boost.errors.append("ERROR")
     return boost
+
+
+def send_boost_note(note, username):
+    global boosts
+    user_id = username.lower()
+    boost, last_update = boosts.get(user_id, (None, None))
+    try:
+        if not boost or not note or not username:
+            raise Exception(f"Wrong note: [{username}]: {note}")
+        print(f"Note [{username}]:\n{note}")
+        is_ok = add_note(username, note)
+        if is_ok:
+            mod_notes = get_notes(username)
+            header_notes = "Notes:" if mod_notes else "No notes"
+            return {'mod-notes': mod_notes, 'notes-header': header_notes, 'user': username}
+    except Exception as exception:
+        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        try:
+            boost.errors.append(str(exception))
+        except:
+            print("Error: no boost instance")
+    return {'user': username, 'mod-notes': "", "notes-header": "No notes (ERROR)"}
+
+
+class ModLogData:
+    def __init__(self, mod_log_data):
+        self.data = mod_log_data
+        self.mod_log_table = ""
+        self.sandbag_manual = WarningStats()
+        self.boost_manual = WarningStats()
+        self.sandbag_auto = WarningStats()
+        self.boost_auto = WarningStats()
+        self.num_total = 0
+        self.num_other_actions = 0
+        self.time_last_manual_warning: datetime = None
+
+    def process(self):
+        self.num_other_actions = 0
+        self.time_last_manual_warning = None
+        self.mod_log_table, actions = get_mod_log(self.data, ModActionType.Boost)
+        now_utc = datetime.now(tz=tz.tzutc())
+        for action in actions:
+            if action.is_warning():
+                if action.mod_id == "lichess" and action.details == "Warning: possible sandbagging":
+                    self.sandbag_auto.add(action, now_utc)
+                elif action.details == "Warning: Sandbagging":
+                    self.sandbag_manual.add(action, now_utc)
+                    self.update_manual_warning(action)
+                elif action.mod_id == "lichess" and action.details == "Warning: possible boosting":
+                    self.boost_auto.add(action, now_utc)
+                elif action.details == "Warning: Boosting":
+                    self.boost_manual.add(action, now_utc)
+                    self.update_manual_warning(action)
+                elif not action.is_old(now_utc):
+                    self.num_other_actions += 1
+            else:
+                if action.action in ['engine', 'booster', 'alt', 'closeAccount',
+                                     'cheatDetected', 'troll', 'permissions', 'setTitle',
+                                     'unengine', 'unbooster', 'unalt', 'reopenAccount']:
+                    self.num_other_actions += 1
+        self.num_total = len(actions)
+
+    def update_manual_warning(self, action):
+        if self.time_last_manual_warning is None:
+            self.time_last_manual_warning = action.get_datetime()
+        else:
+            dt = action.get_datetime()
+            if dt > self.time_last_manual_warning:
+                self.time_last_manual_warning = dt
+
+    def prepare(self):
+        if self.data is None:
+            return "Mod Log is not available"
+        self.process()
+        class_sandbag_manual = "text-danger" if self.sandbag_manual.active else ""
+        class_boost_manual = "text-danger" if self.boost_manual.active else ""
+        class_sandbag_auto = "text-danger" if self.sandbag_auto.active >= 10 \
+            else "text-warning" if self.sandbag_auto.active > 1 else ""
+        class_boost_auto = "text-danger" if self.boost_auto.active >= 10 \
+            else "text-warning" if self.boost_auto.active > 1 else ""
+        mod_log_summary = \
+            f'<table class="table table-sm table-hover text-center border">' \
+            f'<col>' \
+            f'<colgroup span="2"></colgroup>' \
+            f'<colgroup span="2"></colgroup>' \
+            f'<tr>' \
+                f'<td rowspan="2" class="align-middle">Warnings</td>' \
+                f'<th colspan="2" scope="colgroup">6 months</th>' \
+                f'<th colspan="2" scope="colgroup">Total</th>' \
+            f'</tr>' \
+            f'<tr>' \
+                f'<th scope="col">Manual</th>' \
+                f'<th scope="col">Auto</th>' \
+                f'<th scope="col">Manual</th>' \
+                f'<th scope="col">Auto</th>' \
+            f'</tr>' \
+            f'<tr>' \
+                f'<th scope="row" class="text-left">Sandbagging</th>' \
+                f'<td class="{class_sandbag_manual}">{self.sandbag_manual.get_active()}</td>' \
+                f'<td class="{class_sandbag_auto}">{self.sandbag_auto.get_active()}</td>' \
+                f'<td class="text-muted">{self.sandbag_manual.get_total()}</td>' \
+                f'<td class="text-muted">{self.sandbag_auto.get_total()}</td>' \
+            f'</tr>' \
+            f'<tr>' \
+                f'<th scope="row" class="text-left">Boosting</th>' \
+                f'<td class="{class_boost_manual}">{self.boost_manual.get_active()}</td>' \
+                f'<td class="{class_boost_auto}">{self.boost_auto.get_active()}</td>' \
+                f'<td class="text-muted">{self.boost_manual.get_total()}</td>' \
+                f'<td class="text-muted">{self.boost_auto.get_total()}</td>' \
+            f'</tr>' \
+            f'</table>'
+        if self.num_other_actions == 0:
+            expanded = "false"
+            show = ""
+        else:
+            expanded = "true"
+            show = " show"
+        header = f'Mod Log: <b>{self.num_total}</b> item{"" if self.num_total == 1 else "s"}'
+        mod_log_table = f'<div><div class="card border-0"><div>' \
+            f'<button class="btn btn-secondary col py-0" type="button" data-toggle="collapse" ' \
+            f'data-target="#collapseModLog" aria-expanded="{expanded}" aria-controls="collapseModLog">{header}</button>' \
+            f'</div><div id="collapseModLog" class="collapse{show}">' \
+            f'<div class="card card-body p-0">{self.mod_log_table}</div></div></div>' if self.mod_log_table else ""
+        return f'{mod_log_summary}{mod_log_table}'
+
+
+def send_mod_action(action, username):
+    global boosts
+    output = {'user': username, 'mod-log': "", 'enable-sandbagging': -1, 'enable-boosting': -1, 'enable-marking': -1}
+    user_id = username.lower()
+    boost, last_update = boosts.get(user_id, (None, None))
+    if boost:
+        try:
+            output.update(boost.get_enabled_buttons())
+            if action == "warn_sandbagging":
+                is_ok = warn_sandbagging(username)
+            elif action == "warn_boosting":
+                is_ok = warn_boosting(username)
+            elif action == "mark_booster":
+                is_ok = mark_booster(username)
+            else:
+                raise Exception(f"Wrong mod action: [{username}]: {action}")
+            print(f"{username}: {action} -> {'DONE' if is_ok else 'skipped'}")
+            if is_ok:
+                boost.update_mod_log()
+                return {'user': username, 'mod-log': boost.mod_log_out,
+                        'enable-sandbagging': -1, 'enable-boosting': -1, 'enable-marking': -1}
+        except Exception as exception:
+            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            try:
+                boost.errors.append(str(exception))
+            except:
+                print(f"Error: no boost instance for {username}")
+    return output

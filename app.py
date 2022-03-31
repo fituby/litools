@@ -2,9 +2,9 @@ from flask import Flask, Response, render_template, request, make_response
 from waitress import serve
 import logging
 import traceback
-from boost import get_boost_data
+from boost import get_boost_data, send_boost_note, send_mod_action
 from chat import ChatAnalysis
-from elements import get_port
+from elements import get_port, get_embed_lichess
 from enum import IntEnum
 
 
@@ -62,14 +62,15 @@ def update_boost_theme():
 def create_boost():
     update_boost_theme()
     boost_user = request.form.get("user", None) if request.method == 'POST' else None
-    resp = make_response(render_template('/boost.html', boost_user=boost_user, view=view_boost))
+    resp = make_response(render_template('/boost.html', boost_user=boost_user,
+                                         embed_lichess=get_embed_lichess(), view=view_boost))
     return resp
 
 
 @app.route('/boost/<user>/', methods=['POST'])
 def get_boost_user(user):
     boost = get_boost_data(user.lower())
-    resp = make_response(render_template('/boost_get_user.html', boost=boost, view=view_boost))
+    resp = make_response(boost.get_output())
     return resp
 
 
@@ -78,6 +79,24 @@ def create_tournaments(user):
     boost = get_boost_data(user.lower())
     boost.analyse_tournaments()
     resp = make_response(boost.get_tournaments())
+    return resp
+
+
+@app.route('/boost/send_note', methods=['POST'])
+def boost_send_note():
+    user = request.form.get("user", None)
+    note = request.form.get("note", None)
+    data = send_boost_note(note, user)
+    resp = make_response(data)
+    return resp
+
+
+@app.route('/boost/mod_action', methods=['POST'])
+def boost_mod_action():
+    user = request.form.get("user", None)
+    action = request.form.get("action", None)
+    data = send_mod_action(action, user)
+    resp = make_response(data)
     return resp
 
 
@@ -174,6 +193,27 @@ def chat_flip_tournament_group(group):
 def chat_add_tournament():
     page = request.form.get("page", "")
     resp = make_response(chat.add_tournament(page))
+    return resp
+
+
+@app.route('/chat/send_note', methods=['POST'])
+def chat_send_note():
+    note = request.form.get("note", None)
+    user = request.form.get("user", None)
+    data = chat.send_note(note, user)
+    resp = make_response(data)
+    return resp
+
+
+@app.route('/chat/custom_timeout', methods=['POST'])
+def custom_timeout():
+    data = request.form.to_dict(flat=False)
+    msg_ids = data.get("ids[]", None)
+    reason = data.get("reason", 0)
+    if isinstance(reason, list):
+        reason = reason[0]
+    chat.custom_timeout(msg_ids, reason)
+    resp = make_response(chat.get_all())
     return resp
 
 

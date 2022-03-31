@@ -8,8 +8,9 @@ import traceback
 from enum import Enum, IntFlag
 from multiprocessing import Lock
 import yaml
+import html
 from elements import Reason, get_token, get_ndjson, deltaseconds, deltaperiod, shorten, log, config_file
-from elements import STYLE_WORD_BREAK
+from elements import STYLE_WORD_BREAK, get_notes, add_note, load_mod_log, get_mod_log, ModActionType
 from chat_re import ReUser, list_res, list_res_variety, re_spaces
 
 
@@ -17,7 +18,7 @@ CHAT_TOURNAMENT_FINISHED_AGO = 12 * 60  # [min]
 CHAT_TOURNAMENT_STARTS_IN = 6 * 60  # [min]
 CHAT_SWISS_STARTED_AGO = 6 * 60  # [min]
 MAX_LEN_TOURNEY_NAME_SHORT = 25
-MAX_LEN_TOURNEY_NAME_LONG = 40
+MAX_LEN_TOURNEY_NAME_LONG = 33
 NUM_RECENT_BROADCASTS_TO_FETCH = 20
 
 API_TOURNEY_PAGE_DELAY = 1.0  # [s]
@@ -30,6 +31,7 @@ NUM_FREQUENT_MESSAGES = 9
 NUM_MSGS_BEFORE = 10
 NUM_MSGS_AFTER = 10
 TIMEOUT_RANGE = [25, 25]  # [min]
+DELAY_ERROR_READ_MOD_LOG = 60  # [min]
 
 CHAT_NUM_VISIBLE_MSGS = 450
 CHAT_MAX_NUM_MSGS = 500
@@ -168,8 +170,9 @@ class Message:
         return self.is_deleted or self.is_removed or self.is_disabled or \
                self.is_reset or self.is_timed_out or self.is_official
 
-    def get_info(self, tag, show_hidden=None, add_buttons=None, base_time=None, rename_dismiss=None,
-                 add_user=True, add_mscore=False, add_reason=None, highlight_user=None, allow_selection=True):
+    def get_info(self, tag, show_hidden=None, add_buttons=None, base_time=None, rename_dismiss=None, add_user=True,
+                 add_mscore=False, add_reason=None, highlight_user=None, is_selected=False, is_centered=False,
+                 add_selection=False):
         if show_hidden is None:
             show_hidden = (base_time is not None)
         if add_buttons is None:
@@ -188,10 +191,11 @@ class Message:
                 else f"{abs(ds // 60)}m{abs(ds % 60):02d}s" if abs(ds) < 300 \
                 else f"{abs(int(round(ds / 60)))}m"
             str_time = f"&minus;{dt} " if ds < 0 else f'+{dt} ' if ds > 0 else "== "
-            str_time = f'<span class="user-select-none">{str_time}</span>'
+            str_time = f'<abbr title="{self.time:%H:%M:%S}" class="user-select-none" ' \
+                       f'style="text-decoration:none;">{str_time}</abbr>'
         score_theme = "" if self.score is None else ' text-danger' if self.score > 50 \
             else ' text-warning' if self.score > 10 else ""
-        score = f'<span class="user-select-none{score_theme}">{self.score}</span>' if self.score > 0 else ""
+        score = f'<span class="user-select-none{score_theme}">{self.score}</span>' if self.score and self.score > 0 else ""
         username = f"<b><u>{self.username}</u></b>" if highlight_user is True or highlight_user == self.username \
             else self.username
         user = f'<a class="text-info user-select-none" href="https://lichess.org/@/{self.username.lower()}" target="_blank" ' \
@@ -207,7 +211,7 @@ class Message:
         if best_reason == Reason.No and add_reason is not None:
             best_reason = int(add_reason)
         r = Reason.to_Tag(best_reason)
-        class_ban = "btn-warning" if self.score >= 50 else "btn-secondary"
+        class_ban = "btn-warning" if self.score and self.score >= 50 else "btn-secondary"
         button_ban = f'<button class="btn {class_ban} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" ' \
                      f'data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">' \
                      f'Ban</button><span class="dropdown-menu" style="">' \
@@ -221,37 +225,42 @@ class Message:
                         f'{self.format_reason(Reason.Other, "Inappropriate Behaviour", add_reason, best_reason)}</button>' \
                      f'</span>' if add_buttons & AddButtons.Ban else ""
         if add_buttons & AddButtons.Ban:
-            if best_ban_reason != Reason.No or (best_reason != Reason.No and self.score >= 50):
+            if best_ban_reason != Reason.No or (best_reason != Reason.No and self.score and self.score >= 50):
                 button_ban = f'<button class="btn btn-danger align-baseline flex-grow-0 py-0 px-1" ' \
                              f'onclick="timeout(\'{tag}{self.id}\');">{r}</button>{button_ban}'
         class_name = "text-muted" if self.is_deleted or self.is_reset \
             else "text-secondary" if self.is_removed or self.is_disabled or self.is_timed_out or self.is_official else ""
         text = f'<s style="text-decoration-style:double;">{self.eval_text}</s>' if self.is_removed \
-            else f'<s style="text-decoration-style:dotted;"><u style="text-decoration-style:wavy;">{self.eval_text}</u></s>' if self.is_timed_out \
+            else f'<s style="text-decoration-style:dotted;"><u style="text-decoration-style:wavy;">' \
+                 f'{self.eval_text}</u></s>' if self.is_timed_out \
             else f'<s>{self.eval_text}</s>' if self.is_disabled \
             else f'<small>{self.eval_text}</small>' if self.is_reset \
             else f'<small><i>{self.eval_text}</i></small>' if self.is_official \
-            else f'<s style="text-decoration-style:wavy;">{self.eval_text}</s>' if self.is_deleted \
+            else self.eval_text if self.is_deleted \
             else self.eval_text
         text = f'<span class="{class_name}" style="{STYLE_WORD_BREAK}">{text}</span>'
         mscore = f' data-mscore={self.score}' if add_mscore else ""
-        onclick = f' onclick="select_message(event,\'{tag}{self.id}\')"' if allow_selection else ""
+        selection = html.escape(self.text).replace("'", "&apos;")
+        selection = f' data-selection=\'{self.username}: "{selection}"\'' if add_selection else ""
+        onclick = "" if is_selected else f' onclick="select_message(event,\'{tag}{self.id}\')"'
+        selectee_class = "selectee selectee-center" if is_centered else "selectee"
         if add_buttons == AddButtons.No:
-            return f'<div id="msg{tag}{self.id}"{mscore} class="align-items-baseline selectee px-1" ' \
-                   f'style="{STYLE_WORD_BREAK}{highlight_style}"{onclick}>' \
-                   f'{str_time}{user} <b>{score}</b> {text}</div>'
+            div = f'<div id="msg{tag}{self.id}"{mscore}{selection} class="align-items-baseline {selectee_class} px-1" ' \
+                  f'style="{STYLE_WORD_BREAK}"{onclick}>' \
+                  f'{str_time}{user} <b>{score}</b> {text}</div>'
         elif add_buttons & AddButtons.Ban:
-            return f'<div id="msg{tag}{self.id}"{mscore} class="align-items-baseline selectee px-1" ' \
-                   f'style="{STYLE_WORD_BREAK}{highlight_style}"{onclick}>' \
-                   f'<div class="d-flex justify-content-between"><span>{button_ban}{str_time}{user} {text}</span> ' \
-                   f'<span class="text-nowrap"><b class="pl-2">{score}</b>{button_dismiss}</span></div></div>'
+            div = f'<div id="msg{tag}{self.id}"{mscore}{selection} class="align-items-baseline {selectee_class} px-1" ' \
+                  f'style="{STYLE_WORD_BREAK}"{onclick}>' \
+                  f'<div class="d-flex justify-content-between"><span>{button_ban}{str_time}{user} {text}</span> ' \
+                  f'<span class="text-nowrap"><b class="pl-2">{score}</b>{button_dismiss}</span></div></div>'
         else:
-            return f'<div id="msg{tag}{self.id}"{mscore} class="align-items-baseline selectee px-1" ' \
-                   f'style="{highlight_style}"{onclick}>' \
-                   f'<div class="d-flex justify-content-between">' \
-                   f'<span class="d-flex flex-row">{button_ban}{str_time}{user}</span>' \
-                   f'<span class="d-flex flex-row">{score}{button_dismiss}</span></div>' \
-                   f'<div class="align-items-baseline" style="{STYLE_WORD_BREAK}">{text}</div></div>'
+            div = f'<div id="msg{tag}{self.id}"{mscore}{selection} class="align-items-baseline {selectee_class} ' \
+                  f'px-1" {onclick}>' \
+                  f'<div class="d-flex justify-content-between">' \
+                  f'<span class="d-flex flex-row">{button_ban}{str_time}{user}</span>' \
+                  f'<span class="d-flex flex-row">{score}{button_dismiss}</span></div>' \
+                  f'<div class="align-items-baseline" style="{STYLE_WORD_BREAK}">{text}</div></div>'
+        return f'<div style="{highlight_style}">{div}</div>' if highlight_style else div
 
 
 class Type(Enum):
@@ -568,8 +577,7 @@ class Tournament:
             combined_msg.evaluate(self.re_usernames)
             best_ban_reason = combined_msg.best_ban_reason()
             if best_ban_reason != Reason.No or score_int > MULTI_MSG_MIN_TIMEOUT_SCORE:
-                str_tag = "spam"
-                combined_msg.text = f'[multi-line {str_tag}] {" | ".join([m.text for m in real_msgs])}'
+                combined_msg.text = f'[multiline] {" | ".join([m.text for m in real_msgs])}'
                 if score_int > MULTI_MSG_MIN_TIMEOUT_SCORE:
                     combined_msg.reasons[Reason.Spam] = score_int / MULTI_MSG_MIN_TIMEOUT_SCORE
                     combined_msg.score = score_int
@@ -588,7 +596,7 @@ class Tournament:
                                 break
                             reported_msgs[i] = True
                             total_len += 1  # whitespace
-                        combined_msg.text = f'[multi-line {str_tag}] ' \
+                        combined_msg.text = f'[multiline] ' \
                                             f'{" | ".join([m.text for i, m in enumerate(real_msgs) if reported_msgs[i]])}'
                         if last_msg:
                             combined_msg.text = f"{combined_msg.text} | {last_msg}"  # add to the end to further shorten it
@@ -734,6 +742,17 @@ class ChatAnalysis:
         self.state_reports = 1
         self.cache_tournaments = {'state': 0}
         self.cache_reports = {'state': 0}
+        try:
+            with open(config_file) as stream:
+                config = yaml.safe_load(stream)
+                self.to_read_mod_log = config.get('chat_mod_log', False)
+                self.to_read_notes = config.get('chat_notes', True)
+        except Exception as e:
+            print(f"There appears to be a syntax problem with your {config_file}: {e}")
+            self.to_read_mod_log = False
+            self.to_read_notes = True
+        self.last_mod_log_error = None
+        self.last_notes_error = None
 
     def wait_api(self):
         now = datetime.now()
@@ -894,6 +913,10 @@ class ChatAnalysis:
                     if m.username == msg.username and start_time < m.time < end_time:
                         m.is_timed_out = True
                         m.is_reset = False
+                for m in self.tournaments[msg.tournament].messages:
+                    if m.username == msg.username:
+                        m.is_timed_out = True
+                        m.is_reset = False
             else:
                 status_info = "invalid token?" if r.status_code == 200 else f"status: {r.status_code}"
                 self.errors.append(f"Timeout error ({status_info}):<br>{timeout_tag}{reason_tag.upper()} "
@@ -927,11 +950,40 @@ class ChatAnalysis:
                     reason = int(reason)
                     if reason == 0:
                         reason = Reason.Spam  # msg.best_reason()
-                    str_tag = "spam"
-                    combined_text = f'[multi-line {str_tag}] {" | ".join([m.text for m in msgs if not m.is_reset])}'
+                    combined_text = f'[multiline] {" | ".join([m.text for m in msgs if not m.is_reset])}'
                     combined_msg = Message({'u': msgs[0].username, 't': combined_text}, msgs[0].tournament, msgs[0].time)
                     combined_msg.evaluate(self.tournaments[self.tournament_messages[msg_id]].re_usernames)
                     self.api_timeout(combined_msg, reason, True)
+                    self.state_reports += 1
+        except Exception as exception:
+            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            self.errors.append(str(exception))
+
+    def custom_timeout(self, msg_ids, reason):
+        try:
+            with self.msg_lock:
+                if msg_ids:
+                    username = None
+                    msgs = []
+                    for msg_id in msg_ids:
+                        msg_id = int(msg_id[1:])
+                        msg = self.all_messages.get(msg_id)
+                        if username is None:
+                            username = msg.username
+                        elif username != msg.username:
+                            raise Exception(f"Messages of different users: {username} != {msg.username}")
+                        msgs.append(msg)
+                    reason = int(reason)
+                    if reason == 0:
+                        reason = Reason.Spam  # msg.best_reason()
+                    if len(msgs) > 1:
+                        combined_text = f'[multiline] {" | ".join([m.text for m in msgs])}'
+                        combined_msg = Message({'u': msgs[0].username, 't': combined_text}, msgs[0].tournament, msgs[0].time)
+                        first_msg_id = int(msg_ids[0][1:])
+                        combined_msg.evaluate(self.tournaments[self.tournament_messages[first_msg_id]].re_usernames)
+                        self.api_timeout(combined_msg, reason, True)
+                    else:
+                        self.api_timeout(msgs[0], reason, True)
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -946,26 +998,42 @@ class ChatAnalysis:
             return
 
     def select_message(self, msg_id):
+        def create_info(info):
+            return {'selected-messages': info, 'filtered-messages': info, 'selected-tournament': "",
+                    'selected-user': "", 'mod-notes': "", 'mod-log': ""}
+
         try:
             if msg_id == "--":
                 self.selected_msg_id = None
-                return ""
+                return create_info("")
             self.selected_msg_id = int(msg_id[1:])
             return self.get_messages_nearby(self.selected_msg_id)
         except Exception as exception:
             self.selected_msg_id = None
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            return f'<p class="text-danger">Error: {exception}</p>'
+            return create_info(f'<p class="text-danger">Error: {exception}</p>')
         except:
             self.selected_msg_id = None
-            return f'<p class="text-danger">Error: get_messages_near()</p>'
+            return create_info(f'<p class="text-danger">Error: get_messages_near()</p>')
 
     def get_messages_nearby(self, msg_id):
+        def create_output(info, tournament, user, notes, action_log=""):
+            return {'selected-messages': info, 'filtered-messages': info, 'selected-tournament': tournament,
+                    'selected-user': user, 'mod-notes': notes, 'mod-log': action_log}
+
+        def make_selected(msg_selected):
+            return f'<div class="border border-success rounded" style="{get_highlight_style(0.3)}">{msg_selected}</div>'
+
+        tournament_name = ""
+        username = ""
+        mod_notes = ""
+        mod_log = ""
         try:
+            tourn_id = self.tournament_messages.get(msg_id)
+            tournament_name = self.tournaments[tourn_id].get_link(short=False) if tourn_id in self.tournaments else ""
             if msg_id is None:
-                return ""
+                return create_output("", tournament_name, username, mod_notes, mod_log)
             with self.msg_lock:
-                tourn_id = self.tournament_messages.get(msg_id)
                 i: int = None
                 if tourn_id in self.tournaments:
                     for j, msg in enumerate(self.tournaments[tourn_id].messages):
@@ -973,34 +1041,59 @@ class ChatAnalysis:
                             i = j
                             break
                 if i is None:
-                    return f'<p class="text-warning">Warning: Message has been removed</p>'
-                i_start = max(0, i - NUM_MSGS_BEFORE)
-                n_rest = max(0, NUM_MSGS_BEFORE - i + i_start)
-                i_end = min(len(self.tournaments[tourn_id].messages), i + NUM_MSGS_AFTER + n_rest)
-                n_rest = max(0, NUM_MSGS_AFTER - i_end + i)
-                i_start = max(0, i_start - n_rest)
+                    return create_output(f'<p class="text-warning">Warning: Message has been removed</p>',
+                                         tournament_name, username, mod_notes, mod_log)
+                i_start = 0
+                i_end = len(self.tournaments[tourn_id].messages)
                 msg_i = self.tournaments[tourn_id].messages[i]
+                msg = make_selected(msg_i.get_info('C', show_hidden=True, highlight_user=True,
+                                                   is_selected=True, is_centered=True))
+                msg_f = make_selected(msg_i.get_info('F', show_hidden=True, highlight_user=True,
+                                                     is_selected=False, is_centered=True, add_selection=True))
+                # msg_f is not selected to allow copying to the notes.
+                # However, this prevents text from being selected with the mouse
                 msgs_before = [self.tournaments[tourn_id].messages[j].get_info('C',
                                base_time=msg_i.time, highlight_user=msg_i.username) for j in range(i_start, i)]
                 msgs_after = [self.tournaments[tourn_id].messages[j].get_info('C',
                               base_time=msg_i.time, highlight_user=msg_i.username) for j in range(i + 1, i_end)]
+                msgs_user = [(msg_f if msg_user.id == msg_id else msg_user.get_info(
+                                'F', base_time=msg_i.time, highlight_user=msg_i.username, add_selection=True))
+                             for msg_user in self.tournaments[tourn_id].messages if msg_user.username == msg_i.username]
                 list_start = '<hr class="text-primary my-1" style="border:1px solid;">' if i_start == 0 else ""
                 list_end = '<hr class="text-primary mt-1 mb-0" style="border:1px solid;">'\
                            if i_end == len(self.tournaments[tourn_id].messages) else ""
-                msg = msg_i.get_info('C', show_hidden=True, highlight_user=True, allow_selection=False)
-            header = f'<div class="d-flex user-select-none justify-content-between px-1 py-1" ' \
-                     f'style="background-color:rgba(128,128,128,0.2);">' \
-                     f'<span><b>Messages</b> in {self.tournaments[tourn_id].get_link(short=False)}:</span>' \
-                     f'<button class="btn btn-primary align-baseline flex-grow-0 py-0" ' \
-                     f'onclick="select_message(event,\'--\')">Close</button></div>'
-            return f'{header}{list_start}{"".join(msgs_before)}' \
-                   f'<div class="border border-success rounded" style="{get_highlight_style(0.3)}">{msg}</div>' \
-                   f'{"".join(msgs_after)}{list_end}'
+                username = msg_i.username
+                now = datetime.now()
+                if self.to_read_mod_log and (self.last_mod_log_error is None
+                                             or now > self.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
+                    mod_log_data = load_mod_log(username)
+                    if mod_log_data is None:
+                        self.last_mod_log_error = now
+                    else:
+                        mod_log, _ = get_mod_log(mod_log_data, ModActionType.Chat)
+                        self.last_mod_log_error = None
+                else:
+                    mod_log_data = None
+                if self.to_read_notes and (self.last_notes_error is None
+                                           or now > self.last_notes_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
+                    mod_notes = get_notes(username, mod_log_data)
+                    if mod_notes is None:
+                        self.last_notes_error = now
+                        mod_notes = ""
+                    else:
+                        self.last_notes_error = None
+            info_selected = f'{list_start}{"".join(msgs_before)} {msg} {"".join(msgs_after)}{list_end}'
+            info_filtered = "".join(msgs_user)
+            return {'selected-messages': info_selected, 'filtered-messages': info_filtered,
+                    'selected-tournament': tournament_name, 'selected-user': username,
+                    'mod-notes': mod_notes, 'mod-log': mod_log}
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            return f'<p class="text-danger">Error: {exception}</p>'
+            return create_output(f'<p class="text-danger">Error: {exception}</p>',
+                                 tournament_name, username, mod_notes, mod_log)
         except:
-            return f'<p class="text-danger">Error: get_messages_near()</p>'
+            return create_output(f'<p class="text-danger">Error: get_messages_near()</p>',
+                                 tournament_name, username, mod_notes, mod_log)
 
     def set_tournament(self, tourn_id, checked):
         tournament = self.tournaments.get(tourn_id)
@@ -1103,10 +1196,11 @@ class ChatAnalysis:
             if self.errors:
                 info = f'<div class="text-warning text-break">{"<b>Errors</b>: " if len(self.errors) > 1 else ""}<div>' \
                        f'{"</div><div>".join(self.errors)}</div><div class="text-danger">ABORTED</div></div>{info}'
-            info_selected = self.get_messages_nearby(self.selected_msg_id)
+            messages_nearby = self.get_messages_nearby(self.selected_msg_id)
             str_time = f"{now_utc:%H:%M}"
-            self.cache_reports = {'reports': info, 'multiline-reports': info_frequent, 'selected-messages': info_selected,
+            self.cache_reports = {'reports': info, 'multiline-reports': info_frequent,
                                   'time': str_time, 'state': self.state_reports}
+            self.cache_reports.update(messages_nearby)
             return self.cache_reports
 
     def get_tournaments(self, active_tournaments=None):
@@ -1181,6 +1275,22 @@ class ChatAnalysis:
                 self.cache_tournaments[state] = "".join(t)
             self.cache_tournaments['state'] = self.state_tournaments
             return self.cache_tournaments
+
+    def send_note(self, note, username):
+        try:
+            if not note or not username:
+                raise Exception(f"Wrong note: [{username}]: {note}")
+            with self.msg_lock:
+                if note and username:
+                    print(f"Note [{username}]:\n{note}")
+                    is_ok = add_note(username, note)
+                    if is_ok:
+                        mod_notes = get_notes(username)
+                        return {'selected-user': username, 'mod-notes': mod_notes}
+        except Exception as exception:
+            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            self.errors.append(str(exception))
+        return {'selected-user': username, 'mod-notes': ""}
 
 
 def get_current_tournaments():

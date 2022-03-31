@@ -1,36 +1,71 @@
 {% extends 'layout.html' %}
 
 {% block main %}
-<div class="container-fluid m-0">
-  <div class="justify-content-around">
-    <div class="d-flex d-row justify-content-between">
-      <div class="column mr-3" style="min-width:370px;">
-        <div class="d-flex flex-row mt-3">
-          <label for="userlink" class="m-0 mr-1">User:</label>
-          <input id="userlink" type="text" class="flex-grow-1 py-0 mr-1">
-          <button class="btn btn-primary flex-grow-0 py-0" onclick="go_username()">Go</button>
-        </div>
-        <div id="user_downloading" class="d-none justify-content-center align-items-center mt-2 mb-3">
-          <div class="spinner-border spinner-blue-only text-secondary" role="status"></div>
-          <span id="downloading_text" class="ml-3 text-secondary">Downloading user data&hellip;</span>
-        </div>
-        <div id="boost_user">
-        </div>
-        <div class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2">
-          <p class="pr-2 m-0">Mode</p>
-          <div class="btn-group btn-group-toggle">
-            <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
-            <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
-            <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
-          </div>
+{% if embed_lichess %}
+<div class="container-fluid m-0 px-2 pb-5" style="max-width:96vw;min-height:60vh;">
+{% else %}
+<div class="container-fluid m-0 px-2 pb-3" style="max-width:96vw;min-height:97vh;">
+{% endif %}
+  <div class="row justify-content-center my-2">
+    <div class="col" style="width:420px;min-width:370px;max-width:500px;">
+      <div class="d-flex flex-row mt-3">
+        <label for="userlink" class="m-0 mr-1">User:</label>
+        <input id="userlink" type="text" class="flex-grow-1 py-0 mr-1">
+        <button class="btn btn-primary flex-grow-0 py-0" onclick="go_username()">Go</button>
+      </div>
+      <div id="user_downloading" class="d-none justify-content-center align-items-center my-3">
+        <div class="spinner-border spinner-blue-only text-secondary" role="status"></div>
+        <span id="downloading_text" class="ml-3 text-secondary">Downloading user data&hellip;</span>
+      </div>
+      <div id="part-1">
+      </div>
+      <div class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2">
+        <p class="pr-2 m-0">Mode</p>
+        <div class="btn-group btn-group-toggle">
+          <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
+          <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
+          <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
         </div>
       </div>
-      <div class="container-fluid px-0">
-        <iframe id="embed_frame" class="container-fluid px-0" style="min-width:60vw; min-height:96vh;" src="https://lichess.org/report/list/boost" allowtransparency="true" frameborder="0"></iframe>
+    </div>
+    <div class="col" style="min-width:370px;max-width:500px;">
+      <div id="tournaments_downloading" class="row d-none justify-content-center align-items-center my-3">
+        <div class="spinner-border spinner-blue-only text-secondary" role="status"></div>
+        <span class="ml-3 text-secondary">Downloading tournaments&hellip;</span>
+      </div>
+      <div id="tournaments" class="my-3" style="display:none;">
+      </div>
+      <div id="part-2">
+      </div>
+    </div>
+    <div class="col" style="min-width:370px;max-width:800px;">
+      <div id="notes-section" class="d-none mt-3">
+        <div class="d-flex user-select-none justify-content-between px-1 py-1">
+          <span id="label_add_notes" class="d-none align-self-center mr-2">Add note + </span>
+          <button id="warn_sandbag" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="mod_action('warn_sandbagging')">Warn: Sandbag</button>
+          <button id="warn_boost" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="mod_action('warn_boosting')">Warn: Boost</button>
+          <button id="mark_booster" class="btn btn-secondary align-baseline flex-grow-1 p-0" onclick="mod_action('mark_booster')">Mark</button>
+        </div>
+        <textarea id="notes" class="form-control" rows="5" oninput='update_notes()'></textarea>
+        <div id="btn_actions" class="d-none user-select-none justify-content-between px-1 py-1">
+          <span id="notes_username" class="align-self-center mr-2"></span>
+          <button class="btn btn-warning align-baseline flex-grow-1 p-0 mr-1" onclick="send_note()">Add note</button>
+          <button class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="copyTextToClipboard($('#notes').val())">Copy</button>
+          <button class="btn btn-secondary align-baseline flex-grow-1 p-0" onclick="clear_notes()">Clear</button>
+        </div>
+        <div id="notes-header" class="d-none mt-3">
+        </div>
+        <div id="mod-notes" class="d-none mt-1">
+        </div>
+        <div id="mod-log" class="mt-3">
+        </div>
       </div>
     </div>
   </div>
-</div>
+</div> {% if embed_lichess %}
+<div class="container-fluid px-0">
+  <iframe id="embed_frame" class="container-fluid px-0" style="min-width:60vw; min-height:96vh;" src="https://lichess.org/report/list/boost" allowtransparency="true" frameborder="0"></iframe>
+</div> {% endif %}
 {% endblock %}
 
 {% block scripts %}
@@ -47,7 +82,11 @@
     $("#mainOverlay").css("display","block");
     $("#userlink").on('change input', username_changed);
     $("#userlink").on('keypress', username_entered);
-    {% if boost_user %} set_user('{{boost_user}}'); {% endif %}
+    {% if boost_user %}
+    set_user('{{boost_user}}');
+    {% else %}
+    clear_data();
+    {% endif %}
   });
   function username_changed(e) {
     check_username(e.target.value);
@@ -70,7 +109,7 @@
     }
   }
   function go_username() {
-    set_user($("#userlink")[0].value);
+    set_user($("#userlink")[0].value.trim());
     $("#userlink")[0].value = "";
   }
   var current_user = "";
@@ -78,44 +117,71 @@
     current_user = username;
     if (!username)
       return;
-    $("#user_downloading").removeClass("d-none").addClass("d-flex");
-    $("#downloading_text").html(`Downloading ${username}&hellip;`);
+    clear_data();
+    $('#user_downloading').removeClass("d-none").addClass("d-flex");
+    $('#downloading_text').html(`Downloading ${username}&hellip;`);
     $.ajax({url: `/boost/${username}`, type: "post"})
       .done(function(data, textStatus, jqXHR) {
-        $("#user_downloading").removeClass("d-flex").addClass("d-none");
-        $("#downloading_text").html("Downloading user data&hellip;");
-        $('#boost_user').html(data);
-        $('#embed_frame')[0].src = `https://lichess.org/@/${username}?mod`;
+        $('#user_downloading').removeClass("d-flex").addClass("d-none");
+        $('#downloading_text').html("Downloading user data&hellip;");
+        $('#part-1').html(data["part-1"]);
+        $('#part-2').html(data["part-2"]);
+        $('#mod-log').html(data["mod-log"]);
+        update_mod_notes(data);
+        $('#notes-section').removeClass("d-none").addClass("d-block");
+        $('#tournaments_downloading').removeClass("d-none").addClass("d-flex");
+        //$('#embed_frame')[0].src = `https://lichess.org/@/${username}?mod`;
+        enable_buttons(data);
         $.ajax({url: `/boost/${username}/tournaments/`})
           .done(function(data, textStatus, jqXHR) {
-            $("#tournaments_downloading").css("display","none");
-            $("#tournaments").css("display","block");
-            $('#tournaments').html(data);
+            $('#tournaments_downloading').removeClass("d-flex").addClass("d-none");
+            $('#tournaments').css("display","block");
+            $('#tournaments').html(data["tournaments"]);
+            enable_buttons(data);
           });
       });
   }
-  function copyTextToClipboard(text) {
-    var textArea = document.createElement("textarea");
-    textArea.style.position = 'fixed';
-    textArea.style.top = 0;
-    textArea.style.left = 0;
-    textArea.style.width = '2em';
-    textArea.style.height = '2em';
-    textArea.style.padding = 0;
-    textArea.style.border = 'none';
-    textArea.style.outline = 'none';
-    textArea.style.boxShadow = 'none';
-    textArea.style.background = 'transparent';
-    textArea.value = text;
-    document.body.appendChild(textArea);
-    textArea.focus();
-    textArea.select();
-    try {
-      var successful = document.execCommand('copy');
-    } catch (err) {
-      console.log('Oops, unable to copy');
-    }
-    document.body.removeChild(textArea);
+  function clear_data() {
+    clear_notes();
+    $('#notes-section').removeClass("d-block").addClass("d-none");
+    $('#part-1').html("");
+    $('#part-2').html("");
+    $('#mod-log').html("");
+    $('#user_downloading').removeClass("d-flex").addClass("d-none");
+    $('#downloading_text').html("Downloading user data&hellip;");
+    $('#tournaments_downloading').removeClass("d-flex").addClass("d-none");
+    $('#tournaments').css("display","none");
+    $('#tournaments').html("");
+    $('#notes-header').html("");
+    $('#notes-header').removeClass("d-flex").addClass("d-none");
+    $('#mod-notes').html("");
+    $('#mod-notes').removeClass("d-flex").addClass("d-none");
+  }
+  function enable_buttons(data) {
+    if (data["enable-sandbagging"] == 1)
+      $('#warn_sandbag').removeClass("btn-secondary").addClass("btn-warning");
+    else
+      $('#warn_sandbag').removeClass("btn-warning").addClass("btn-secondary");
+    if (data["enable-sandbagging"] == -1)
+      $('#warn_sandbag').attr("disabled", "");
+    else
+      $('#warn_sandbag').removeAttr("disabled");
+    if (data["enable-boosting"] == 1)
+      $('#warn_boost').removeClass("btn-secondary").addClass("btn-warning");
+    else
+      $('#warn_boost').removeClass("btn-warning").addClass("btn-secondary");
+    if (data["enable-boosting"] == -1)
+      $('#warn_boost').attr("disabled", "");
+    else
+      $('#warn_boost').removeAttr("disabled");
+    if (data["enable-marking"] == 1)
+      $('#mark_booster').removeClass("btn-secondary").addClass("btn-danger");
+    else
+      $('#mark_booster').removeClass("btn-danger").addClass("btn-secondary");
+    if (data["enable-marking"] == -1)
+      $('#mark_booster').attr("disabled", "");
+    else
+      $('#mark_booster').removeAttr("disabled");
   }
   function update_mode(val, to_request=true) {
     if (val == 0)
@@ -137,6 +203,81 @@
         location.reload();
       }
     }
+  }
+  function update_mod_notes(data) {
+    $('#notes-header').html(data['notes-header']);
+    $('#notes-header').removeClass("d-none").addClass("d-flex");
+    $('#mod-notes').html(data['mod-notes']);
+    if (data['mod-notes'])
+      $('#mod-notes').removeClass("d-none").addClass("d-flex");
+    else
+      $('#mod-notes').removeClass("d-flex").addClass("d-none");
+  }
+  function update_username() {
+    $('#notes_username').html(current_user ? `<a class="text-success" href="https://lichess.org/@/${current_user.toLowerCase()}?notes" target="_blank">${current_user}</a>:` : "");
+  }
+  function update_notes() {
+    $("#notes")[0].style.height = "50px";
+    $("#notes")[0].style.height = (Math.max(100, $("#notes")[0].scrollHeight + 5)) + "px";
+    if ($('#notes').val()) {
+      $('#btn_actions').removeClass("d-none").addClass("d-flex");
+      $('#label_add_notes').removeClass("d-none").addClass("d-flex");
+    }
+    else {
+      $("#btn_actions").removeClass("d-flex").addClass("d-none");
+      $('#label_add_notes').removeClass("d-flex").addClass("d-none");
+    }
+    $('[data-selection]').each(function(i, el){
+      if ($('#notes').val().includes(el.getAttribute("data-selection")))
+        $(el).attr("disabled", "");
+      else
+        $(el).removeAttr("disabled");
+    });
+  }
+  function clear_notes() {
+    $('#notes').val('');
+    update_notes();
+  }
+  function add_to_notes(button) {
+    if (!button)
+      return;
+    var text = button.getAttribute("data-selection");
+    if (!text)
+      return;
+    var note = $('#notes').val();
+    if (note && note.includes(text))
+      return;
+    $('#notes').val(note ? `${note}\n${text}` : text);
+    update_notes();
+  }
+  function send_note() {
+    text = $('#notes').val();
+    if (!text)
+      return;
+    $.ajax({
+      url: `/boost/send_note`,
+      type: "post",
+      data: {note: text, user: current_user}})
+        .done(function(data, textStatus, jqXHR) {
+          if (data['mod-notes']) {
+            if (current_user && data['user'] == current_user)
+              update_mod_notes(data);
+            clear_notes();
+          }
+        });
+  }
+  function mod_action(action) {
+    send_note();
+    $.ajax({
+      url: `/boost/mod_action`,
+      type: "post",
+      data: {action: action, user: current_user}})
+        .done(function(data, textStatus, jqXHR) {
+          if (current_user && data['user'] == current_user && data['mod-log']) {
+            $('#mod-log').html(data['mod-log']);
+            enable_buttons(data);
+          }
+        });
   }
   </script>
 {% endblock %}

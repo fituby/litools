@@ -488,8 +488,10 @@ list_res = {
        reason=Reason.Offensive, info="Ru: мудак"),
     Re(r'(|от|под?)cос(и|ать|ала?|)', 40,
        reason=Reason.Offensive, info="Ru: отсоси"),
-    Re(r'(|от|с)пизд(а|ы|е|у|ить?|ил?а?|или|ошить?|ошил?а?|ошили|охать|охала?|охали|юлить|юлил?а?|юлили|ярить?|ярила?|ярили|яхать|яхала?|яхали|ячить?|ячила?|ячили|якать|якала?|якали|ец|ецкий?|абол|атый?)', 30,  # corrected
+    Re(r'(|от|с)пизд(а|ы|е|у|ить?|ил?а?|или|ошить?|ошил?а?|ошили|охать|охала?|охали|юлить|юлил?а?|юлили|ярить?|ярила?|ярили|яхать|яхала?|яхали|ячить?|ячила?|ячили|якать|якала?|якали|ец|ецкий?|атый?)', 30,  # corrected
        reason=Reason.Offensive, info="Ru: пизда"),
+    Re(r'пизд[ао]бол(|а|ы|е|у|ом|ов|ав|ами?|ах)', 50,  # added
+       reason=Reason.Offensive, info="Ru: пиздабол"),
     Re(r'(|отъ?|вы|до|за|у|про)[её]ба(л|ла|ли|ло|лся|льник|ть|на|нул|нула|нулся|нн?ый|нутый?|нутая|нутые)', 50,  # added '|нутый?|нутая|нутые', '(е|ё)'-->'[её]'
        reason=Reason.Offensive, info="Ru: заебал"),
     Re(r'у?[её]бл(а|о|у|ану?|я|ю)', 50,  # added 'у?', '(е|ё)'-->'[её]', '|я|ю'
@@ -628,10 +630,6 @@ list_res = {
        reason=Reason.Offensive, info="Ru: шмара"),
     Re(r'шлюх(|ам?|е|и)', 30,
        reason=Reason.Offensive, info="Ru: шлюха"),
-    Re(r'z\s?(|z|v)', 80,  # added
-       reason=Reason.Offensive, info="Ru: Z (pro-war symbol)"),
-    Re(r'z+', 50,  # added
-       reason=Reason.Offensive, info="Ru: Z (pro-war symbol)"),
 ],
 'De': [
     Re(r'angsthase',
@@ -832,11 +830,11 @@ list_res = {
        ban=-2, reason=Reason.Spam, info="Spam: [$7] x25..39"),
     Re(r'[\W_\-\d]{15,24}', 10, is_separate_word=False,
        reason=Reason.Spam, info="Spam: [$7] x15..24"),
-    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0600-\u06FF]{45,}', 80, is_separate_word=False,
+    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0600-\u06FF' '\u0E00-\u0E7F' ']{45,}', 80, is_separate_word=False,
        ban=-2, reason=Reason.Spam, info="Spam: [^ -.] x45"),
-    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0600-\u06FF]{35,44}', 50, is_separate_word=False,
+    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0600-\u06FF' '\u0E00-\u0E7F' ']{35,44}', 50, is_separate_word=False,
        reason=Reason.Spam, info="Spam: [^ -.] x35..44"),
-    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0600-\u06FF]{25,34}', 10, is_separate_word=False,
+    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0600-\u06FF' '\u0E00-\u0E7F' ']{25,34}', 10, is_separate_word=False,
        reason=Reason.Spam, info="Spam: [^ -.] x25..34"),
     Re(r'[qwrtpsdfghjklzxcvbnmйцкнгшщзхъфвпрлджчсмтьб]{50,}', 80, is_separate_word=False,
        ban=-1, reason=Reason.Spam, info="Spam: [b] x50"),  # without y
