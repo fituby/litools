@@ -386,7 +386,7 @@ class UserTournament:
         name = shorten(self.name, MAX_LEN_TOURNEY_NAME)
         tourney_type = "tournament" if self.is_arena else "swiss"
         class_name = ""
-        if self.is_official and self.name.startswith('<') and self.place:
+        if self.is_official and self.name.startswith('≤') and self.place:
             if self.place <= 5:
                 class_name = ' class="text-danger"'
             elif self.place <= 10:
@@ -792,7 +792,7 @@ class Boost:
     def get_tournaments(self):
         if not self.prefer_marking and not self.user.is_titled():
             for tourney in self.tournaments:
-                if tourney.is_official and tourney.name.startswith('<') and 1 <= tourney.place <= 3:
+                if tourney.is_official and tourney.name.startswith('≤') and 1 <= tourney.place <= 3:
                     self.prefer_marking = True
                     break
         output = self.get_enabled_buttons()
