@@ -9,9 +9,9 @@ from enum import Enum, IntFlag
 from multiprocessing import Lock
 import yaml
 import html
-from elements import Reason, get_token, get_ndjson, deltaseconds, deltaperiod, shorten, log, config_file
-from elements import STYLE_WORD_BREAK, get_notes, add_note, load_mod_log, get_mod_log, ModActionType
-from chat_re import ReUser, list_res, list_res_variety, re_spaces
+from elements import Reason, get_token, get_ndjson, deltaseconds, deltaperiod, shorten, log, config_file, Error502
+from elements import STYLE_WORD_BREAK, get_notes, add_note, load_mod_log, get_mod_log, ModActionType, UserData
+from chat_re import ReUser, list_res, list_res_variety, re_spaces, LANGUAGES
 
 
 CHAT_TOURNAMENT_FINISHED_AGO = 12 * 60  # [min]
@@ -45,6 +45,8 @@ CHAT_UPDATE_SWISS = False  # loading messages from swiss tourneys doesn't work a
 DO_AUTO_TIMEOUTS = False
 MULTI_MSG_MIN_TIMEOUT_SCORE = 300
 MAX_LEN_TEXT = 140
+CHAT_NUM_PLAYED_GAMES = [100, 250]
+CHAT_CREATED_DAYS_AGO = [30, 60]
 
 
 def get_highlight_style(opacity):
@@ -64,7 +66,7 @@ def load_res():
             config = yaml.safe_load(stream)
             timeouts = config.get('timeouts', "En, Spam").lower()
             list_re = []
-            for group in ['En', 'Ru', 'De', 'Es', 'It', 'Hi', 'Fr', 'Tr', 'Spam']:
+            for group in LANGUAGES.keys():
                 if group.lower() in timeouts:
                     list_re.extend(list_res[group])
             list_re_variety = list_res_variety if 'spam' in timeouts else []
@@ -80,9 +82,10 @@ class Message:
     global_id = 0
     list_res, list_res_variety = load_res()
 
-    def __init__(self, data, tournament, now=None):
+    def __init__(self, data, tournament, now=None, delay=None):
         self.id: int = None
         self.time: datetime = now
+        self.delay: int = delay
         self.username = data['u']
         self.text = data['t']
         self.eval_text = ""
@@ -191,7 +194,7 @@ class Message:
                 else f"{abs(ds // 60)}m{abs(ds % 60):02d}s" if abs(ds) < 300 \
                 else f"{abs(int(round(ds / 60)))}m"
             str_time = f"&minus;{dt} " if ds < 0 else f'+{dt} ' if ds > 0 else "== "
-            str_time = f'<abbr title="{self.time:%H:%M:%S}" class="user-select-none" ' \
+            str_time = f'<abbr title="{self.time.astimezone(tz=None):%H:%M:%S}" class="user-select-none" ' \
                        f'style="text-decoration:none;">{str_time}</abbr>'
         score_theme = "" if self.score is None else ' text-danger' if self.score > 50 \
             else ' text-warning' if self.score > 10 else ""
@@ -294,6 +297,7 @@ class Tournament:
         self.user_names = set()
         self.re_usernames = []
         self.errors = []
+        self.errors_502 = []
         self.max_score = 0
         self.total_score = 0
         self.is_monitored = is_monitored
@@ -395,9 +399,17 @@ class Tournament:
             url = self.link if self.link else f"https://lichess.org/{self.get_type()}/{self.id}"
             r = requests.get(url, headers=headers)
             if r.status_code != 200:
+                if r.status_code == 502:
+                    if self.errors_502 and self.errors_502[-1].is_ongoing():
+                        return
+                    self.errors_502.append(Error502(now_utc))
+                    return
                 raise Exception(f"Failed to download {url}<br>Status Code {r.status_code}")
+            if self.errors_502 and self.errors_502[-1].is_ongoing():
+                self.errors_502[-1].complete(now_utc)
+            delay = None if self.last_update is None else deltaseconds(now_utc, self.last_update)
             with msg_lock:
-                new_messages, deleted_messages = self.process_messages(r.text, now_utc)
+                new_messages, deleted_messages = self.process_messages(r.text, now_utc, delay)
             #self.process_usernames(r.text)  # doesn't work with token
             self.last_update = now_utc
         except Exception as exception:
@@ -411,7 +423,7 @@ class Tournament:
             self.re_usernames.append(ReUser(re_user, 0, info=user, class_name="text-muted"))
         return new_messages, deleted_messages
 
-    def process_messages(self, text, now_utc):
+    def process_messages(self, text, now_utc, delay):
         new_messages = []
         deleted_messages = []
         i1 = text.find(CHAT_BEGINNING_MESSAGES_TEXT)
@@ -432,7 +444,7 @@ class Tournament:
         can_be_old = True
         is_new = True
         for d in data:
-            msg = Message(d, self.id, now_utc)
+            msg = Message(d, self.id, now_utc, delay)
             if can_be_old:
                 is_new = True
                 for i in range(i_msg, len(self.messages)):
@@ -505,12 +517,14 @@ class Tournament:
 
     def get_info(self, now_utc):
         msgs = [msg.get_info('A', add_mscore=True) for msg in self.messages if msg.score and not msg.is_hidden()]
-        if not msgs and not self.errors:
+        if not msgs and not self.errors and not self.errors_502:
             return ""
+        errors = self.errors.copy()
+        errors.extend([str(err) for err in self.errors_502])
         header = f'<div class="d-flex user-select-none justify-content-between px-1 mb-1" ' \
                  f'style="background-color:rgba(128,128,128,0.2);">' \
                  f'{self.get_link(short=False)}{self.get_status(now_utc)}</div>'
-        errors = f'<div class="text-warning px-1"><div>{"</div><div>".join(self.errors)}</div></div>' if self.errors else ""
+        errors = f'<div class="text-warning px-1"><div>{"</div><div>".join(errors)}</div></div>' if errors else ""
         return f'<div class="col rounded m-1 px-0" style="background-color:rgba(128,128,128,0.2);min-width:350px">' \
                f'{header}{errors}{"".join(msgs)}</div>'
 
@@ -719,6 +733,7 @@ class Tournament:
 class ChatAnalysis:
     def __init__(self):
         self.tournaments = {}
+        self.users = {}
         #self.user_messages = {}
         self.tournament_messages = {}
         self.all_messages = {}
@@ -917,6 +932,7 @@ class ChatAnalysis:
                     if m.username == msg.username:
                         m.is_timed_out = True
                         m.is_reset = False
+                self.update_selected_user()
             else:
                 status_info = "invalid token?" if r.status_code == 200 else f"status: {r.status_code}"
                 self.errors.append(f"Timeout error ({status_info}):<br>{timeout_tag}{reason_tag.upper()} "
@@ -997,16 +1013,48 @@ class ChatAnalysis:
         except:
             return
 
+    def update_selected_user(self):
+        try:
+            if self.selected_msg_id is None:
+                return
+            msg = self.all_messages.get(self.selected_msg_id)
+            if not msg:
+                return
+            user = UserData(msg.username)
+            now = datetime.now()
+            if self.to_read_mod_log and (self.last_mod_log_error is None
+                                         or now > self.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
+                mod_log_data = load_mod_log(msg.username)
+                if mod_log_data is None:
+                    self.last_mod_log_error = now
+                else:
+                    user.mod_log, _ = get_mod_log(mod_log_data, ModActionType.Chat)
+                    self.last_mod_log_error = None
+            else:
+                mod_log_data = None
+            if self.to_read_notes and (self.last_notes_error is None
+                                       or now > self.last_notes_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
+                user.notes = get_notes(msg.username, mod_log_data)
+                if user.notes is None:
+                    self.last_notes_error = now
+                    user.notes = ""
+                else:
+                    self.last_notes_error = None
+            self.users[msg.username] = user
+        except Exception as exception:
+            traceback.print_exception(type(exception), exception, exception.__traceback__)
+
     def select_message(self, msg_id):
         def create_info(info):
             return {'selected-messages': info, 'filtered-messages': info, 'selected-tournament': "",
-                    'selected-user': "", 'mod-notes': "", 'mod-log': ""}
+                    'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': ""}
 
         try:
             if msg_id == "--":
                 self.selected_msg_id = None
                 return create_info("")
             self.selected_msg_id = int(msg_id[1:])
+            self.update_selected_user()
             return self.get_messages_nearby(self.selected_msg_id)
         except Exception as exception:
             self.selected_msg_id = None
@@ -1017,22 +1065,25 @@ class ChatAnalysis:
             return create_info(f'<p class="text-danger">Error: get_messages_near()</p>')
 
     def get_messages_nearby(self, msg_id):
-        def create_output(info, tournament, user, notes, action_log=""):
-            return {'selected-messages': info, 'filtered-messages': info, 'selected-tournament': tournament,
-                    'selected-user': user, 'mod-notes': notes, 'mod-log': action_log}
+        def create_output(info, tournament, user_data, filtered_info=None):
+            data = {'selected-messages': info, 'filtered-messages': filtered_info or info, 'selected-tournament': tournament}
+            if user_data:
+                data.update({'selected-user': user_data.user.name, 'user-profile': user_data.user.get_profile(),
+                             'user-info': user_data.user.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES),
+                             'mod-notes': user_data.notes, 'mod-log': user_data.mod_log})
+            else:
+                data.update({'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': ""})
+            return data
 
         def make_selected(msg_selected):
             return f'<div class="border border-success rounded" style="{get_highlight_style(0.3)}">{msg_selected}</div>'
 
         tournament_name = ""
-        username = ""
-        mod_notes = ""
-        mod_log = ""
         try:
             tourn_id = self.tournament_messages.get(msg_id)
             tournament_name = self.tournaments[tourn_id].get_link(short=False) if tourn_id in self.tournaments else ""
             if msg_id is None:
-                return create_output("", tournament_name, username, mod_notes, mod_log)
+                return create_output("", tournament_name, None)
             with self.msg_lock:
                 i: int = None
                 if tourn_id in self.tournaments:
@@ -1042,7 +1093,7 @@ class ChatAnalysis:
                             break
                 if i is None:
                     return create_output(f'<p class="text-warning">Warning: Message has been removed</p>',
-                                         tournament_name, username, mod_notes, mod_log)
+                                         tournament_name, None)
                 i_start = 0
                 i_end = len(self.tournaments[tourn_id].messages)
                 msg_i = self.tournaments[tourn_id].messages[i]
@@ -1063,37 +1114,15 @@ class ChatAnalysis:
                 list_end = '<hr class="text-primary mt-1 mb-0" style="border:1px solid;">'\
                            if i_end == len(self.tournaments[tourn_id].messages) else ""
                 username = msg_i.username
-                now = datetime.now()
-                if self.to_read_mod_log and (self.last_mod_log_error is None
-                                             or now > self.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
-                    mod_log_data = load_mod_log(username)
-                    if mod_log_data is None:
-                        self.last_mod_log_error = now
-                    else:
-                        mod_log, _ = get_mod_log(mod_log_data, ModActionType.Chat)
-                        self.last_mod_log_error = None
-                else:
-                    mod_log_data = None
-                if self.to_read_notes and (self.last_notes_error is None
-                                           or now > self.last_notes_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
-                    mod_notes = get_notes(username, mod_log_data)
-                    if mod_notes is None:
-                        self.last_notes_error = now
-                        mod_notes = ""
-                    else:
-                        self.last_notes_error = None
+            user = self.users.get(username)
             info_selected = f'{list_start}{"".join(msgs_before)} {msg} {"".join(msgs_after)}{list_end}'
             info_filtered = "".join(msgs_user)
-            return {'selected-messages': info_selected, 'filtered-messages': info_filtered,
-                    'selected-tournament': tournament_name, 'selected-user': username,
-                    'mod-notes': mod_notes, 'mod-log': mod_log}
+            return create_output(info_selected, tournament_name, user, filtered_info=info_filtered)
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            return create_output(f'<p class="text-danger">Error: {exception}</p>',
-                                 tournament_name, username, mod_notes, mod_log)
+            return create_output(f'<p class="text-danger">Error: {exception}</p>', tournament_name, None)
         except:
-            return create_output(f'<p class="text-danger">Error: get_messages_near()</p>',
-                                 tournament_name, username, mod_notes, mod_log)
+            return create_output(f'<p class="text-danger">Error: get_messages_near()</p>', tournament_name, None)
 
     def set_tournament(self, tourn_id, checked):
         tournament = self.tournaments.get(tourn_id)
@@ -1178,6 +1207,7 @@ class ChatAnalysis:
                 return self.cache_reports
             # Main content
             now_utc = datetime.now(tz=tz.tzutc())
+            now = datetime.now()
             active_tournaments = self.get_score_sorted_tournaments(now_utc)
             info = "".join([tourn.get_info(now_utc) for tourn in active_tournaments])
             output = []
@@ -1197,7 +1227,7 @@ class ChatAnalysis:
                 info = f'<div class="text-warning text-break">{"<b>Errors</b>: " if len(self.errors) > 1 else ""}<div>' \
                        f'{"</div><div>".join(self.errors)}</div><div class="text-danger">ABORTED</div></div>{info}'
             messages_nearby = self.get_messages_nearby(self.selected_msg_id)
-            str_time = f"{now_utc:%H:%M}"
+            str_time = f"{now:%H:%M}"
             self.cache_reports = {'reports': info, 'multiline-reports': info_frequent,
                                   'time': str_time, 'state': self.state_reports}
             self.cache_reports.update(messages_nearby)
@@ -1280,13 +1310,12 @@ class ChatAnalysis:
         try:
             if not note or not username:
                 raise Exception(f"Wrong note: [{username}]: {note}")
-            with self.msg_lock:
-                if note and username:
-                    print(f"Note [{username}]:\n{note}")
-                    is_ok = add_note(username, note)
-                    if is_ok:
-                        mod_notes = get_notes(username)
-                        return {'selected-user': username, 'mod-notes': mod_notes}
+            if note and username:
+                print(f"Note [{username}]:\n{note}")
+                is_ok = add_note(username, note)
+                if is_ok:
+                    mod_notes = get_notes(username)
+                    return {'selected-user': username, 'mod-notes': mod_notes}
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             self.errors.append(str(exception))

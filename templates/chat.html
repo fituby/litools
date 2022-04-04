@@ -75,7 +75,7 @@
         </div>
       </div>
       <div class="d-flex flex-row align-content-start flex-wrap mt-3">
-        <div class="col align-content-start px-0 mr-2 mb-3" style="min-width:350px;max-width:500px;">
+        <div class="col align-content-start px-0" style="min-width:350px;max-width:500px;">
           <div id="selection_header" class="d-none user-select-none justify-content-between py-1" style="background-color:rgba(128,128,128,0.2);">
             <span>
               <button id="btn_filter_msgs" class="btn btn-outline-success align-baseline py-0 px-1 mr-1" type="button" onclick="filter_toggle()">Process</button>
@@ -105,10 +105,14 @@
             </div>
           </div>
         </div>
-        <div>
-          <div id="mod-notes" class="col d-none flex-wrap align-content-start px-0 mr-2" style="min-width:350px;max-width:500px;">
+        <div class="col align-content-start mb-3 p-0">
+          <div id="user-info" class="col d-none align-content-start mr-2 px-0" style="min-width:350px;max-width:500px;">
           </div>
-          <div id="mod-log" class="col d-none align-content-start px-0 mr-2 mb-2" style="min-width:350px;max-width:500px;">
+          <div id="mod-notes" class="col d-none flex-wrap align-content-start px-0" style="min-width:350px;max-width:500px;">
+          </div>
+          <div id="mod-log" class="col d-none align-content-start px-0 mb-2" style="min-width:350px;max-width:500px;">
+          </div>
+          <div id="user-profile" class="col d-none align-content-start px-0" style="min-width:350px;max-width:500px;">
           </div>
         </div>
       </div>
@@ -118,7 +122,7 @@
       <span class="ml-3 text-secondary">Downloading chats&hellip;</span>
     </div>
     <div id="clean_messages" class="col d-none justify-content-center mt-5">
-      <h5 class="text-success">Everything is clean as of <span id="chat_clean">now</span> UTC.<br>Thank you for your great work! <i class="far fa-heart"></i></h5>
+      <h5 class="text-success">Everything is clean as of <span id="chat_clean">now</span>.<br>Thank you for your great work! <i class="far fa-heart"></i></h5>
     </div>
     <div id="dubious_messages" class="col">
       <h6 class="text-center mb-1">Dubious messages</h6>
@@ -160,6 +164,7 @@
   var notes_msgs = [];
   var state_tournaments = 0;
   var state_reports = 0;
+  var hidden_msgs = new Set();
   var last_update = new Date().getTime();
   function is_clickable() {
     return (new Date().getTime()) >= last_update + 1000;
@@ -223,6 +228,11 @@
     }
     set_selection(data_chats);
     filter_messages();
+    for (var msg_id of hidden_msgs) {
+      $(`#msgA${msg_id}`).css("display","none");
+      $(`#msgB${msg_id}`).css("display","none");
+    }
+    console.log(hidden_msgs);
     return true;
   }
   function update_tournament_list(data) {
@@ -234,12 +244,26 @@
     $('#tournaments_started').html(data['started']);
     $('#tournaments_finished').html(data['finished']);
   }
+  function hide_msg(msg_id, flag) {
+    if (!msg_id || msg_id.length <= 1 || msg_id == "--" || msg_id.startsWith('T'))
+      return;
+    if (flag) {
+      hidden_msgs.add(`${msg_id.substring(1)}`);
+      console.log(`+ ${msg_id.substring(1)}`);
+    }
+    else {
+      hidden_msgs.delete(`${msg_id.substring(1)}`);
+      console.log(`- ${msg_id.substring(1)}`);
+    }
+  }
   function set_ok(msg_id) {
     if (!is_clickable()) return;
     if (!msg_id.startsWith('C') && !msg_id.startsWith('F'))
       $(`#msg${msg_id}`).css("display","none");
+    hide_msg(msg_id, true);
     $.ajax({url: `/chat/set_msg_ok/${msg_id}`, type: "post"})
         .done(function(data_chats, textStatus, jqXHR) {
+          hide_msg(msg_id, false);
           update_data(data_chats);
         });
   }
@@ -247,8 +271,10 @@
     if (reason == 0 && !is_clickable()) return;
     if (!msg_id.startsWith('C') && !msg_id.startsWith('F') && !msg_id.startsWith('B'))
       $(`#msg${msg_id}`).css("display","none");
+    hide_msg(msg_id, true);
     $.ajax({url: `/chat/timeout/${msg_id}/${reason}`, type: "post"})
       .done(function(data_chats, textStatus, jqXHR) {
+        hide_msg(msg_id, false);
         update_data(data_chats);
       });
   }
@@ -302,8 +328,21 @@
     } else {
       $('#selection_header').removeClass("d-flex").addClass("d-none");
     }
+    update_user_info(data_chats);
     update_mod_notes(data_chats);
     update_mod_log(data_chats);
+  }
+  function update_user_info(data) {
+    $('#user-info').html(data["user-info"]);
+    if (data["user-info"])
+      $('#user-info').removeClass("d-none").addClass("d-block");
+    else
+      $('#user-info').removeClass("d-block").addClass("d-none");
+    $('#user-profile').html(data["user-profile"]);
+    if (data["user-profile"])
+      $('#user-profile').removeClass("d-none").addClass("d-block");
+    else
+      $('#user-profile').removeClass("d-block").addClass("d-none");
   }
   function update_mod_notes(data) {
     $('#mod-notes').html(data["mod-notes"]);
@@ -358,6 +397,8 @@
   }
   function update_user_button(username) {
     num_messages = $('#filtered_messages .selectee').length;
+    if (username && username.length > 10)
+      username = `${username.substring(0, 9)}&hellip;`
     var text = username ? username : "Process";
     if (num_messages > 0)
       text = `<b>${num_messages}</b>: ${text}`;

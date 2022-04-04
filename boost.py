@@ -4,9 +4,10 @@ from datetime import datetime, timedelta
 from dateutil import tz
 import time
 import traceback
-from elements import get_token, get_ndjson, country_flags, country_names, timestamp_to_ago, shorten
-from elements import get_notes, add_note, load_mod_log, get_mod_log, ModActionType, WarningStats
-from elements import warn_sandbagging, warn_boosting, mark_booster
+from elements import get_token, get_user, get_ndjson, shorten
+from elements import get_notes, add_note, load_mod_log, get_mod_log
+from elements import ModActionType, WarningStats, User
+from elements import warn_sandbagging, warn_boosting, mark_booster, decode_string
 
 
 BOOST_UPDATE_PERIOD = 5 * 60  # seconds
@@ -14,7 +15,7 @@ BOOST_UPDATE_PERIOD = 5 * 60  # seconds
 BOOST_SUS_PROGRESS = 50
 BOOST_SUS_NUM_GAMES = 50
 BOOST_SUS_RATING_DIFF = [150, 300]
-BOOST_NUM_GAMES = [100, 500]
+BOOST_NUM_GAMES = [100, 200, 500]
 BOOST_NUM_MOVES = [0, 5, 10, 15]
 BOOST_BAD_GAME_PERCENT = {0: [0.05, 0.10], 5: [0.08, 0.15], 10: [0.10, 0.20], 15: [0.15, 0.33]}
 BOOST_STREAK_TIME = 10 * 60  # interval between games [s]
@@ -29,6 +30,7 @@ STD_NUM_TOURNEYS = 5
 MIN_NUM_TOURNEY_GAMES = 4
 MAX_LEN_TOURNEY_NAME = 22
 API_TOURNEY_DELAY = 0.5  # [s]
+BOOST_RING_TOOL = b'iSfVR3ICd3lHqSQf2ucEkLvyvCf0'
 
 
 boosts = {}
@@ -139,49 +141,6 @@ class Storm:
         if not self.is_ok():
             return ""
         return f'<div class="mb-3 px-2">Strom: {self.score} over {self.runs} runs</div>'
-
-
-class Profile:
-    def __init__(self):
-        self.country = ""
-        self.location = ""
-        self.bio = ""
-        self.firstName = ""
-        self.lastName = ""
-        self.fideRating = 0
-        self.uscfRating = 0
-        self.ecfRating = 0
-
-    def set(self, data):
-        self.country = data.get('country', "")
-        self.location = data.get('location', "")
-        self.bio = data.get('bio', "")
-        self.firstName = data.get('firstName', "")
-        self.lastName = data.get('lastName', "")
-        self.fideRating = data.get('fideRating', 0)
-        self.uscfRating = data.get('uscfRating', 0)
-        self.ecfRating = data.get('ecfRating', 0)
-
-    def get_info(self):
-        info = []
-        name = f"{self.firstName} {self.lastName}".strip()
-        if name:
-            info.append(f'<div><span class="text-muted">Name:</span> {name}</div>')
-        if self.location:
-            info.append(f'<div><span class="text-muted">Location:</span> {self.location}</div>')
-        if self.bio:
-            info.append(f'<div><span class="text-muted text-break">Bio:</span> {self.bio}</div>')
-        ratings = []
-        if self.fideRating:
-            ratings.append(f"FIDE = {self.fideRating}")
-        if self.uscfRating:
-            ratings.append(f"USCF = {self.uscfRating}")
-        if self.ecfRating:
-            ratings.append(f"ECF = {self.ecfRating}")
-        str_ratings = ", ".join(ratings)
-        if str_ratings:
-            info.append(f'<div><span class="text-muted">Ratings:</span> {str_ratings}</div>')
-        return "".join(info)
 
 
 class StatsData:
@@ -423,7 +382,7 @@ class UserTournament:
                 performance = f"{str_diff}"
         return performance
 
-    def get_name(self):
+    def get_name_link(self):
         name = shorten(self.name, MAX_LEN_TOURNEY_NAME)
         tourney_type = "tournament" if self.is_arena else "swiss"
         class_name = ""
@@ -432,13 +391,15 @@ class UserTournament:
                 class_name = ' class="text-danger"'
             elif self.place <= 10:
                 class_name = ' class="text-warning"'
-        name = f'<a href="https://lichess.org/{tourney_type}/{self.tournament_id}" {class_name}target="_blank">{name}</a>'
+        url = f'https://lichess.org/{tourney_type}/{self.tournament_id}'
+        name_link = f'<a href="{url}" {class_name}target="_blank">{name}</a>'
         if self.date:
-            name = f'<abbr title="{self.date}" class="pr-2" style="text-decoration:none;">{name}</abbr>'
-        return name
+            name_link = f'<abbr title="{self.date} UTC" class="pr-2" style="text-decoration:none;">{name_link}</abbr>'
+        return url, name_link
 
     def get_table_row(self):
-        name = f"{self.get_ongoing()}{self.get_official()}{self.get_name()}"
+        tournament_url, name_link = self.get_name_link()
+        name = f"{self.get_ongoing()}{self.get_official()}{name_link}"
         if self.place is None:
             place = f"{MAX_NUM_TOURNEY_PLAYERS + 1}+" if self.name else "&ndash;"
             place_class = ""
@@ -451,7 +412,8 @@ class UserTournament:
         else:
             score = f"{self.score:,}" if self.is_arena else f"<b>{self.score:,}</b>"
         row = f'''<tr>
-                    <td class="text-left">{name}</td>
+                    <td class="text-left"><button class="btn btn-primary py-0 mr-2" onclick="add_to_notes(this)" 
+                        data-selection=\'{tournament_url}\'><i class="fas fa-plus"></i></button>{name}</td>
                     <td class="text-center{place_class}">{place}</td>
                     <td class="text-right">{self.num_games:,}</td>
                     <td class="text-right">{performance}</td>
@@ -462,7 +424,7 @@ class UserTournament:
 
 
 class Games:
-    def __init__(self, user_id):
+    def __init__(self, user_id, max_num_games):
         self.user_id = user_id
         self.games = []
         self.arena_tournaments = {}
@@ -470,21 +432,36 @@ class Games:
         self.median_rating = {}
         self.all_user_ratings = {}
         self.since: int = None
+        self.until: datetime = None
+        self.max_num_games: int = max_num_games
 
-    def download(self, since=None):
-        ts_6months_ago = int((datetime.now(tz=tz.tzutc()) - timedelta(days=182)).timestamp() * 1000)
+    def download(self, since=None, before=None):
+        now_utc = datetime.now(tz=tz.tzutc())
+        ts_6months_ago = int((now_utc - timedelta(days=182)).timestamp() * 1000)
         if since is None:
             since = ts_6months_ago
         else:
             since = max(ts_6months_ago, int(since.timestamp() * 1000))
-        url = f"https://lichess.org/api/games/user/{self.user_id}?rated=true&finished=true&max={BOOST_NUM_GAMES[0]}" \
-              f"&since={since}"
+        self.until = None
+        if before:
+            try:
+                self.until = datetime.strptime(before, '%Y-%m-%dT%H:%M').replace(tzinfo=tz.tzutc())
+            except Exception as exception:
+                before = None
+                traceback.print_exception(type(exception), exception, exception.__traceback__)
+        if before:
+            str_until = f"&until={int(self.until.timestamp() * 1000)}"
+        else:
+            str_until = ""
+            self.until = now_utc
+        url = f"https://lichess.org/api/games/user/{self.user_id}?rated=true&finished=true&max={self.max_num_games}" \
+              f"&since={since}{str_until}"
         self.since = None if since == ts_6months_ago else since
         self.games = get_ndjson(url)
 
     def get_num(self):
         str_s = "" if len(self.games) == 1 else "s"
-        str_num = f'<abbr title="{len(self.games)} latest game{str_s} analyzed (max. {BOOST_NUM_GAMES[0]})" ' \
+        str_num = f'<abbr title="{len(self.games)} latest game{str_s} analyzed ({self.max_num_games} requested)" ' \
                   f'style="text-decoration:none;"><b>{len(self.games)} game{str_s}</b></abbr>'
         first_createdAt: datetime = None
         if self.games:
@@ -495,9 +472,9 @@ class Games:
             str_num = f'{str_num} for <b>{num_days} day{"" if num_days == 1 else "s"}</b>'
         if self.since:
             since = datetime.fromtimestamp(self.since // 1000, tz=tz.tzutc())
-            str_num = f'{str_num} from <abbr title="Date/Time of the last manual warning">{since:%Y-%m-%d %H:%M}</abbr>'
+            str_num = f'{str_num} from <abbr title="Date/Time of the last manual warning">{since:%Y-%m-%d %H:%M} UTC</abbr>'
         elif self.games:
-            str_num = f'{str_num} from {first_createdAt:%Y-%m-%d %H:%M}'
+            str_num = f'{str_num} from {first_createdAt:%Y-%m-%d %H:%M} UTC'
         return f'<div class="mb-3">{str_num}</div>'
 
     def analyse(self, is_sandbagging=True):
@@ -601,23 +578,19 @@ class Games:
 
 
 class Boost:
-    def __init__(self, username):
-        self.username = username
-        self.user_id = username.lower()
+    ring_tool: str = None
+
+    @staticmethod
+    def is_mod():
+        return not not Boost.ring_tool
+
+    def __init__(self, username, num_games, before):
+        self.user = User(username)
+        self.before = before
         self.errors = []
-        self.disabled = False
-        self.tosViolation = False
-        self.patron = False
-        self.verified = False
-        self.title = ""
-        self.country = ""
-        self.createdAt: int = None
-        self.num_games = 0
-        self.num_rated_games = 0
-        self.profile = Profile()
         self.variants = []
         self.storm = Storm()
-        self.games = Games(self.user_id)
+        self.games = Games(self.user.id, num_games)
         self.sandbagging = []
         self.boosting = []
         self.tournaments = []
@@ -627,89 +600,8 @@ class Boost:
         self.prefer_marking = False
         self.mod_log: ModLogData = None
         self.mod_log_out = ""
-
-    def is_titled(self):
-        return self.title and self.title != "BOT"
-
-    def get_name(self):
-        if self.title:
-            if self.title == "BOT":
-                title = f'<span style="color:#cd63d9">{self.title}</span> '
-            else:
-                title = f'<span class="text-warning">{self.title}</span> '
-        else:
-            title = ""
-        return f'{title}<a href="https://lichess.org/@/{self.user_id}" target="_blank">{self.username}</a>'
-
-    def get_disabled(self):
-        if not self.disabled:
-            return ""
-        return '<abbr title="Closed" class="px-1" style="text-decoration:none;font-size:19px;">' \
-               '<i class="fas fa-times text-muted" style="font-size:19px"></i></abbr>'
-
-    def get_patron(self):
-        if not self.patron:
-            return ""
-        return '<abbr title="Lichess Patron" class="text-info px-1" style="text-decoration:none;">' \
-               '<i class="fas fa-gem"></i></abbr>'
-
-    def get_verified(self):
-        if not self.verified:
-            return ""
-        return '<abbr title="Verified" class="text-info px-1" style="text-decoration:none;">' \
-               '<i class="fas fa-check"></i></abbr>'
-
-    def get_tosViolation(self):
-        if not self.tosViolation:
-            return ""
-        return '<abbr title="TOS Violation" class="px-1" style="text-decoration:none;font-size:19px;' \
-               'color:#e74c3c;background-color:#f39c12;"><i class="far fa-angry"></i></abbr>'
-
-    def get_country(self):
-        original_country = self.profile.country
-        if not original_country:
-            return ""
-        country_name = country_names.get(original_country, None)
-        country = country_flags.get(original_country, None)
-        if country_name is None or country is None:
-            country_name = original_country.upper()
-            if country_name[0] == '_':
-                country_name = country_name[1:]
-            country = '🏴󠁲󠁵󠁡󠁤󠁿️'
-        font_size = "20px"
-        if country_name:
-            fs = "" if original_country == "_lichess" else f'font-size:{font_size};'
-            return f'<abbr class="px-1" title="{country_name}" style="text-decoration:none;{fs}">{country}</abbr>'
-        return f'<span class="px-1" style="font-size:{font_size};">{country}</span>'
-
-    def get_name_info(self):
-        part1 = f"{self.get_name()}{self.get_disabled()}{self.get_patron()}{self.get_verified()}"
-        part2 = f"{self.get_tosViolation()}{self.get_country()} {self.get_created()}"
-        return f"<div>{part1}{part2}</div>"
-
-    def get_num_games(self):
-        if self.num_games == 0 and self.num_rated_games == 0:
-            return ""
-        class_games = f' class="text-danger"' if self.num_rated_games <= BOOST_NUM_PLAYED_GAMES[0] \
-            else f' class="text-warning"' if self.num_rated_games <= BOOST_NUM_PLAYED_GAMES[1] else ""
-        return f'<div><abbr{class_games} title="Number of rated games" style="text-decoration:none;">' \
-               f'<b>{self.num_rated_games:,}</b></abbr> / <abbr title="Total number of games" ' \
-               f'style="text-decoration:none;">{self.num_games:,}</abbr> games</div>'
-
-    def get_created(self):
-        if not self.createdAt:
-            return ""
-        now_utc = datetime.now(tz=tz.tzutc())
-        created_ago = timestamp_to_ago(self.createdAt, now_utc)
-        t = datetime.fromtimestamp(self.createdAt // 1000, tz=tz.tzutc())
-        days = (now_utc - t).days
-        class_created = ' class="text-danger"' if days <= BOOST_CREATED_DAYS_AGO[0] \
-            else ' class="text-warning"' if days <= BOOST_CREATED_DAYS_AGO[1] else ""
-        return f'<abbr{class_created} title="Account created {created_ago}" style="text-decoration:none;">' \
-               f'<b>{created_ago}</b></abbr>'
-
-    def get_profile(self):
-        return self.profile.get_info()
+        if Boost.ring_tool is None:
+            Boost.ring_tool = decode_string(BOOST_RING_TOOL)  # returns "" (not None) if not available
 
     def get_variants(self):
         rows = [variant.get_table_row() for variant in self.variants]
@@ -728,7 +620,7 @@ class Boost:
                 <th class="text-right" style="cursor:default;"><abbr title="Total number of rated games played" 
                     style="text-decoration:none;"># games</abbr></th>
               </tr></thead>
-              {"".join(rows).format(username=self.username)}
+              {"".join(rows).format(username=self.user.name)}
             </table>
           </div>'''
         return f"{table}{self.storm.get_info()}"
@@ -739,25 +631,35 @@ class Boost:
         return f'<div class="text-warning"><div>{"</div><div>".join(self.errors)}</div></div>'
 
     def get_info_1(self):
-        main = f'<div class="d-flex justify-content-between align-items-baseline mt-3">' \
-               f'{self.get_name_info()}{self.get_num_games()}</div>'
+        main = self.user.get_user_info(BOOST_CREATED_DAYS_AGO, BOOST_NUM_PLAYED_GAMES)
         num_games = self.games.get_num()
         analysis = self.get_analysis()
         if analysis:
             analysis = f'<div class="my-3">{analysis}</div>'
-        return f"{main}{num_games}{self.get_errors()}{analysis}"
+        best_tournaments = f'<a href="https://lichess.org/@/{self.user.name}/tournaments/best" target="_blank" ' \
+                           f'class="btn btn-secondary flex-grow-1 py-0" role="button">Best tournaments&hellip;</a>'
+        if Boost.ring_tool:
+            class_boost_ring = "btn-warning" if self.enable_sandbagging and self.enable_boosting else "btn-secondary"
+            additional_tools = f'<div class="d-flex justify-content-between mb-2 px-1">' \
+                               f'<a href="https://{Boost.ring_tool}/?user={self.user.name}" target="_blank" ' \
+                               f'class="btn {class_boost_ring} flex-grow-1 py-0 mr-2" ' \
+                               f'role="button">Boost ring tool&hellip;</a>{best_tournaments}</div>'
+        else:
+            additional_tools = f'<div>{best_tournaments}' \
+                               f'<div class="text-warning mb-2">No permissions to work with mod data</div></div>'
+        return f"{main}{num_games}{self.get_errors()}{analysis}{additional_tools}"
 
     def get_info_2(self):
         variants = self.get_variants()
         if variants:
             variants = f'<div class="my-3">{variants}</div>'
-        profile = self.get_profile()
+        profile = self.user.get_profile()
         if profile:
             profile = f'<div class="my-3">{profile}</div>'
         return f"{variants}{profile}"
 
     def get_mod_notes(self, mod_log_data):
-        mod_notes = get_notes(self.username, mod_log_data)
+        mod_notes = get_notes(self.user.name, mod_log_data) if Boost.is_mod() else ""
         header_notes = "Notes:" if mod_notes else "No notes"
         return {'mod-notes': mod_notes, 'notes-header': header_notes}
 
@@ -765,22 +667,13 @@ class Boost:
         return {'enable-sandbagging': 1 if self.enable_sandbagging and not self.prefer_marking else 0,
                 'enable-boosting': 1 if self.enable_boosting and not self.prefer_marking else 0,
                 'enable-marking': 1 if self.prefer_marking and (self.enable_sandbagging or self.enable_boosting)
-                                       else -1 if self.is_titled() else 0}
+                                       else -1 if self.user.is_titled() else 0}
 
     def set(self, user):
-        self.username = user['username']
-        self.disabled = user.get('disabled', False)
-        if self.disabled:
+        self.user.set(user)
+        if self.user.disabled:
             self.errors.append('Account closed')
         else:
-            self.tosViolation = user.get('tosViolation', False)
-            self.patron = user.get('patron', False)
-            self.verified = user.get('verified', False)
-            self.title = user.get('title', "")
-            self.createdAt = user['createdAt']
-            self.num_games = user['count']['all']
-            self.num_rated_games = user['count']['rated']
-            self.profile.set(user.get('profile', {}))
             perfs = user.get('perfs', {})
             self.storm = Storm(perfs)
             for variant_name, perf in perfs.items():
@@ -794,7 +687,7 @@ class Boost:
     def analyse_games(self):
         exc: Exception = None
         try:
-            self.games.download(self.mod_log.time_last_manual_warning)
+            self.games.download(self.mod_log.time_last_manual_warning, self.before)
         except Exception as e:
             exc = e
         self.sandbagging = self.games.analyse(True)
@@ -806,7 +699,7 @@ class Boost:
             raise exc
 
     def update_mod_log(self):
-        mod_log_data = load_mod_log(self.username)
+        mod_log_data = load_mod_log(self.user.name) if Boost.is_mod() else None
         self.mod_log = ModLogData(mod_log_data)
         self.mod_log_out = self.mod_log.prepare()
 
@@ -842,7 +735,7 @@ class Boost:
                     assert delay <= API_TOURNEY_DELAY
                     if delay > 0:
                         time.sleep(delay)
-                tourney = UserTournament(self.user_id, self.games.median_rating, tourn, is_arena, tourney_info)
+                tourney = UserTournament(self.user.id, self.games.median_rating, tourn, is_arena, tourney_info)
                 tourney.download()
                 self.tournaments.append(tourney)
                 t1 = time.time()
@@ -874,7 +767,7 @@ class Boost:
         output = []
         for table_name, winner_loser, analyses in tables:
             rows = [analysis.row for analysis in analyses if not analysis.is_empty()]
-            str_rows = "".join(rows).format(username=self.username, user_id=self.user_id, winner_loser=winner_loser)
+            str_rows = "".join(rows).format(username=self.user.name, user_id=self.user.id, winner_loser=winner_loser)
             if rows:
                 table = f'''<table id="{table_name.lower()}_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
                       <thead><tr>
@@ -897,7 +790,7 @@ class Boost:
         return '\n'.join(output)
 
     def get_tournaments(self):
-        if not self.prefer_marking and not self.is_titled():
+        if not self.prefer_marking and not self.user.is_titled():
             for tourney in self.tournaments:
                 if tourney.is_official and tourney.name.startswith('<') and 1 <= tourney.place <= 3:
                     self.prefer_marking = True
@@ -907,7 +800,7 @@ class Boost:
             output['tournaments'] = '<p class="mt-3">No tournaments</p>'
             return output
         rows = [tourney.get_table_row() for tourney in self.tournaments]
-        link = f'https://lichess.org/@/{self.username}/tournaments/recent'
+        link = f'https://lichess.org/@/{self.user.name}/tournaments/recent'
         table = f'''<table id="tournaments_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
               <thead><tr>
                 <th class="text-left" style="cursor:default;"><button class="btn btn-primary p-0" style="min-width:120px;" 
@@ -929,10 +822,17 @@ class Boost:
         return output
 
     def enable_buttons(self, mod_log):
+        if mod_log.is_engine or mod_log.is_boost:
+            self.prefer_marking = True
+            self.disable_buttons()
+            return
         self.enable_sandbagging = False
         now_utc = datetime.now(tz=tz.tzutc())
-        t = datetime.fromtimestamp(self.createdAt // 1000, tz=tz.tzutc())
-        days = (now_utc - t).days
+        if self.user.is_error:
+            days = 0
+        else:
+            t = datetime.fromtimestamp(self.user.createdAt // 1000, tz=tz.tzutc())
+            days = (now_utc - t).days
         for sandbag in self.sandbagging:
             if sandbag.score >= BOOST_ANALYSIS_SCORE:
                 self.enable_sandbagging = True
@@ -942,11 +842,12 @@ class Boost:
             if boost.score >= BOOST_ANALYSIS_SCORE:
                 self.enable_boosting = True
                 break
-        if not self.title or self.title == "BOT":
+        if not self.user.title or self.user.title == "BOT":
             if mod_log.sandbag_manual.active > 0 or mod_log.boost_manual.active \
-               or mod_log.sandbag_auto.active >= 10 or mod_log.boost_auto.active >= 10:
+               or (mod_log.sandbag_auto.active >= 5 and mod_log.sandbag_auto.total >= 10)\
+               or (mod_log.boost_auto.active >= 5 and mod_log.boost_auto.total >= 10):
                 self.prefer_marking = True
-            elif self.num_rated_games <= BOOST_NUM_PLAYED_GAMES[0] or days <= BOOST_CREATED_DAYS_AGO[0]:
+            elif self.user.num_rated_games <= BOOST_NUM_PLAYED_GAMES[0] or days <= BOOST_CREATED_DAYS_AGO[0]:
                 self.prefer_marking = True
             else:
                 for variant in self.variants:
@@ -967,14 +868,28 @@ class Boost:
         self.enable_sandbagging = False
         self.enable_boosting = False
 
+    def get_datetime_before(self):
+        until = self.games.until or datetime.now(tz=tz.tzutc())
+        return f"{until:%Y-%m-%dT%H:%M}"
+
     def get_output(self):
-        output = {'part-1': self.get_info_1(), 'part-2': self.get_info_2()}
-        if not self.mod_log:
-            self.update_mod_log()
-        self.enable_buttons(self.mod_log)
-        output['mod-log'] = self.mod_log_out
-        output.update(self.get_mod_notes(self.mod_log.data))
-        output.update(self.get_enabled_buttons())
+        before = self.get_datetime_before()
+        if not self.before:
+            self.before = before
+        output = {}
+        if not self.user.is_error:
+            try:
+                if not self.mod_log:
+                    self.update_mod_log()
+                self.enable_buttons(self.mod_log)
+                output['mod-log'] = self.mod_log_out
+                output.update(self.get_mod_notes(self.mod_log.data))
+                output.update(self.get_enabled_buttons())
+            except Exception as exception:
+                traceback.print_exception(type(exception), exception, exception.__traceback__)
+        # After self.enable_buttons():
+        output.update({'part-1': self.get_info_1(), 'part-2': self.get_info_2(),
+                       'num-games': self.games.max_num_games, 'datetime-before': before})
         return output
 
 
@@ -985,31 +900,28 @@ def add_variant_rating(ratings, variant, rating):
         ratings[variant] = [rating]
 
 
-def get_boost_data(username):
+def get_boost_data(username, num_games=None, before=None):
     global boosts
     now = datetime.now()
     user_id = username.lower()
     boost, last_update = boosts.get(user_id, (None, None))
-    if boost:
+    if num_games:
+        num_games = int(num_games)
+    if boost and (boost.before == before or before is None) \
+            and (boost.games.max_num_games == num_games or num_games is None):
         delta = now - last_update
         if delta.days*24*60*60 + delta.seconds < BOOST_UPDATE_PERIOD:
             return boost
-    boost = Boost(username)
-    try:
-        headers = {'Authorization': f"Bearer {get_token()}"}
-        url = f"https://lichess.org/api/user/{username}"
-        r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            user = r.json()
-            boost.set(user)
-            boosts[user_id] = boost, now
-        else:
-            boost.errors.append(f"ERROR /api/user/: Status Code {r.status_code}")
-    except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
-        boost.errors.append(str(exception))
-    except:
-        boost.errors.append("ERROR")
+    if not num_games:
+        num_games = BOOST_NUM_GAMES[0]
+    boost = Boost(username, num_games, before)
+    user, api_error = get_user(username)
+    if api_error:
+        boost.user.is_error = True
+        boost.errors.append(api_error)
+    else:
+        boost.set(user)
+        boosts[user_id] = boost, now
     return boost
 
 
@@ -1046,6 +958,8 @@ class ModLogData:
         self.num_total = 0
         self.num_other_actions = 0
         self.time_last_manual_warning: datetime = None
+        self.is_boost = False
+        self.is_engine = False
 
     def process(self):
         self.num_other_actions = 0
@@ -1071,6 +985,15 @@ class ModLogData:
                                      'cheatDetected', 'troll', 'permissions', 'setTitle',
                                      'unengine', 'unbooster', 'unalt', 'reopenAccount']:
                     self.num_other_actions += 1
+        for action in reversed(actions):
+            if action.action == 'engine':
+                self.is_engine = True
+            elif action.action == 'unengine':
+                self.is_engine = False
+            elif action.action == 'booster':
+                self.is_boost = True
+            elif action.action == 'unbooster':
+                self.is_boost = False
         self.num_total = len(actions)
 
     def update_manual_warning(self, action):
@@ -1085,19 +1008,32 @@ class ModLogData:
         if self.data is None:
             return "Mod Log is not available"
         self.process()
-        class_sandbag_manual = "text-danger" if self.sandbag_manual.active else ""
-        class_boost_manual = "text-danger" if self.boost_manual.active else ""
-        class_sandbag_auto = "text-danger" if self.sandbag_auto.active >= 10 \
+        class_sandbag_manual_active = "text-danger" if self.sandbag_manual.active else ""
+        class_boost_manual_active = "text-danger" if self.boost_manual.active else ""
+        class_sandbag_manual_total = "text-warning" if self.sandbag_manual.total else "text-muted"
+        class_boost_manual_total = "text-warning" if self.boost_manual.total else "text-muted"
+        class_sandbag_auto_active = "text-danger" if self.sandbag_auto.active >= 10 \
             else "text-warning" if self.sandbag_auto.active > 1 else ""
-        class_boost_auto = "text-danger" if self.boost_auto.active >= 10 \
+        class_boost_auto_active = "text-danger" if self.boost_auto.active >= 10 \
             else "text-warning" if self.boost_auto.active > 1 else ""
+        class_sandbag_auto_total = "text-danger" if self.sandbag_auto.total >= 10 \
+            else "text-warning" if self.sandbag_auto.total >= 5 else "text-muted"
+        class_boost_auto_total = "text-danger" if self.boost_auto.total >= 10 \
+            else "text-warning" if self.boost_auto.total >= 5 else "text-muted"
+        header = "Warnings"
+        if self.is_boost and self.is_engine:
+            header += '<br><span class="text-danger">marked: boost/engine</span>'
+        elif self.is_boost:
+            header += '<br><span class="text-danger">marked: boost</span>'
+        elif self.is_engine:
+            header += '<br><span class="text-danger">marked: engine</span>'
         mod_log_summary = \
             f'<table class="table table-sm table-hover text-center border">' \
             f'<col>' \
             f'<colgroup span="2"></colgroup>' \
             f'<colgroup span="2"></colgroup>' \
             f'<tr>' \
-                f'<td rowspan="2" class="align-middle">Warnings</td>' \
+                f'<td rowspan="2" class="align-middle">{header}</td>' \
                 f'<th colspan="2" scope="colgroup">6 months</th>' \
                 f'<th colspan="2" scope="colgroup">Total</th>' \
             f'</tr>' \
@@ -1109,17 +1045,17 @@ class ModLogData:
             f'</tr>' \
             f'<tr>' \
                 f'<th scope="row" class="text-left">Sandbagging</th>' \
-                f'<td class="{class_sandbag_manual}">{self.sandbag_manual.get_active()}</td>' \
-                f'<td class="{class_sandbag_auto}">{self.sandbag_auto.get_active()}</td>' \
-                f'<td class="text-muted">{self.sandbag_manual.get_total()}</td>' \
-                f'<td class="text-muted">{self.sandbag_auto.get_total()}</td>' \
+                f'<td class="{class_sandbag_manual_active}">{self.sandbag_manual.get_active()}</td>' \
+                f'<td class="{class_sandbag_auto_active}">{self.sandbag_auto.get_active()}</td>' \
+                f'<td class="{class_sandbag_manual_total}">{self.sandbag_manual.get_total()}</td>' \
+                f'<td class="{class_sandbag_auto_total}">{self.sandbag_auto.get_total()}</td>' \
             f'</tr>' \
             f'<tr>' \
                 f'<th scope="row" class="text-left">Boosting</th>' \
-                f'<td class="{class_boost_manual}">{self.boost_manual.get_active()}</td>' \
-                f'<td class="{class_boost_auto}">{self.boost_auto.get_active()}</td>' \
-                f'<td class="text-muted">{self.boost_manual.get_total()}</td>' \
-                f'<td class="text-muted">{self.boost_auto.get_total()}</td>' \
+                f'<td class="{class_boost_manual_active}">{self.boost_manual.get_active()}</td>' \
+                f'<td class="{class_boost_auto_active}">{self.boost_auto.get_active()}</td>' \
+                f'<td class="{class_boost_manual_total}">{self.boost_manual.get_total()}</td>' \
+                f'<td class="{class_boost_auto_total}">{self.boost_auto.get_total()}</td>' \
             f'</tr>' \
             f'</table>'
         if self.num_other_actions == 0:

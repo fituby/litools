@@ -8,11 +8,26 @@
 {% endif %}
   <div class="row justify-content-center my-2">
     <div class="col" style="width:420px;min-width:370px;max-width:500px;">
-      <div class="d-flex flex-row mt-3">
-        <label for="userlink" class="m-0 mr-1">User:</label>
-        <input id="userlink" type="text" class="flex-grow-1 py-0 mr-1">
-        <button class="btn btn-primary flex-grow-0 py-0" onclick="go_username()">Go</button>
-      </div>
+      <table class="w-100 mt-2"><tbody>
+        <tr class="align-items-baseline">
+          <td><label for="userlink" class="text-nowrap m-0 mr-1">User / #games:</label></td>
+          <td class="px-1">
+            <div class="d-flex">
+              <input id="userlink" class="w-100 mr-1" type="text" placeholder="">
+              <select id="num-games" class="flex-shrink-1">
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+              </select>
+            </div>
+          </td>
+          <td rowspan="2"><button class="btn btn-primary" style="min-height:100%;" onclick="go_username()">Go</button></td>
+        </tr>
+        <tr id="row-datetime" class="d-none">
+          <td><label for="datetime-before" class="text-nowrap m-0">Before, UTC:</label></td>
+          <td class="w-100 px-1"><input id="datetime-before" class="w-100" type="datetime-local" value=""></td>
+        </tr>
+      </tbody></table>
       <div id="user_downloading" class="d-none justify-content-center align-items-center my-3">
         <div class="spinner-border spinner-blue-only text-secondary" role="status"></div>
         <span id="downloading_text" class="ml-3 text-secondary">Downloading user data&hellip;</span>
@@ -82,6 +97,7 @@
     $("#mainOverlay").css("display","block");
     $("#userlink").on('change input', username_changed);
     $("#userlink").on('keypress', username_entered);
+    $('#datetime-before').val("");
     {% if boost_user %}
     set_user('{{boost_user}}');
     {% else %}
@@ -89,6 +105,7 @@
     {% endif %}
   });
   function username_changed(e) {
+    $('#datetime-before').val("");
     check_username(e.target.value);
   }
   function username_entered(e) {
@@ -114,16 +131,26 @@
   }
   var current_user = "";
   function set_user(username) {
-    current_user = username;
+    if (username)
+      current_user = username;
+    else
+      username = current_user;
     if (!username)
       return;
     clear_data();
+    $('#userlink').attr("placeholder", username).val("").focus().blur();
     $('#user_downloading').removeClass("d-none").addClass("d-flex");
     $('#downloading_text').html(`Downloading ${username}&hellip;`);
-    $.ajax({url: `/boost/${username}`, type: "post"})
+    $.ajax({
+      url: `/boost/${username}`,
+      type: "post",
+      data: {before: $('#datetime-before').val(), num_games: $('#num-games').val()}})
       .done(function(data, textStatus, jqXHR) {
         $('#user_downloading').removeClass("d-flex").addClass("d-none");
         $('#downloading_text').html("Downloading user data&hellip;");
+        $('#row-datetime').removeClass("d-none");
+        $('#datetime-before').val(data["datetime-before"]);
+        $('#num-games').val(data["num-games"])
         $('#part-1').html(data["part-1"]);
         $('#part-2').html(data["part-2"]);
         $('#mod-log').html(data["mod-log"]);
@@ -144,6 +171,7 @@
   function clear_data() {
     clear_notes();
     $('#notes-section').removeClass("d-block").addClass("d-none");
+    //$('#row-datetime').addClass("d-none");
     $('#part-1').html("");
     $('#part-2').html("");
     $('#mod-log').html("");

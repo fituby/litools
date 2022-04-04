@@ -4,6 +4,19 @@ from elements import Reason
 from elements import STYLE_WORD_BREAK
 
 
+LANGUAGES = {
+    'En': "English",
+    'Ru': "Russian",
+    'De': "German",
+    'Es': "Spanish",
+    'It': "Italian",
+    'Hi': "Hindi",
+    'Fr': "French",
+    'Tr': "Turkish",
+    'Spam': "Spam"
+}
+
+
 class EvalResult:
     def __init__(self, text):
         self.scores = [0] * Reason.Size
@@ -85,6 +98,10 @@ class Re:
         self.ban = ban
         self.reason = reason
         self.info = info
+        for tag, lang in LANGUAGES.items():
+            if info.startswith(f"{tag}:"):
+                self.info = f"{lang}{info[len(tag):]}"
+                break
         self.class_name = class_name
 
     def eval(self, original_msg, res, it):
@@ -604,7 +621,7 @@ list_res = {
        reason=Reason.Shaming, info="Ru: хакер"),
     Re(r'хохл[яа]нди(я|и|ю|е|ей)', 50,  # added
        reason=Reason.Offensive, info="Ru: хохляндия"),
-    Re(r'хох(ол|лу|ла|ом|е|ы|ов|ами?|ах)', 40,  # added
+    Re(r'хох(ол|лу|ла|лом|ле|лы|лов|лами?|лах)', 40,  # added
        reason=Reason.Offensive, info="Ru: хохол"),
     Re(r'\bхохл[ао]', 40, is_separate_word=False,  # added
        reason=Reason.Offensive, info="Ru: хохол"),

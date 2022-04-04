@@ -9,6 +9,12 @@ import traceback
 import os
 import html
 import re
+import hashlib
+import math
+import base64
+import random
+import struct
+
 
 config_file = "config.yml"
 token: str = None
@@ -19,7 +25,7 @@ embed_lichess = False
 
 STYLE_WORD_BREAK = "word-break:break-word;"  # "word-break:break-all;"
 re_link = re.compile(r'\bhttps?:\/\/(?:www\.)?[-_a-zA-Z0-9]*\.?lichess\.(?:ovh|org)\/[-a-zA-Z0-9@:%&\?\$\.,_\+~#=\/]+\b', re.IGNORECASE)
-
+url_symbols = "abcdefghijklmnopqrstuvwxyz1234567890/?@&=$-_.+!,()'*{}^~[]#%<>; "
 
 country_flags = {'GB-WLS': '🏴󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-SCT': '🏴󠁧󠁢󠁳󠁣󠁴󠁿󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-ENG': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'GB-NIR': '🇬🇧NIR󠁧󠁢󠁥󠁮󠁧󠁿',
         'AD': '🇦🇩', 'AE': '🇦🇪', 'AF': '🇦🇫', 'AG': '🇦🇬', 'AI': '🇦🇮', 'AL': '🇦🇱', 'AM': '🇦🇲', 'AO': '🇦🇴', 'AQ': '🇦🇶', 'AR': '🇦🇷', 'AS': '🇦🇸', 'AT': '🇦🇹', 'AU': '🇦🇺', 'AW': '🇦🇼', 'AX': '🇦🇽', 'AZ': '🇦🇿', 'BA': '🇧🇦', 'BB': '🇧🇧', 'BD': '🇧🇩', 'BE': '🇧🇪', 'BF': '🇧🇫', 'BG': '🇧🇬', 'BH': '🇧🇭', 'BI': '🇧🇮', 'BJ': '🇧🇯', 'BL': '🇧🇱', 'BM': '🇧🇲', 'BN': '🇧🇳', 'BO': '🇧🇴', 'BQ': '🇧🇶', 'BR': '🇧🇷', 'BS': '🇧🇸', 'BT': '🇧🇹', 'BV': '🇧🇻', 'BW': '🇧🇼', 'BY': '🇧🇾', 'BZ': '🇧🇿', 'CA': '🇨🇦', 'CC': '🇨🇨', 'CD': '🇨🇩', 'CF': '🇨🇫', 'CG': '🇨🇬', 'CH': '🇨🇭', 'CI': '🇨🇮', 'CK': '🇨🇰', 'CL': '🇨🇱', 'CM': '🇨🇲', 'CN': '🇨🇳', 'CO': '🇨🇴', 'CR': '🇨🇷', 'CU': '🇨🇺', 'CV': '🇨🇻', 'CW': '🇨🇼', 'CX': '🇨🇽', 'CY': '🇨🇾', 'CZ': '🇨🇿', 'DE': '🇩🇪', 'DJ': '🇩🇯', 'DK': '🇩🇰', 'DM': '🇩🇲', 'DO': '🇩🇴', 'DZ': '🇩🇿', 'EC': '🇪🇨', 'EE': '🇪🇪', 'EG': '🇪🇬', 'EH': '🇪🇭', 'ER': '🇪🇷', 'ES': '🇪🇸', 'ET': '🇪🇹', 'FI': '🇫🇮', 'FJ': '🇫🇯', 'FK': '🇫🇰', 'FM': '🇫🇲', 'FO': '🇫🇴', 'FR': '🇫🇷', 'GA': '🇬🇦', 'GB': '🇬🇧', 'GD': '🇬🇩', 'GE': '🇬🇪', 'GF': '🇬🇫', 'GG': '🇬🇬', 'GH': '🇬🇭', 'GI': '🇬🇮', 'GL': '🇬🇱', 'GM': '🇬🇲', 'GN': '🇬🇳', 'GP': '🇬🇵', 'GQ': '🇬🇶', 'GR': '🇬🇷', 'GS': '🇬🇸', 'GT': '🇬🇹', 'GU': '🇬🇺', 'GW': '🇬🇼', 'GY': '🇬🇾', 'HK': '🇭🇰', 'HM': '🇭🇲', 'HN': '🇭🇳', 'HR': '🇭🇷', 'HT': '🇭🇹', 'HU': '🇭🇺', 'ID': '🇮🇩', 'IE': '🇮🇪', 'IL': '🇮🇱', 'IM': '🇮🇲', 'IN': '🇮🇳', 'IO': '🇮🇴', 'IQ': '🇮🇶', 'IR': '🇮🇷', 'IS': '🇮🇸', 'IT': '🇮🇹', 'JE': '🇯🇪', 'JM': '🇯🇲', 'JO': '🇯🇴', 'JP': '🇯🇵', 'KE': '🇰🇪', 'KG': '🇰🇬', 'KH': '🇰🇭', 'KI': '🇰🇮', 'KM': '🇰🇲', 'KN': '🇰🇳', 'KP': '🇰🇵', 'KR': '🇰🇷', 'KW': '🇰🇼', 'KY': '🇰🇾', 'KZ': '🇰🇿', 'LA': '🇱🇦', 'LB': '🇱🇧', 'LC': '🇱🇨', 'LI': '🇱🇮', 'LK': '🇱🇰', 'LR': '🇱🇷', 'LS': '🇱🇸', 'LT': '🇱🇹', 'LU': '🇱🇺', 'LV': '🇱🇻', 'LY': '🇱🇾', 'MA': '🇲🇦', 'MC': '🇲🇨', 'MD': '🇲🇩', 'ME': '🇲🇪', 'MF': '🇲🇫', 'MG': '🇲🇬', 'MH': '🇲🇭', 'MK': '🇲🇰', 'ML': '🇲🇱', 'MM': '🇲🇲', 'MN': '🇲🇳', 'MO': '🇲🇴', 'MP': '🇲🇵', 'MQ': '🇲🇶', 'MR': '🇲🇷', 'MS': '🇲🇸', 'MT': '🇲🇹', 'MU': '🇲🇺', 'MV': '🇲🇻', 'MW': '🇲🇼', 'MX': '🇲🇽', 'MY': '🇲🇾', 'MZ': '🇲🇿', 'NA': '🇳🇦', 'NC': '🇳🇨', 'NE': '🇳🇪', 'NF': '🇳🇫', 'NG': '🇳🇬', 'NI': '🇳🇮', 'NL': '🇳🇱', 'NO': '🇳🇴', 'NP': '🇳🇵', 'NR': '🇳🇷', 'NU': '🇳🇺', 'NZ': '🇳🇿', 'OM': '🇴🇲', 'PA': '🇵🇦', 'PE': '🇵🇪', 'PF': '🇵🇫', 'PG': '🇵🇬', 'PH': '🇵🇭', 'PK': '🇵🇰', 'PL': '🇵🇱', 'PM': '🇵🇲', 'PN': '🇵🇳', 'PR': '🇵🇷', 'PS': '🇵🇸', 'PT': '🇵🇹', 'PW': '🇵🇼', 'PY': '🇵🇾', 'QA': '🇶🇦', 'RE': '🇷🇪', 'RO': '🇷🇴', 'RS': '🇷🇸', 'RU': '🇷🇺', 'RW': '🇷🇼', 'SA': '🇸🇦', 'SB': '🇸🇧', 'SC': '🇸🇨', 'SD': '🇸🇩', 'SE': '🇸🇪', 'SG': '🇸🇬', 'SH': '🇸🇭', 'SI': '🇸🇮', 'SJ': '🇸🇯', 'SK': '🇸🇰', 'SL': '🇸🇱', 'SM': '🇸🇲', 'SN': '🇸🇳', 'SO': '🇸🇴', 'SR': '🇸🇷', 'SS': '🇸🇸', 'ST': '🇸🇹', 'SV': '🇸🇻', 'SX': '🇸🇽', 'SY': '🇸🇾', 'SZ': '🇸🇿', 'TC': '🇹🇨', 'TD': '🇹🇩', 'TF': '🇹🇫', 'TG': '🇹🇬', 'TH': '🇹🇭', 'TJ': '🇹🇯', 'TK': '🇹🇰', 'TL': '🇹🇱', 'TM': '🇹🇲', 'TN': '🇹🇳', 'TO': '🇹🇴', 'TR': '🇹🇷', 'TT': '🇹🇹', 'TV': '🇹🇻', 'TW': '🇹🇼', 'TZ': '🇹🇿', 'UA': '🇺🇦', 'UG': '🇺🇬', 'UM': '🇺🇲', 'US': '🇺🇸', 'UY': '🇺🇾', 'UZ': '🇺🇿', 'VA': '🇻🇦', 'VC': '🇻🇨', 'VE': '🇻🇪', 'VG': '🇻🇬', 'VI': '🇻🇮', 'VN': '🇻🇳', 'VU': '🇻🇺', 'WF': '🇼🇫', 'WS': '🇼🇸', 'YE': '🇾🇪', 'YT': '🇾🇹', 'ZA': '🇿🇦', 'ZM': '🇿🇲', 'ZW': '🇿🇼',
@@ -116,6 +122,191 @@ def get_embed_lichess():
     return embed_lichess
 
 
+class Profile:
+    def __init__(self):
+        self.country = ""
+        self.location = ""
+        self.bio = ""
+        self.firstName = ""
+        self.lastName = ""
+        self.fideRating = 0
+        self.uscfRating = 0
+        self.ecfRating = 0
+
+    def set(self, data):
+        self.country = data.get('country', "")
+        self.location = data.get('location', "")
+        self.bio = data.get('bio', "")
+        self.firstName = data.get('firstName', "")
+        self.lastName = data.get('lastName', "")
+        self.fideRating = data.get('fideRating', 0)
+        self.uscfRating = data.get('uscfRating', 0)
+        self.ecfRating = data.get('ecfRating', 0)
+
+    def get_info(self):
+        info = []
+        name = f"{self.firstName} {self.lastName}".strip()
+        if name:
+            info.append(f'<div><span class="text-muted">Name:</span> {name}</div>')
+        if self.location:
+            info.append(f'<div><span class="text-muted">Location:</span> {self.location}</div>')
+        if self.bio:
+            info.append(f'<div class="text-break"><span class="text-muted">Bio:</span> {self.bio}</div>')
+        ratings = []
+        if self.fideRating:
+            ratings.append(f"FIDE = {self.fideRating}")
+        if self.uscfRating:
+            ratings.append(f"USCF = {self.uscfRating}")
+        if self.ecfRating:
+            ratings.append(f"ECF = {self.ecfRating}")
+        str_ratings = ", ".join(ratings)
+        if str_ratings:
+            info.append(f'<div><span class="text-muted">Ratings:</span> {str_ratings}</div>')
+        return "".join(info)
+
+
+class User:
+    def __init__(self, username):
+        self.name = username
+        self.id = username.lower()
+        self.disabled = False
+        self.tosViolation = False
+        self.patron = False
+        self.verified = False
+        self.title = ""
+        self.country = ""
+        self.createdAt: int = None
+        self.num_games = 0
+        self.num_rated_games = 0
+        self.profile = Profile()
+        self.is_error = False
+
+    def is_titled(self):
+        return self.title and self.title != "BOT"
+
+    def get_name(self):
+        if self.title:
+            if self.title == "BOT":
+                title = f'<span style="color:#cd63d9">{self.title}</span> '
+            else:
+                title = f'<span class="text-warning">{self.title}</span> '
+        else:
+            title = ""
+        return f'{title}<a href="https://lichess.org/@/{self.id}" target="_blank">{self.name}</a>'
+
+    def get_disabled(self):
+        if not self.disabled:
+            return ""
+        return '<abbr title="Closed" class="px-1" style="text-decoration:none;font-size:19px;">' \
+               '<i class="fas fa-times text-muted" style="font-size:19px"></i></abbr>'
+
+    def get_patron(self):
+        if not self.patron:
+            return ""
+        return '<abbr title="Lichess Patron" class="text-info px-1" style="text-decoration:none;">' \
+               '<i class="fas fa-gem"></i></abbr>'
+
+    def get_verified(self):
+        if not self.verified:
+            return ""
+        return '<abbr title="Verified" class="text-info px-1" style="text-decoration:none;">' \
+               '<i class="fas fa-check"></i></abbr>'
+
+    def get_tosViolation(self):
+        if not self.tosViolation:
+            return ""
+        return '<abbr title="TOS Violation" class="px-1" style="text-decoration:none;font-size:19px;' \
+               'color:#e74c3c;background-color:#f39c12;"><i class="far fa-angry"></i></abbr>'
+
+    def get_country(self):
+        original_country = self.profile.country
+        if not original_country:
+            return ""
+        country_name = country_names.get(original_country, None)
+        country = country_flags.get(original_country, None)
+        if country_name is None or country is None:
+            country_name = original_country.upper()
+            if country_name[0] == '_':
+                country_name = country_name[1:]
+            country = '🏴󠁲󠁵󠁡󠁤󠁿️'
+        font_size = "20px"
+        if country_name:
+            fs = "" if original_country == "_lichess" else f'font-size:{font_size};'
+            return f'<abbr class="px-1" title="{country_name}" style="text-decoration:none;{fs}">{country}</abbr>'
+        return f'<span class="px-1" style="font-size:{font_size};">{country}</span>'
+
+    def get_name_info(self, limits_created_days_ago):
+        part1 = f'{self.get_name()}{self.get_disabled()}{self.get_patron()}{self.get_verified()}'
+        part2 = f'{self.get_tosViolation()}{self.get_country()} {self.get_created(limits_created_days_ago)}'
+        return f'<div class="mr-2">{part1}{part2}</div>'
+
+    def get_num_games(self, limits_num_played_games):
+        if self.num_games == 0 and self.num_rated_games == 0:
+            return ""
+        class_games = f' class="text-danger"' if self.num_rated_games <= limits_num_played_games[0] \
+            else f' class="text-warning"' if self.num_rated_games <= limits_num_played_games[1] else ""
+        return f'<div><abbr{class_games} title="Number of rated games" style="text-decoration:none;">' \
+               f'<b>{self.num_rated_games:,}</b></abbr> / <abbr title="Total number of games" ' \
+               f'style="text-decoration:none;">{self.num_games:,}</abbr> games</div>'
+
+    def get_user_info(self, limits_created_days_ago, limits_num_played_games):
+        return f'<div class="d-flex justify-content-between align-items-baseline mt-3">' \
+               f'{self.get_name_info(limits_created_days_ago)}{self.get_num_games(limits_num_played_games)}</div>'
+
+    def get_created(self, limits_created_days_ago):
+        if not self.createdAt:
+            return ""
+        now_utc = datetime.now(tz=tz.tzutc())
+        created_ago = timestamp_to_ago(self.createdAt, now_utc)
+        t = datetime.fromtimestamp(self.createdAt // 1000, tz=tz.tzutc())
+        days = (now_utc - t).days
+        class_created = ' class="text-danger"' if days <= limits_created_days_ago[0] \
+            else ' class="text-warning"' if days <= limits_created_days_ago[1] else ""
+        return f'<abbr{class_created} title="Account created {created_ago}" style="text-decoration:none;">' \
+               f'<b>{created_ago}</b></abbr>'
+
+    def get_profile(self):
+        return self.profile.get_info()
+
+    def set(self, user):
+        self.name = user['username']
+        self.disabled = user.get('disabled', False)
+        if not self.disabled:
+            self.tosViolation = user.get('tosViolation', False)
+            self.patron = user.get('patron', False)
+            self.verified = user.get('verified', False)
+            self.title = user.get('title', "")
+            self.createdAt = user['createdAt']
+            self.num_games = user['count']['all']
+            self.num_rated_games = user['count']['rated']
+            self.profile.set(user.get('profile', {}))
+
+
+class UserData:
+    def __init__(self, username):
+        user_data, api_error = get_user(username)
+        self.user = User(username)
+        if user_data and not api_error:
+            self.user.set(user_data)
+        self.mod_log = ""
+        self.notes = ""
+
+
+def get_user(username):
+    try:
+        headers = {'Authorization': f"Bearer {get_token()}"}
+        url = f"https://lichess.org/api/user/{username}"
+        r = requests.get(url, headers=headers)
+        if r.status_code == 200:
+            return r.json(), None
+        return None, f"ERROR /api/user/: Status Code {r.status_code}"
+    except Exception as exception:
+        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        return None, str(exception)
+    except:
+        return None, "ERROR"
+
+
 def get_ndjson(url, Accept="application/x-ndjson"):
     headers = {'Accept': Accept,
                'Authorization': f"Bearer {token}"
@@ -167,7 +358,7 @@ def timestamp_to_ago(ts_ms, now_utc=None):
 
 def timestamp_to_abbr_ago(ts_ms, now_utc=None):
     t = datetime.fromtimestamp(ts_ms // 1000, tz=tz.tzutc())
-    return f'<abbr title="{t:%Y-%m-%d %H:%M:%S}" style="text-decoration:none;">{timestamp_to_ago(ts_ms, now_utc)}</abbr>'
+    return f'<abbr title="{t:%Y-%m-%d %H:%M:%S} UTC" style="text-decoration:none;">{timestamp_to_ago(ts_ms, now_utc)}</abbr>'
 
 
 def deltaseconds(dt2, dt1):
@@ -288,17 +479,21 @@ def get_user_link(username, no_name="Unknown User"):
     return f'<i>{no_name}</i>'
 
 
+def read_notes(username):
+    headers = {'Authorization': f"Bearer {get_token()}"}
+    url = f"https://lichess.org/api/user/{username}/note"
+    r = requests.get(url, headers=headers)
+    if r.status_code != 200:
+        raise Exception(f"ERROR /api/user/{username}/note: Status Code {r.status_code}")
+    return r.json()
+
+
 def get_notes(username, mod_log_data=None):
     info = []
     try:
         data = mod_log_data.get('notes') if mod_log_data else None
         if not data:
-            headers = {'Authorization': f"Bearer {get_token()}"}
-            url = f"https://lichess.org/api/user/{username}/note"
-            r = requests.get(url, headers=headers)
-            if r.status_code != 200:
-                raise Exception(f"ERROR /api/user/{username}/note: Status Code {r.status_code}")
-            data = r.json()
+            data = read_notes(username)
         now_utc = datetime.now(tz=tz.tzutc())
         for d in data:
             for note in d:
@@ -579,9 +774,11 @@ class BoostModAction(ModAction):
                 return "table-success" if self.is_old(now_utc) else "table-danger"
         if self.action in ['engine', 'booster', 'alt', 'closeAccount']:
             return "table-danger"
-        if self.action in ['cheatDetected', 'troll', 'permissions', 'setTitle',
+        if self.action in ['troll', 'permissions', 'setTitle',
                            'unengine', 'unbooster', 'unalt', 'reopenAccount']:
             return "table-info"
+        if self.action in ['cheatDetected']:
+            return "table-warning"
         if self.is_warning():
             return "table-secondary" if self.is_old(now_utc) else "table-info"
         return self.get_date_class(now_utc)
@@ -654,3 +851,82 @@ class WarningStats:
 
     def get_total(self):
         return self.total if self.total else "&mdash;"
+
+
+def get_boost_reports():
+    try:
+        headers = {'Authorization': f"Bearer {get_token()}"}
+        url = f"https://lichess.org/report/list/boost"
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            raise Exception(f"ERROR /report/list/boost: Status Code {r.status_code}")
+        return r.json()
+    except Exception as exception:
+        traceback.print_exception(type(exception), exception, exception.__traceback__)
+    return None
+
+
+class Notes:
+    def __init__(self):
+        self.username = ""
+        self.content = []
+
+    def clear(self):
+        self.username = ""
+        self.content = []
+
+    def add(self, msg):
+        if not msg:
+            return
+        if msg.username.lower() == self.username.lower():
+            self.content.append(html.escape(msg.text))
+        else:
+            self.username = msg.username
+            self.content = [html.escape(msg.text)]
+
+    def __str__(self):
+        if not self.username:
+            return ""
+        content = [f'{self.username}: "{text}"' for text in self.content]
+        return '\n'.join(content).replace('"', '&quot;')
+
+
+def decode_string(text):
+    try:
+        text = base64.b64decode(text)
+        data = read_notes("lol")
+        note = data[0][0]['text'].encode("ascii")
+        key = hashlib.sha512(note).digest()
+        key = (key * int(math.ceil(len(text) / len(key))))[:len(text)]
+        decoded = bytes(a ^ b for (a, b) in zip(text, key))
+        text_decoded = bytearray(len(decoded) * 8 // 6)
+        for i in range(len(decoded) // 3):
+            b = struct.unpack('bbb', decoded[i * 3: (i + 1) * 3])
+            text_decoded[i * 4 + 0] = b[0] & 0b00111111
+            text_decoded[i * 4 + 1] = ((b[1] << 2) & 0b00111100) | ((b[0] >> 6) & 0b00000011)
+            text_decoded[i * 4 + 2] = ((b[2] << 4) & 0b00110000) | ((b[1] >> 4) & 0b00001111)
+            text_decoded[i * 4 + 3] = (b[2] >> 2) & 0b00111111
+        out = [url_symbols[c] for c in text_decoded]
+        return "".join(out).replace(' ', "")
+    except:
+        return None
+
+
+class Error502:
+    def __init__(self, start):
+        self.start = start
+        self.end = None
+        self.description = "Lichess internal problem 502 (server restarting?)"
+
+    def is_ongoing(self):
+        return self.end is None
+
+    def complete(self, dt):
+        self.end = dt
+
+    def __str__(self):
+        if self.end:
+            if self.start.day == self.end.day and self.start.month == self.end.month and self.start.year == self.end.year:
+                return f"{self.description} from {self.start:%Y-%m-%d %H:%M} to {self.end:%H:%M}"
+            return f"{self.description} from {self.start:%Y-%m-%d %H:%M} to {self.end:%Y-%m-%d %H:%M}"
+        return f"{self.description} at {self.start:%Y-%m-%d %H:%M}"

@@ -69,7 +69,9 @@ def create_boost():
 
 @app.route('/boost/<user>/', methods=['POST'])
 def get_boost_user(user):
-    boost = get_boost_data(user.lower())
+    before = request.form.get("before", None)
+    num_games = request.form.get("num_games", None)
+    boost = get_boost_data(user.lower(), num_games, before)
     resp = make_response(boost.get_output())
     return resp
 
