@@ -797,7 +797,7 @@ class Boost:
     def get_tournaments(self):
         if not self.prefer_marking and not self.user.is_titled():
             for tourney in self.tournaments:
-                if tourney.is_official and tourney.name.startswith('≤') and 1 <= tourney.place <= 3:
+                if tourney.is_official and tourney.name.startswith('≤') and tourney.place and 1 <= tourney.place <= 3:
                     self.prefer_marking = True
                     break
         output = self.get_enabled_buttons()

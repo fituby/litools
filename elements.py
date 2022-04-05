@@ -793,7 +793,7 @@ class ChatModAction(ModAction):
     def get_class(self, now_utc):
         if self.is_warning():
             if self.details in ["Warning: Accusations", "Warning: Offensive language",
-                                "Warning: Chat/Forum trolling", "Warning: spam is not permitted"]:
+                                "Warning: Chat/Forum trolling", "Warning: Spam is not permitted"]:
                 return "table-secondary" if self.is_old(now_utc) else "table-warning"
             return "table-muted" if self.is_old(now_utc) else "table-info"
         if self.action in ['engine', 'booster', 'troll', 'alt', 'closeAccount']:
