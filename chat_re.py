@@ -237,6 +237,8 @@ list_res = {
        reason=Reason.Other, info="En: boob"),
     Re(r'bozos?',  # added
        reason=Reason.Other, info="En: bozo"),
+    Re(r'braindead',  # added
+       reason=Reason.Offensive, info="En: braindead"),
     Re(r'buggers?',  # added "s?"
        reason=Reason.Offensive, info="En: bugger"),
     Re(r'buk?kake',

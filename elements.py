@@ -459,7 +459,7 @@ def log(text, to_print=False):
     try:
         now_utc = datetime.now(tz=tz.tzutc())
         with open(log_file, "a", encoding="utf-8") as file:
-            line = f"{now_utc: %Y-%m-%d %H:%M:%S}: {text}"
+            line = f"{now_utc: %Y-%m-%d %H:%M:%S} UTC: {text}"
             if to_print:
                 print(line)
             file.write(f"{line}\n")
@@ -536,7 +536,9 @@ def add_note(username, note):
                 'mod': True}
         url = f"https://lichess.org/api/user/{username}/note"
         r = requests.post(url, headers=headers, json=data)
-        return r.status_code == 200
+        if r.status_code == 200:
+            log(f"ADD NOTE for @{username}:\n{note}", True)
+            return True
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
     return False
@@ -811,7 +813,9 @@ def warn_user(username, subject):
         headers = {'Authorization': f"Bearer {get_token()}"}
         url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
         r = requests.post(url, headers=headers)
-        return r.status_code == 200
+        if r.status_code == 200:
+            log(f'WARN @{username} with "{subject}"', True)
+            return True
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
     return False
@@ -830,7 +834,9 @@ def mark_booster(username):
         headers = {'Authorization': f"Bearer {get_token()}"}
         url = f"https://lichess.org/mod/{username}/booster/true"
         r = requests.post(url, headers=headers)
-        return r.status_code == 200
+        if r.status_code == 200:
+            log(f'MARK BOOST: @{username}', True)
+            return True
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
     return False

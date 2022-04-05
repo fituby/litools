@@ -86,7 +86,10 @@
           <div id="selected_messages" class="d-none" style="max-height:65vh;overflow-y:auto;">
           </div>
           <div id="filtered_section" class="d-none">
-            <span id="notes_title" class="mt-2">Messages of <b id="selected_user">the player of interest</b>:</span>
+            <span id="notes_title" class="d-flex justify-content-between px-1 mt-2">
+              <span>Messages of <b id="selected_user">the player of interest</b>:</span>
+              <button class="btn btn-secondary align-baseline px-1 py-0" onclick="add_users_all_messages()">Add all</button>
+            </span>
             <div id="filtered_messages" class="mb-3" style="max-height:60vh;overflow-y:auto;">
             </div>
             <textarea id="notes" class="form-control mt-1" rows="3" oninput='update_notes()' readonly></textarea>
@@ -358,29 +361,31 @@
     else
       $('#mod-log').removeClass("d-flex").addClass("d-none");
   }
+  function add_to_notes(username, msg_id) {
+    var selection = $(`#msg${msg_id}`).attr("data-selection");
+    if (selection && !notes_msgs.includes(msg_id) && username != "lichess") {
+      var notes = $('#notes').val();
+      if (notes)
+        $('#notes').val((username != notes_user) ? selection : `${notes}\n${selection}`);
+      else
+        $('#notes').val(selection);
+      if (username == notes_user)
+        notes_msgs.push(msg_id);
+      else
+        notes_msgs = [msg_id];
+      notes_user = username;
+      update_username();
+      update_notes();
+    }
+  }
   function select_message(event, msg_id) {
     event = event || window.event;
     if (event && (event.target.tagName == "BUTTON" || event.target.tagName == "A") && msg_id != "--" && !msg_id.startsWith('T'))
       return;
     username = (msg_id == "--" || msg_id.startsWith('T') || $(`#msg${msg_id} a`).length == 0) ? "" : $(`#msg${msg_id} a`)[0].text;
     update_user_button(username);
-    if (msg_id.startsWith('F')) {
-      var selection = $(`#msg${msg_id}`).attr("data-selection");
-      if (selection && !notes_msgs.includes(msg_id) && username != "lichess") {
-        var notes = $('#notes').val();
-        if (notes)
-          $('#notes').val((username != notes_user) ? selection : `${notes}\n${selection}`);
-        else
-          $('#notes').val(selection);
-        if (username == notes_user)
-          notes_msgs.push(msg_id);
-        else
-          notes_msgs = [msg_id];
-        notes_user = username;
-        update_username();
-        update_notes();
-      }
-    }
+    if (msg_id.startsWith('F'))
+      add_to_notes(username, msg_id);
     $.ajax({url: `/chat/select_message/${msg_id}`, type: "post"})
       .done(function(data, textStatus, jqXHR) {
         set_selection(data);
@@ -403,6 +408,12 @@
     if (num_messages > 0)
       text = `<b>${num_messages}</b>: ${text}`;
     $('#btn_filter_msgs').html(text);
+  }
+  function add_users_all_messages() {
+    $('#filtered_messages .selectee').each(function(i, el) {
+      if (el.id.startsWith('msgF') && $(`#${el.id} a`).length)
+        add_to_notes($(`#${el.id} a`)[0].text, el.id.substring(3));
+    });
   }
   function prevent_click(event) {
     event = event || window.event;

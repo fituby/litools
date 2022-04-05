@@ -48,6 +48,18 @@ MAX_LEN_TEXT = 140
 CHAT_NUM_PLAYED_GAMES = [100, 250]
 CHAT_CREATED_DAYS_AGO = [30, 60]
 
+official_teams = [
+    "lichess-swiss",
+    "lichess-antichess",
+    "lichess-atomic",
+    "lichess-chess960",
+    "lichess-crazyhouse",
+    "lichess-horde",
+    "lichess-king-of-the-hill",
+    "lichess-racing-kings",
+    "lichess-three-check"
+]
+
 
 def get_highlight_style(opacity):
     return f"background-color:rgba(0,160,119,{opacity});"
@@ -877,8 +889,8 @@ class ChatAnalysis:
                         else "swiss" if self.tournaments[msg.tournament].t_type == Type.Swiss \
                         else "study" if self.tournaments[msg.tournament].t_type == Type.Study \
                         else None
-                    log(f"[reset] {reason_tag.upper()} score: {msg.score} "
-                        f"user: {msg.username} roomId: {msg.tournament} chan: {chan} text: {msg.text}")
+                    log(f"[reset] {reason_tag.upper()} @{msg.username} score={msg.score} "
+                        f"{chan.upper()}={msg.tournament}: {msg.text}")
                 self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -920,8 +932,8 @@ class ChatAnalysis:
             if len(msg.text) > MAX_LEN_TEXT:
                 text = f'{text}{msg.text[MAX_LEN_TEXT-1:]}'
             if r.status_code == 200 and r.text == "ok":
-                log(f"{timeout_tag}{reason_tag.upper()} score: {msg.score} user: {msg.username} "
-                    f"roomId: {msg.tournament} chan: {chan} text: {text}", True)
+                log(f"{timeout_tag}{reason_tag.upper()} @{msg.username} score={msg.score} "
+                    f"{chan.upper()}={msg.tournament}: {text}", True)
                 start_time = msg.time - timedelta(minutes=TIMEOUT_RANGE[0])
                 end_time = msg.time + timedelta(minutes=TIMEOUT_RANGE[1])
                 for m in self.all_messages.values():
@@ -1323,14 +1335,20 @@ class ChatAnalysis:
 
 
 def get_current_tournaments():
-    # Arena
     headers = {}  # {'Authorization': f"Bearer {get_token()}"}
+    # Arenas of official teams
+    arenas = []
+    for teamId in official_teams:
+        url = f"https://lichess.org/api/team/{teamId}/arena"
+        data = get_ndjson(url, Accept="application/nd-json")
+        arenas.extend(data)
+    # Arena
     url = "https://lichess.org/api/tournament"
     r = requests.get(url, headers=headers)
     if r.status_code != 200:
         raise Exception(f"ERROR /api/tournament: Status Code {r.status_code}")
     data = r.json()
-    arenas = [*data['created'], *data['started'], *data['finished']]
+    arenas.extend([*data['created'], *data['started'], *data['finished']])
     tournaments = []
     now_utc = datetime.now(tz=tz.tzutc())
     for arena in arenas:
@@ -1338,20 +1356,21 @@ def get_current_tournaments():
         if tourn.is_active(now_utc):
             tournaments.append(tourn)
     # Swiss
-    url = "https://lichess.org/api/team/lichess-swiss/swiss"
-    swiss_data = get_ndjson(url, Accept="application/nd-json")
-    for swiss in swiss_data:
-        try:
-            i = swiss['startsAt'].rfind('.')
-            if i < 0:
-                print(f"Error swiss: {swiss}")
-                continue
-            swiss['startsAt'] = datetime.strptime(swiss['startsAt'][:i], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=tz.tzutc())
-            tourn = Tournament(swiss, Type.Swiss)
-            if tourn.is_active(now_utc):
-                tournaments.append(tourn)
-        except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+    for teamId in official_teams:
+        url = f"https://lichess.org/api/team/{teamId}/swiss"
+        swiss_data = get_ndjson(url, Accept="application/nd-json")
+        for swiss in swiss_data:
+            try:
+                i = swiss['startsAt'].rfind('.')
+                if i < 0:
+                    print(f"Error swiss: {swiss}")
+                    continue
+                swiss['startsAt'] = datetime.strptime(swiss['startsAt'][:i], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=tz.tzutc())
+                tourn = Tournament(swiss, Type.Swiss)
+                if tourn.is_active(now_utc):
+                    tournaments.append(tourn)
+            except Exception as exception:
+                traceback.print_exception(type(exception), exception, exception.__traceback__)
     # Broadcast
     url = f"https://lichess.org/api/broadcast?nb={NUM_RECENT_BROADCASTS_TO_FETCH}"
     broadcast_data = get_ndjson(url, Accept="application/nd-json")

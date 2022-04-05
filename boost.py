@@ -24,7 +24,7 @@ BOOST_SUS_STREAK = 3
 BOOST_NUM_PLAYED_GAMES = [100, 250]
 BOOST_CREATED_DAYS_AGO = [30, 60]
 BOOST_ANALYSIS_SCORE = 2
-NUM_FIRST_GAMES_TO_EXCLUDE = 6
+NUM_FIRST_GAMES_TO_EXCLUDE = 15
 MAX_NUM_TOURNEY_PLAYERS = 20
 STD_NUM_TOURNEYS = 5
 MIN_NUM_TOURNEY_GAMES = 4
@@ -114,12 +114,15 @@ class VariantPlayed:
             str_range = f'<abbr title="{str_detailed_progress}" style="text-decoration:none;">{str_range}</abbr>'
         str_num_recent_games = "&ndash;" if self.num_recent_games == 0 else f"{self.num_recent_games:,}"
         row_class = ' class="text-muted"' if self.num_recent_games == 0 else ""
+        perf_link = ""
         if self.num_recent_games > 0:
             link = f'https://lichess.org/@/{{username}}/perf/{self.name}'
-            name = f'<button class="btn btn-primary p-0" style="min-width: 120px;" ' \
+            perf_link = f'<a href="{link}" target="_blank">open</a>'
+            name = f'<button class="btn btn-primary w-100 py-0" ' \
                    f'onclick="add_to_notes(this)" data-selection=\'{link}\'>{name}</button>'
         row = f'''<tr{row_class}>
                     <td class="text-left">{name}</td>
+                    <td class="text-left">{perf_link}</td>
                     <td class="text-left">{self.get_rating()}</td>
                     <td class="text-center">{str_num_recent_games}</td>
                     <td class="text-center">{str_range}</td>
@@ -392,7 +395,7 @@ class UserTournament:
             elif self.place <= 10:
                 class_name = ' class="text-warning"'
         url = f'https://lichess.org/{tourney_type}/{self.tournament_id}'
-        name_link = f'<a href="{url}" {class_name}target="_blank">{name}</a>'
+        name_link = f'<a href="{url}"{class_name} target="_blank">{name}</a>'
         if self.date:
             name_link = f'<abbr title="{self.date} UTC" class="pr-2" style="text-decoration:none;">{name_link}</abbr>'
         return url, name_link
@@ -613,6 +616,7 @@ class Boost:
             <table id="variants_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
               <thead><tr>
                 <th class="text-left" style="cursor:default;">Variant</th>
+                <th></th>
                 <th class="text-left" style="cursor:default;">Rating</th>
                 <th class="text-center" style="cursor:default;"><abbr title="{str_games}" 
                     style="text-decoration:none;"><i class="fas fa-hashtag"></i></abbr></th>
@@ -758,8 +762,9 @@ class Boost:
                         v.detailed_progress = [str(ratings[int(round(i * step))]) for i in range(10)]
                     v.num_recent_games = len(ratings)
                     num_stable_games = v.num_games - NUM_FIRST_GAMES_TO_EXCLUDE
-                    i_start = max(-len(ratings), 1 - num_stable_games)
-                    stable_ratings = ratings[i_start:] if i_start < 0 else [ratings[0]]
+                    # Ratings are in reverse order
+                    i_end = min(len(ratings), num_stable_games)
+                    stable_ratings = ratings[:i_end] if i_end > 0 else [ratings[0]]
                     v.stable_rating_range = [min(stable_ratings), max(stable_ratings)]
 
     def get_analysis(self):
@@ -932,7 +937,6 @@ def send_boost_note(note, username):
     try:
         if not boost or not note or not username:
             raise Exception(f"Wrong note: [{username}]: {note}")
-        print(f"Note [{username}]:\n{note}")
         is_ok = add_note(username, note)
         if is_ok:
             mod_notes = get_notes(username)
