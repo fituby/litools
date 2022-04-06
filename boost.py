@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 from dateutil import tz
 import time
 import traceback
+from collections import defaultdict
+import math
 from elements import get_token, get_user, get_ndjson, shorten
 from elements import get_notes, add_note, load_mod_log, get_mod_log
 from elements import ModActionType, WarningStats, User
@@ -24,6 +26,9 @@ BOOST_SUS_STREAK = 3
 BOOST_NUM_PLAYED_GAMES = [100, 250]
 BOOST_CREATED_DAYS_AGO = [30, 60]
 BOOST_ANALYSIS_SCORE = 2
+BOOST_NUM_GAMES_FREQUENT_OPP = 4
+BOOST_PERCENT_FREQUENT_OPP = 0.30
+BOOST_MIN_DECENT_RATING = 1500  # TODO: different for different variants
 NUM_FIRST_GAMES_TO_EXCLUDE = 15
 MAX_NUM_TOURNEY_PLAYERS = 20
 STD_NUM_TOURNEYS = 5
@@ -209,10 +214,12 @@ class GameAnalysis:
         self.resign = StatsData()
         self.timeout = StatsData()
         self.out_of_time = StatsData()
+        self.opponents = defaultdict(int)
         self.is_sandbagging = is_sandbagging
         self.skip_atomic_streaks = is_sandbagging
         self.score = 0
         self.row = ""
+        self.is_best = False
 
     def check_variants(self, variants):
         if not self.skip_atomic_streaks:
@@ -258,7 +265,7 @@ class GameAnalysis:
         num_bad_games, s_bad_games = self.get_num_and_score(self.bad_games)
         exclude_variants = ['atomic'] if self.skip_atomic_streaks and self.max_num_moves > 1 else None
         streak, s_streak = self.get_num_and_score(self.streak, limits=[BOOST_SUS_STREAK, BOOST_SUS_STREAK],
-                                         exclude_variants=exclude_variants)
+                                                  exclude_variants=exclude_variants)
         resign, s_resign = self.get_num_and_score(self.resign)
         timeout, s_timeout = self.get_num_and_score(self.timeout)
         if self.max_num_moves <= 1:
@@ -287,7 +294,30 @@ class GameAnalysis:
                   </tr>'''
 
     def set_best_row(self):
+        self.is_best = True
         self.row = self.row.replace("btn-primary", "btn-warning")
+
+    def get_frequent_opponents(self):
+        if not self.is_best:
+            return ""
+        game_threshold = max(BOOST_NUM_GAMES_FREQUENT_OPP, int(math.ceil(self.bad_games.num * BOOST_PERCENT_FREQUENT_OPP)))
+        opponents = [(opp_name, num_games) for opp_name, num_games in self.opponents.items() if num_games >= game_threshold]
+        if not opponents:
+            return ""
+        opponents.sort(key=lambda name_num: name_num[1], reverse=True)
+        num_moves = 1 if self.max_num_moves == 0 else self.max_num_moves
+        opps = []
+        for opp_name, num_games in opponents:
+            link = f'https://lichess.org/@/{{username}}/search?turnsMax={num_moves}&mode=1&players.a={{user_id}}' \
+                   f'&players.b={opp_name.lower()}&players.{{winner_loser}}={{user_id}}&sort.field=d&sort.order=desc"'
+            opponent_name = opp_name if len(opp_name) <= 10 else f'{opp_name[:9]}&hellip;'
+            link_class = "text-danger" if num_games >= 6 else "text-warning"
+            opps.append(f'<span class="d-flex flex-wrap align-items-baseline"><button class="btn btn-primary py-0 mr-1" '
+                        f'onclick="add_to_notes(this)" data-selection=\'{link}\'>{num_games} games</button> '
+                        f'<a href="{link}" class="{link_class}" target="_blank"> vs {opponent_name}</a></span>')
+        separator = '<span class="mx-1">,</span>'
+        return f'<div class="d-flex flex-wrap mt-1"><div>Frequent opponent{"" if len(opps) == 1 else "s"} in games with ' \
+               f'&le;{self.max_num_moves} moves:</div>{separator.join(opps)}</div>'
 
     def is_empty(self):
         return sum((self.bad_games.num, self.streak.num, self.resign.num, self.timeout.num, self.out_of_time.num)) == 0
@@ -493,6 +523,7 @@ class Games:
             self.all_user_ratings = {}
             streak = {}
             best_streak = {}
+            analysis.opponents.clear()
             is_last_game_bad = False
             last_game_end = None
             for game in self.games:
@@ -546,6 +577,8 @@ class Games:
                                 add_variant_rating(out_of_time, variant, opp_rating)
                             elif status == "resign":
                                 add_variant_rating(resign, variant, opp_rating)
+                            opp_name = game['players'][opp_color]['user']['name']
+                            analysis.opponents[opp_name] += 1
                             createdAt = datetime.fromtimestamp(game['createdAt'] // 1000, tz=tz.tzutc())
                             delta = (createdAt - last_game_end) if last_game_end else None
                             if is_last_game_bad and last_game_end \
@@ -641,16 +674,18 @@ class Boost:
         if analysis:
             analysis = f'<div class="my-3">{analysis}</div>'
         best_tournaments = f'<a href="https://lichess.org/@/{self.user.name}/tournaments/best" target="_blank" ' \
-                           f'class="btn btn-secondary flex-grow-1 py-0" role="button">Best tournaments&hellip;</a>'
+                           f'class="btn btn-secondary flex-grow-1 py-0 mr-1" role="button">Best tournaments&hellip;</a>'
+        games = f'<a href="https://lichess.org/mod/{self.user.name}/games" target="_blank" ' \
+                f'class="btn btn-secondary flex-grow-1 py-0" role="button">Games&hellip;</a>'
         if Boost.ring_tool:
             class_boost_ring = "btn-warning" if self.enable_sandbagging and self.enable_boosting else "btn-secondary"
             additional_tools = f'<div class="d-flex justify-content-between mb-2 px-1">' \
                                f'<a href="https://{Boost.ring_tool}/?user={self.user.name}" target="_blank" ' \
-                               f'class="btn {class_boost_ring} flex-grow-1 py-0 mr-2" ' \
-                               f'role="button">Boost ring tool&hellip;</a>{best_tournaments}</div>'
+                               f'class="btn {class_boost_ring} flex-grow-1 py-0 mr-1" ' \
+                               f'role="button">Boost ring tool&hellip;</a>{best_tournaments}{games}</div>'
         else:
-            additional_tools = f'<div>{best_tournaments}' \
-                               f'<div class="text-warning mb-2">No permissions to work with mod data</div></div>'
+            additional_tools = f'<div class="d-flex justify-content-between mb-2 px-1">{best_tournaments}{games}</div>' \
+                               f'<div class="text-warning mb-2">No permissions to work with mod data</div>'
         return f"{main}{num_games}{self.get_errors()}{analysis}{additional_tools}"
 
     def get_info_2(self):
@@ -773,8 +808,11 @@ class Boost:
         for table_name, winner_loser, analyses in tables:
             rows = [analysis.row for analysis in analyses if not analysis.is_empty()]
             str_rows = "".join(rows).format(username=self.user.name, user_id=self.user.id, winner_loser=winner_loser)
+            opponents = [analysis.get_frequent_opponents() for analysis in analyses]
+            str_opps = "".join(opponents).format(username=self.user.name, user_id=self.user.id, winner_loser=winner_loser)
             if rows:
-                table = f'''<table id="{table_name.lower()}_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
+                table = f'''<table id="{table_name.lower()}_table" class="table table-sm table-striped table-hover 
+                            text-center text-nowrap mt-3 mb-0">
                       <thead><tr>
                         <th class="text-left" style="cursor:default;">{table_name}</th>
                         <th class="text-right pr-2" style="cursor:default;">
@@ -788,7 +826,7 @@ class Boost:
                             style="text-decoration:none;"><i class="far fa-clock"></i></i></abbr></th>
                       </tr></thead>
                       {str_rows}
-                    </table>'''
+                    </table>{str_opps}'''
             else:
                 table = f'<p class="mt-3">No {table_name.lower()}</p>'
             output.append(table)
@@ -808,8 +846,11 @@ class Boost:
         link = f'https://lichess.org/@/{self.user.name}/tournaments/recent'
         table = f'''<table id="tournaments_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
               <thead><tr>
-                <th class="text-left" style="cursor:default;"><button class="btn btn-primary p-0" style="min-width:120px;" 
-                    onclick="add_to_notes(this)" data-selection=\'{link}\'>Tournaments</button></th>
+                <th class="text-left" style="cursor:default;">
+                    <button class="btn btn-primary p-0" style="min-width:120px;" 
+                        onclick="add_to_notes(this)" data-selection=\'{link}\'>Tournaments</button>
+                    <a class="ml-2" href="{link}" target="_blank">open</a>
+                </th>
                 <th class="text-center" style="cursor:default;">
                     <abbr title="Place" style="text-decoration:none;"><i class="fas fa-trophy"></i></abbr></th>
                 <th class="text-right" style="cursor:default;">
@@ -852,14 +893,16 @@ class Boost:
                or (mod_log.sandbag_auto.active >= 5 and mod_log.sandbag_auto.total >= 10)\
                or (mod_log.boost_auto.active >= 5 and mod_log.boost_auto.total >= 10):
                 self.prefer_marking = True
-            elif self.user.num_rated_games <= BOOST_NUM_PLAYED_GAMES[0] or days <= BOOST_CREATED_DAYS_AGO[0]:
-                self.prefer_marking = True
             else:
                 for variant in self.variants:
                     if not variant.stable_rating_range:
                         continue
                     rating_diff = variant.stable_rating_range[1] - variant.stable_rating_range[0]
                     if rating_diff >= BOOST_SUS_RATING_DIFF[1]:
+                        self.prefer_marking = True
+                        break
+                    if (self.user.num_rated_games <= BOOST_NUM_PLAYED_GAMES[0] or days <= BOOST_CREATED_DAYS_AGO[0]) \
+                            and rating_diff != 0 and variant.stable_rating_range[1] >= BOOST_MIN_DECENT_RATING:
                         self.prefer_marking = True
                         break
         if self.enable_sandbagging and not self.prefer_marking \

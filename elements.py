@@ -468,14 +468,14 @@ def log(text, to_print=False):
         log_file = ""
 
 
-def get_user_link(username, no_name="Unknown User"):
+def get_user_link(username, no_name="Unknown User", class_a="text-info", max_len=10):
     if username:
-        if len(username) > 10:
+        if len(username) > max_len:
             user_url = username
-            username = f'{username[:9]}&hellip;'
+            username = f'{username[:max_len - 1]}&hellip;'
         else:
             user_url = username.lower()
-        return f'<a class="text-info" href="https://lichess.org/@/{user_url}" target="_blank">{username}</a>'
+        return f'<a class="{class_a}" href="https://lichess.org/@/{user_url}" target="_blank">{username}</a>'
     return f'<i>{no_name}</i>'
 
 
@@ -537,7 +537,7 @@ def add_note(username, note):
         url = f"https://lichess.org/api/user/{username}/note"
         r = requests.post(url, headers=headers, json=data)
         if r.status_code == 200:
-            log(f"ADD NOTE for @{username}:\n{note}", True)
+            log(f"ADD NOTE for @{username}:\n{note}", False)
             return True
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -918,11 +918,11 @@ def decode_string(text):
         return None
 
 
-class Error502:
-    def __init__(self, start):
+class Error500:
+    def __init__(self, start, status_code):
         self.start = start
         self.end = None
-        self.description = "Lichess internal problem 502 (server restarting?)"
+        self.description = f"Lichess internal problem {status_code} (server restarting?)"
 
     def is_ongoing(self):
         return self.end is None

@@ -9,7 +9,7 @@ from enum import Enum, IntFlag
 from multiprocessing import Lock
 import yaml
 import html
-from elements import Reason, get_token, get_ndjson, deltaseconds, deltaperiod, shorten, log, config_file, Error502
+from elements import Reason, get_token, get_ndjson, deltaseconds, deltaperiod, shorten, log, config_file, Error500
 from elements import STYLE_WORD_BREAK, get_notes, add_note, load_mod_log, get_mod_log, ModActionType, UserData
 from chat_re import ReUser, list_res, list_res_variety, re_spaces, LANGUAGES
 
@@ -309,7 +309,7 @@ class Tournament:
         self.user_names = set()
         self.re_usernames = []
         self.errors = []
-        self.errors_502 = []
+        self.errors_500 = []
         self.max_score = 0
         self.total_score = 0
         self.is_monitored = is_monitored
@@ -411,14 +411,14 @@ class Tournament:
             url = self.link if self.link else f"https://lichess.org/{self.get_type()}/{self.id}"
             r = requests.get(url, headers=headers)
             if r.status_code != 200:
-                if r.status_code == 502:
-                    if self.errors_502 and self.errors_502[-1].is_ongoing():
+                if r.status_code >= 500:
+                    if self.errors_500 and self.errors_500[-1].is_ongoing():
                         return
-                    self.errors_502.append(Error502(now_utc))
+                    self.errors_500.append(Error500(now_utc, r.status_code))
                     return
                 raise Exception(f"Failed to download {url}<br>Status Code {r.status_code}")
-            if self.errors_502 and self.errors_502[-1].is_ongoing():
-                self.errors_502[-1].complete(now_utc)
+            if self.errors_500 and self.errors_500[-1].is_ongoing():
+                self.errors_500[-1].complete(now_utc)
             delay = None if self.last_update is None else deltaseconds(now_utc, self.last_update)
             with msg_lock:
                 new_messages, deleted_messages = self.process_messages(r.text, now_utc, delay)
@@ -529,10 +529,10 @@ class Tournament:
 
     def get_info(self, now_utc):
         msgs = [msg.get_info('A', add_mscore=True) for msg in self.messages if msg.score and not msg.is_hidden()]
-        if not msgs and not self.errors and not self.errors_502:
+        if not msgs and not self.errors and not self.errors_500:
             return ""
         errors = self.errors.copy()
-        errors.extend([str(err) for err in self.errors_502])
+        errors.extend([str(err) for err in self.errors_500])
         header = f'<div class="d-flex user-select-none justify-content-between px-1 mb-1" ' \
                  f'style="background-color:rgba(128,128,128,0.2);">' \
                  f'{self.get_link(short=False)}{self.get_status(now_utc)}</div>'
@@ -828,12 +828,13 @@ class ChatAnalysis:
                         del self.tournaments[tourn_id]
                 for tourn_id, tourn in active_tournaments.items():
                     self.tournaments[tourn_id] = tourn
+            self.state_tournaments += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(str(exception))
+            if not self.tournaments:
+                self.errors.append(str(exception))  # only if it doesn't work from the very beginning
         except:
             self.errors.append("ERROR")
-        self.state_tournaments += 1
         self.is_processing = False
 
     def run(self):
