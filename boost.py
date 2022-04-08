@@ -6,7 +6,7 @@ import time
 import traceback
 from collections import defaultdict
 import math
-from elements import get_token, get_user, get_ndjson, shorten
+from elements import get_token, get_user, get_ndjson, shorten, deltaseconds
 from elements import get_notes, add_note, load_mod_log, get_mod_log
 from elements import ModActionType, WarningStats, User
 from elements import warn_sandbagging, warn_boosting, mark_booster, decode_string
@@ -22,6 +22,10 @@ BOOST_NUM_MOVES = [0, 5, 10, 15]
 BOOST_BAD_GAME_PERCENT = {0: [0.05, 0.10], 5: [0.08, 0.15], 10: [0.10, 0.20], 15: [0.15, 0.33]}
 BOOST_STREAK_TIME = 10 * 60  # interval between games [s]
 BOOST_STREAK_REPORTABLE = 3
+BOOST_NUM_RESIGN_REPORTABLE = 3
+BOOST_NUM_TIMEOUT_REPORTABLE = 3
+BOOST_NUM_OUT_OF_TIME_REPORTABLE = 3
+BOOST_SIGNIFICANT_RATING_DIFF = 150
 BOOST_SUS_STREAK = 3
 BOOST_NUM_PLAYED_GAMES = [100, 250]
 BOOST_CREATED_DAYS_AGO = [30, 60]
@@ -36,6 +40,8 @@ MIN_NUM_TOURNEY_GAMES = 4
 MAX_LEN_TOURNEY_NAME = 22
 API_TOURNEY_DELAY = 0.5  # [s]
 BOOST_RING_TOOL = b'iSfVR3ICd3lHqSQf2ucEkLvyvCf0'
+STATUSES_TO_DISCARD = ["created", "started", "aborted", "unknownFinish", "draw", "cheat"]
+PERCENT_EXTRA_GAMES_TO_DOWNLOAD = 10
 
 
 boosts = {}
@@ -205,6 +211,29 @@ class StatsData:
         self.dev_median = statistics.median(diff_median)
 
 
+class StatsDesc:
+    def __init__(self, abbr, score, median, nums_per_variant):
+        self.abbr = abbr
+        self.score = score
+        self.median = median
+        self.nums_per_variant = nums_per_variant
+
+    def info(self):
+        if not self.nums_per_variant:
+            return ""
+        info_rating_diff = ""
+        if self.median >= BOOST_SIGNIFICANT_RATING_DIFF:
+            info_rating_diff = "mostly vs higher rated opponents: "
+        elif self.median <= -BOOST_SIGNIFICANT_RATING_DIFF:
+            info_rating_diff = "mostly vs lower rated opponents: "
+        if len(self.nums_per_variant) == 1:
+            variant, num = self.nums_per_variant[0]
+            str_variants = f"{variant}" if num == 1 else f"all {num} {variant}"
+        else:
+            str_variants = " + ".join([f"{num} {variant}" for variant, num in self.nums_per_variant])
+        return f" ({info_rating_diff}{str_variants})"
+
+
 class GameAnalysis:
     def __init__(self, max_num_moves, is_sandbagging):
         self.max_num_moves = max_num_moves
@@ -232,9 +261,9 @@ class GameAnalysis:
                 self.skip_atomic_streaks = variant.stable_rating_range[0] < 1800 and variant.stable_rating_range[1] < 2000
                 return
 
-    def get_num_and_score(self, stats, *, limits=None, text_classes=None, exclude_variants=None, precision=10):
+    def get_stats_desc(self, stats, *, limits=None, text_classes=None, exclude_variants=None, precision=10):
         if stats.num == 0:
-            return '&ndash;', 0
+            return StatsDesc('&ndash;', 0, 0, [])
         mean = int(round(stats.mean / precision)) * precision
         median = int(round(stats.median / precision)) * precision
         str_mean = f"+{mean}" if mean > 0 else f"&minus;{abs(mean)}" if mean < 0 else "0"
@@ -255,42 +284,67 @@ class GameAnalysis:
                 if stats_num >= limits[0] else ""
         score = (10 * stats_num / limits[1]) if stats_num >= limits[1] \
             else 1 + (stats_num - limits[0]) / (limits[1] - limits[0]) if stats_num >= limits[0] else 0
-        return f'<abbr title="{str_info}"{color} style="text-decoration:none;">{stats_num:,}</abbr>', score
+        abbr = f'<abbr title="{str_info}"{color} style="text-decoration:none;">{stats_num:,}</abbr>'
+        return StatsDesc(abbr, score, median, nums)
 
     def calc(self):
         self.score = 0
         if self.is_empty():
             self.row = ""
             return
-        num_bad_games, s_bad_games = self.get_num_and_score(self.bad_games)
+        stats_bad_games = self.get_stats_desc(self.bad_games)
         exclude_variants = ['atomic'] if self.skip_atomic_streaks and self.max_num_moves > 1 else None
-        streak, s_streak = self.get_num_and_score(self.streak, limits=[BOOST_SUS_STREAK, BOOST_SUS_STREAK],
-                                                  exclude_variants=exclude_variants)
-        resign, s_resign = self.get_num_and_score(self.resign)
-        timeout, s_timeout = self.get_num_and_score(self.timeout)
+        stats_streak = self.get_stats_desc(self.streak, limits=[BOOST_SUS_STREAK, BOOST_SUS_STREAK],
+                                           exclude_variants=exclude_variants)
+        stats_resign = self.get_stats_desc(self.resign)
+        stats_timeout = self.get_stats_desc(self.timeout)
         if self.max_num_moves <= 1:
-            out_of_time, _ = self.get_num_and_score(self.out_of_time, text_classes=["text-success", "text-success"])
-            s_out_of_time = 0
+            stats_out_of_time = self.get_stats_desc(self.out_of_time, text_classes=["text-success", "text-success"])
+            stats_out_of_time.score = 0
         else:
-            out_of_time, s_out_of_time = self.get_num_and_score(self.out_of_time)
-        self.score = s_bad_games + s_streak + s_resign + s_timeout + s_out_of_time
+            stats_out_of_time = self.get_stats_desc(self.out_of_time)
+        self.score = stats_bad_games.score + stats_streak.score + stats_resign.score + \
+            stats_timeout.score + stats_out_of_time.score
         if self.max_num_moves > 10:
             self.score /= 2
         num_moves = 1 if self.max_num_moves == 0 else self.max_num_moves
-        link = f"https://lichess.org/@/{{username}}/search?turnsMax={num_moves}&mode=1&players.a={{user_id}}" \
-               f"&players.{{winner_loser}}={{user_id}}&sort.field=d&sort.order=desc"
+        link = f'https://lichess.org/@/{{username}}/search?turnsMax={num_moves}&mode=1&players.a={{user_id}}' \
+               f'&players.{{winner_loser}}={{user_id}}&sort.field=d&sort.order=desc'
         link_open = f'<a class="ml-2" href="{link}" target="_blank">open</a>'
-        if self.streak.num >= BOOST_STREAK_REPORTABLE:
-            str_incl = "including" if self.streak.num < self.bad_games.num else "i.e."
-            link = f'{link} {str_incl} {self.streak.num} games streak'
+        add_info = []
+        if self.resign.num >= BOOST_NUM_RESIGN_REPORTABLE:
+            add_info.append(f"{self.resign.num} games resigned{stats_resign.info()}")
+        if self.timeout.num >= BOOST_NUM_TIMEOUT_REPORTABLE:
+            add_info.append(f"left the game in {self.timeout.num} games{stats_timeout.info()}")
+        if self.out_of_time.num >= BOOST_NUM_OUT_OF_TIME_REPORTABLE:
+            add_info.append(f"out of time in {self.out_of_time.num} games{stats_out_of_time.info()}")
+        info = f'{link}'
+        if add_info or self.streak.num >= BOOST_STREAK_REPORTABLE or stats_bad_games.score >= 1:
+            info = f"{info}\nIn the only game" if self.all_games.num == 1 else f'{info}\nAmong {self.all_games.num} games'
+            info = f"{info}{{info_games_played}}"
+            if self.all_games.num == 100 or self.all_games.num < 30:
+                info = f'{info}, they {{won_lost}} {self.bad_games.num} games'
+            else:
+                perc = int(round(100 * self.bad_games.num / self.all_games.num)) if self.all_games.num else 0
+                info = f'{info}, they {{won_lost}} {perc}% of their games'
+            if self.max_num_moves == 0:
+                info = f'{info} without making a single move'
+            else:
+                info = f'{info} in {self.max_num_moves} moves or less'
+            if add_info:
+                info = f'{info}: {", ".join(add_info)}'
+            if self.streak.num >= BOOST_STREAK_REPORTABLE:
+                str_incl = "including" if self.streak.num < self.bad_games.num else "i.e."
+                info = f'{info}, {str_incl} {self.streak.num} games streak'
+            info = f"{info}."
         self.row = f'''<tr>
                     <td class="text-left"><button class="btn btn-primary p-0" style="min-width: 120px;" 
-                        onclick="add_to_notes(this)" data-selection=\'{link}\'>{self.max_num_moves}</button>{link_open}</td>
-                    <td class="text-right pr-2">{num_bad_games}</td>
-                    <td class="text-center px-2">{streak}</td>
-                    <td class="text-right pr-2">{resign}</td>
-                    <td class="text-right pr-2">{timeout}</td>
-                    <td class="text-right pr-2">{out_of_time}</td>
+                        onclick="add_to_notes(this)" data-selection=\'{info}\'>{self.max_num_moves}</button>{link_open}</td>
+                    <td class="text-right pr-2">{stats_bad_games.abbr}</td>
+                    <td class="text-center px-2">{stats_streak.abbr}</td>
+                    <td class="text-right pr-2">{stats_resign.abbr}</td>
+                    <td class="text-right pr-2">{stats_timeout.abbr}</td>
+                    <td class="text-right pr-2">{stats_out_of_time.abbr}</td>
                   </tr>'''
 
     def set_best_row(self):
@@ -487,10 +541,23 @@ class Games:
         else:
             str_until = ""
             self.until = now_utc
-        url = f"https://lichess.org/api/games/user/{self.user_id}?rated=true&finished=true&max={self.max_num_games}" \
+        max_num_games = int(round(self.max_num_games * (1 + PERCENT_EXTRA_GAMES_TO_DOWNLOAD / 100)))
+        url = f"https://lichess.org/api/games/user/{self.user_id}?rated=true&finished=true&max={max_num_games}" \
               f"&since={since}{str_until}"
         self.since = None if since == ts_6months_ago else since
-        self.games = get_ndjson(url)
+        games = get_ndjson(url)
+        if len(games) > self.max_num_games:
+            num_to_delete = len(games) - self.max_num_games
+            self.games = []
+            for game in games:
+                if num_to_delete > 0 and (game['status'] in STATUSES_TO_DISCARD):
+                    num_to_delete -= 1
+                else:
+                    self.games.append(game)
+            if len(self.games) > self.max_num_games:
+                self.games = self.games[:self.max_num_games]
+        else:
+            self.games = games
 
     def get_num(self):
         str_s = "" if len(self.games) == 1 else "s"
@@ -530,7 +597,7 @@ class Games:
                 if not game['rated']:
                     raise Exception("Error games: not a rated game")
                 status = game['status']
-                if status not in ["created", "started", "aborted", "unknownFinish", "draw", "cheat"]:
+                if status not in STATUSES_TO_DISCARD:
                     black_id = game['players']['black']['user']['id']
                     white_id = game['players']['white']['user']['id']
                     if white_id == self.user_id:
@@ -638,6 +705,7 @@ class Boost:
         self.mod_log_out = ""
         if Boost.ring_tool is None:
             Boost.ring_tool = decode_string(BOOST_RING_TOOL)  # returns "" (not None) if not available
+        self.info_games_played = ""
 
     def get_variants(self):
         rows = [variant.get_table_row() for variant in self.variants]
@@ -727,6 +795,15 @@ class Boost:
         exc: Exception = None
         try:
             self.games.download(self.mod_log.time_last_manual_warning, self.before)
+            if self.games.until and deltaseconds(datetime.now(tz=tz.tzutc()), self.games.until) > 30*60:
+                self.info_games_played = f' played before {self.games.until:%Y-%m-%d %H:%M} UTC'
+            else:
+                self.info_games_played = ""
+            if len(self.games.games) != self.games.max_num_games and self.games.since:
+                since = datetime.fromtimestamp(self.games.since // 1000, tz=tz.tzutc())
+                self.info_games_played += ' and' if self.info_games_played else ' played'
+                self.info_games_played += f' since the previous warning on {since:%Y-%m-%d} at {since:%H:%M} UTC'
+
         except Exception as e:
             exc = e
         self.sandbagging = self.games.analyse(True)
@@ -803,11 +880,12 @@ class Boost:
                     v.stable_rating_range = [min(stable_ratings), max(stable_ratings)]
 
     def get_analysis(self):
-        tables = [("Sandbagging", "loser", self.sandbagging), ("Boosting", "winner", self.boosting)]
+        tables = [("Sandbagging", "loser", "lost", self.sandbagging), ("Boosting", "winner", "won", self.boosting)]
         output = []
-        for table_name, winner_loser, analyses in tables:
+        for table_name, winner_loser, won_lost, analyses in tables:
             rows = [analysis.row for analysis in analyses if not analysis.is_empty()]
-            str_rows = "".join(rows).format(username=self.user.name, user_id=self.user.id, winner_loser=winner_loser)
+            str_rows = "".join(rows).format(username=self.user.name, user_id=self.user.id, winner_loser=winner_loser,
+                                            won_lost=won_lost, info_games_played=self.info_games_played)
             opponents = [analysis.get_frequent_opponents() for analysis in analyses]
             str_opps = "".join(opponents).format(username=self.user.name, user_id=self.user.id, winner_loser=winner_loser)
             if rows:
