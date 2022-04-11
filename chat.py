@@ -35,7 +35,7 @@ DELAY_ERROR_READ_MOD_LOG = 60  # [min]
 
 CHAT_NUM_VISIBLE_MSGS = 450
 CHAT_MAX_NUM_MSGS = 500
-CHAT_FREQUENT_MSGS_MIN_SCORE = 10
+CHAT_FREQUENT_MSGS_MIN_SCORE = [5, 10]
 CHAT_BEGINNING_MESSAGES_TEXT = '"name":"Chat room","lines":['
 CHAT_END_MESSAGES_TEXT = '],"userId":'
 TOURNEY_STANDING_BEGINNING_TEXT = '"standing":{"page":1,"players":['
@@ -47,6 +47,7 @@ MULTI_MSG_MIN_TIMEOUT_SCORE = 300
 MAX_LEN_TEXT = 140
 CHAT_NUM_PLAYED_GAMES = [100, 250]
 CHAT_CREATED_DAYS_AGO = [30, 60]
+STD_SHORT_MESSAGES = ["hi", "hello", "good luck", "bye", "gl", "hf", "thanks"]
 
 official_teams = [
     "lichess-swiss",
@@ -573,7 +574,8 @@ class Tournament:
                     j += 1
                 if j > 0:
                     msgs = msgs[j:]
-            real_msgs = [um for um in msgs if um is not None]
+            real_msgs = [um for um in msgs if (um is not None and um.delay is not None
+                                               and um.text.lower() not in STD_SHORT_MESSAGES)]
             if not real_msgs:
                 return
             num_msgs = len(real_msgs)
@@ -596,7 +598,11 @@ class Tournament:
                     coef = 5 if mean_len < 3 else 4 if mean_len < 4 else 2 if mean_len < 5 else 1.5 if mean_len < 10 else 1
                 else:
                     coef = 1
-                score_int = int(score_int * coef)
+                t_1 = real_msgs[0].time - timedelta(seconds=real_msgs[0].delay)
+                t_9 = real_msgs[min(len(real_msgs) - 1, 9)].time
+                dt = deltaseconds(t_9, t_1)
+                coef_decrease = max(1, min(10, dt / 60))
+                score_int = int(score_int * coef / coef_decrease)
             combined_text = " ".join([m.text for m in real_msgs])
             combined_msg = Message({'u': user_name, 't': combined_text}, real_msgs[-1].tournament, real_msgs[-1].time)
             max_score = max([(0 if m.score is None else m.score) for m in real_msgs])
@@ -639,7 +645,7 @@ class Tournament:
                 else:
                     final_score = f'{prev}+{combined_msg.score}'
                 score_int += combined_msg.score
-            if score_int < CHAT_FREQUENT_MSGS_MIN_SCORE and num_msgs < 5:
+            if score_int < CHAT_FREQUENT_MSGS_MIN_SCORE[0] or (score_int < CHAT_FREQUENT_MSGS_MIN_SCORE[1] and num_msgs < 5):
                 return
             tag = 'B'
             score_theme = ' class="text-danger"' if score_int > 50 else ' class="text-warning"' if score_int > 10 else ""

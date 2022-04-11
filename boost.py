@@ -212,20 +212,22 @@ class StatsData:
 
 
 class StatsDesc:
-    def __init__(self, abbr, score, median, nums_per_variant):
+    def __init__(self, abbr, score, median, nums_per_variant, is_sandbagging):
         self.abbr = abbr
         self.score = score
         self.median = median
         self.nums_per_variant = nums_per_variant
+        self.is_sandbagging = is_sandbagging
 
     def info(self):
         if not self.nums_per_variant:
             return ""
         info_rating_diff = ""
+        str_against = "opponents" if self.is_sandbagging else "@{username}"
         if self.median >= BOOST_SIGNIFICANT_RATING_DIFF:
-            info_rating_diff = "mostly vs higher rated opponents: "
+            info_rating_diff = f'mostly vs higher rated {str_against} — '
         elif self.median <= -BOOST_SIGNIFICANT_RATING_DIFF:
-            info_rating_diff = "mostly vs lower rated opponents: "
+            info_rating_diff = f'mostly vs lower rated {str_against} — '
         if len(self.nums_per_variant) == 1:
             variant, num = self.nums_per_variant[0]
             str_variants = f"{variant}" if num == 1 else f"all {num} {variant}"
@@ -263,7 +265,7 @@ class GameAnalysis:
 
     def get_stats_desc(self, stats, *, limits=None, text_classes=None, exclude_variants=None, precision=10):
         if stats.num == 0:
-            return StatsDesc('&ndash;', 0, 0, [])
+            return StatsDesc('&ndash;', 0, 0, [], self.is_sandbagging)
         mean = int(round(stats.mean / precision)) * precision
         median = int(round(stats.median / precision)) * precision
         str_mean = f"+{mean}" if mean > 0 else f"&minus;{abs(mean)}" if mean < 0 else "0"
@@ -285,7 +287,7 @@ class GameAnalysis:
         score = (10 * stats_num / limits[1]) if stats_num >= limits[1] \
             else 1 + (stats_num - limits[0]) / (limits[1] - limits[0]) if stats_num >= limits[0] else 0
         abbr = f'<abbr title="{str_info}"{color} style="text-decoration:none;">{stats_num:,}</abbr>'
-        return StatsDesc(abbr, score, median, nums)
+        return StatsDesc(abbr, score, median, nums, self.is_sandbagging)
 
     def calc(self):
         self.score = 0
@@ -308,31 +310,34 @@ class GameAnalysis:
         if self.max_num_moves > 10:
             self.score /= 2
         num_moves = 1 if self.max_num_moves == 0 else self.max_num_moves
+        winner_loser = "loser" if self.is_sandbagging else "winner"
         link = f'https://lichess.org/@/{{username}}/search?turnsMax={num_moves}&mode=1&players.a={{user_id}}' \
-               f'&players.{{winner_loser}}={{user_id}}&sort.field=d&sort.order=desc'
+               f'&players.{winner_loser}={{user_id}}&sort.field=d&sort.order=desc'
         link_open = f'<a class="ml-2" href="{link}" target="_blank">open</a>'
         add_info = []
         if self.resign.num >= BOOST_NUM_RESIGN_REPORTABLE:
-            add_info.append(f"{self.resign.num} games resigned{stats_resign.info()}")
+            add_info.append(f"resigned {self.resign.num} games {stats_resign.info()}")
         if self.timeout.num >= BOOST_NUM_TIMEOUT_REPORTABLE:
             add_info.append(f"left the game in {self.timeout.num} games{stats_timeout.info()}")
         if self.out_of_time.num >= BOOST_NUM_OUT_OF_TIME_REPORTABLE:
             add_info.append(f"out of time in {self.out_of_time.num} games{stats_out_of_time.info()}")
         info = f'{link}'
         if add_info or self.streak.num >= BOOST_STREAK_REPORTABLE or stats_bad_games.score >= 1:
+            won_lost = "lost" if self.is_sandbagging else "won"
             info = f"{info}\nIn the only game" if self.all_games.num == 1 else f'{info}\nAmong {self.all_games.num} games'
             info = f"{info}{{info_games_played}}"
             if self.all_games.num == 100 or self.all_games.num < 30:
-                info = f'{info}, they {{won_lost}} {self.bad_games.num} games'
+                info = f'{info}, they {won_lost} {self.bad_games.num} games'
             else:
                 perc = int(round(100 * self.bad_games.num / self.all_games.num)) if self.all_games.num else 0
-                info = f'{info}, they {{won_lost}} {perc}% of their games'
+                info = f'{info}, they {won_lost} {perc}% of their games'
             if self.max_num_moves == 0:
                 info = f'{info} without making a single move'
             else:
                 info = f'{info} in {self.max_num_moves} moves or less'
             if add_info:
-                info = f'{info}: {", ".join(add_info)}'
+                str_opp = ": " if self.is_sandbagging else ": their opponents "
+                info = f'{info}{str_opp}{", ".join(add_info)}'
             if self.streak.num >= BOOST_STREAK_REPORTABLE:
                 str_incl = "including" if self.streak.num < self.bad_games.num else "i.e."
                 info = f'{info}, {str_incl} {self.streak.num} games streak'
@@ -362,13 +367,13 @@ class GameAnalysis:
         num_moves = 1 if self.max_num_moves == 0 else self.max_num_moves
         opps = []
         for opp_name, num_games in opponents:
+            winner_loser = "loser" if self.is_sandbagging else "winner"
             link = f'https://lichess.org/@/{{username}}/search?turnsMax={num_moves}&mode=1&players.a={{user_id}}' \
-                   f'&players.b={opp_name.lower()}&players.{{winner_loser}}={{user_id}}&sort.field=d&sort.order=desc"'
-            opponent_name = opp_name if len(opp_name) <= 10 else f'{opp_name[:9]}&hellip;'
-            link_class = "text-danger" if num_games >= 6 else "text-warning"
-            opps.append(f'<span class="d-flex flex-wrap align-items-baseline"><button class="btn btn-primary py-0 mr-1" '
+                   f'&players.b={opp_name.lower()}&players.{winner_loser}={{user_id}}&sort.field=d&sort.order=desc'
+            btn_class = "btn-warning" if num_games >= 5 else "btn-primary"
+            opps.append(f'<span class="d-flex flex-wrap align-items-baseline"><button class="btn {btn_class} py-0 mr-1" '
                         f'onclick="add_to_notes(this)" data-selection=\'{link}\'>{num_games} games</button> '
-                        f'<a href="{link}" class="{link_class}" target="_blank"> vs {opponent_name}</a></span>')
+                        f'<a href="{link}" target="_blank"> vs {opp_name}</a></span>')
         separator = '<span class="mx-1">,</span>'
         return f'<div class="d-flex flex-wrap mt-1"><div>Frequent opponent{"" if len(opps) == 1 else "s"} in games with ' \
                f'&le;{self.max_num_moves} moves:</div>{separator.join(opps)}</div>'
@@ -880,14 +885,14 @@ class Boost:
                     v.stable_rating_range = [min(stable_ratings), max(stable_ratings)]
 
     def get_analysis(self):
-        tables = [("Sandbagging", "loser", "lost", self.sandbagging), ("Boosting", "winner", "won", self.boosting)]
+        tables = [("Sandbagging", self.sandbagging), ("Boosting", self.boosting)]
         output = []
-        for table_name, winner_loser, won_lost, analyses in tables:
+        for table_name, analyses in tables:
             rows = [analysis.row for analysis in analyses if not analysis.is_empty()]
-            str_rows = "".join(rows).format(username=self.user.name, user_id=self.user.id, winner_loser=winner_loser,
-                                            won_lost=won_lost, info_games_played=self.info_games_played)
+            str_rows = "".join(rows).format(username=self.user.name, user_id=self.user.id,
+                                            info_games_played=self.info_games_played)
             opponents = [analysis.get_frequent_opponents() for analysis in analyses]
-            str_opps = "".join(opponents).format(username=self.user.name, user_id=self.user.id, winner_loser=winner_loser)
+            str_opps = "".join(opponents).format(username=self.user.name, user_id=self.user.id)
             if rows:
                 table = f'''<table id="{table_name.lower()}_table" class="table table-sm table-striped table-hover 
                             text-center text-nowrap mt-3 mb-0">
@@ -945,6 +950,10 @@ class Boost:
         output['tournaments'] = table
         return output
 
+    @staticmethod
+    def calc_badness(value, limits):
+        return 1 if value <= limits[0] else 0 if value >= limits[1] else ((limits[1] - value) / (limits[1] - limits[0]))
+
     def enable_buttons(self, mod_log):
         if mod_log.is_engine or mod_log.is_boost:
             self.prefer_marking = True
@@ -979,8 +988,9 @@ class Boost:
                     if rating_diff >= BOOST_SUS_RATING_DIFF[1]:
                         self.prefer_marking = True
                         break
-                    if (self.user.num_rated_games <= BOOST_NUM_PLAYED_GAMES[0] or days <= BOOST_CREATED_DAYS_AGO[0]) \
-                            and rating_diff != 0 and variant.stable_rating_range[1] >= BOOST_MIN_DECENT_RATING:
+                    badness = Boost.calc_badness(self.user.num_rated_games, BOOST_NUM_PLAYED_GAMES)
+                    badness += Boost.calc_badness(days, BOOST_CREATED_DAYS_AGO)
+                    if badness > 1 and rating_diff != 0 and variant.stable_rating_range[1] >= BOOST_MIN_DECENT_RATING:
                         self.prefer_marking = True
                         break
         if self.enable_sandbagging and not self.prefer_marking \
