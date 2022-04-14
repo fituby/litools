@@ -47,7 +47,7 @@ MULTI_MSG_MIN_TIMEOUT_SCORE = 300
 MAX_LEN_TEXT = 140
 CHAT_NUM_PLAYED_GAMES = [100, 250]
 CHAT_CREATED_DAYS_AGO = [30, 60]
-STD_SHORT_MESSAGES = ["hi", "hello", "good luck", "bye", "gl", "hf", "thanks"]
+STD_SHORT_MESSAGES = ["hi", "hello", "good luck", "bye", "gl", "hf", "thanks", "gg", "wp", "ggs", "ty", "gtg"]
 
 official_teams = [
     "lichess-swiss",
@@ -60,6 +60,9 @@ official_teams = [
     "lichess-racing-kings",
     "lichess-three-check"
 ]
+
+arena_tournament_page = "https://lichess.org/tournament/"
+swiss_tournament_page = "https://lichess.org/siwss/"
 
 
 def get_highlight_style(opacity):
@@ -298,12 +301,26 @@ class Tournament:
         self.id = tourney['id']
         self.is_official = (tourney['createdBy'] == "lichess")
         self.num_players = tourney['nbPlayers']
-        if t_type == Type.Arena:
-            self.startsAt = datetime.fromtimestamp(tourney['startsAt'] // 1000, tz=tz.tzutc())
-            self.name = tourney['fullName'].rstrip('Arena').strip()
-            self.finishesAt = datetime.fromtimestamp(tourney['finishesAt'] // 1000, tz=tz.tzutc())
+        startsAt = tourney.get('startsAt')
+        if startsAt is None:
+            self.startsAt = datetime.now(tz=tz.tzutc())
+        elif isinstance(startsAt, str):
+            i = startsAt.rfind('.')
+            if i < 0:
+                print(f"Error 'startsAt' {t_type}={self.id}: {tourney}")
+                self.startsAt = datetime.now(tz=tz.tzutc())
+            else:
+                self.startsAt = datetime.strptime(startsAt[:i], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=tz.tzutc())
         else:
-            self.startsAt = tourney['startsAt']
+            self.startsAt = datetime.fromtimestamp(startsAt // 1000, tz=tz.tzutc())
+        if t_type == Type.Arena:
+            self.name = tourney['fullName'].rstrip('Arena').strip()
+            finishesAt = tourney.get('finishesAt')
+            if finishesAt:
+                self.finishesAt = datetime.fromtimestamp(finishesAt // 1000, tz=tz.tzutc())
+            else:
+                self.finishesAt = self.startsAt + timedelta(minutes=tourney['minutes'])
+        else:
             self.name = f"Swiss {tourney['name']}" if t_type == Type.Swiss else tourney['name']
             self.finishesAt = (tourney['status'] == 'finished')
         self.messages = []
@@ -1185,28 +1202,40 @@ class ChatAnalysis:
         if page:
             page = page.strip()
         if page and page.startswith(str_lichess):
-            # arena_tournament_page = "https://lichess.org/tournament/"
-            # swiss_tournament_page = "https://lichess.org/siwss/"
-            # if page.startswith(arena_tournament_page):
-            #     tourn_id = page[len(arena_tournament_page):]
-            # elif page.startswith(swiss_tournament_page):
-            #     tourn_id = page[len(swiss_tournament_page):]
             i = page.rfind('/')
             if 0 < i < len(page):
                 tourn_id = page[i + 1:]
                 if tourn_id in self.tournaments:
                     self.tournaments[tourn_id].is_monitored = True
                 else:
-                    j = page[0:i].rfind('/')
-                    name = page[j + 1:i] if j > len(str_lichess) and i > j + 1 else tourn_id
-                    data = {'id': tourn_id,
-                            'createdBy': "lichess",
-                            'nbPlayers': 0,
-                            'startsAt': datetime.now(tz=tz.tzutc()),
-                            'name': name,
-                            'status': "started"
-                            }
-                    self.tournaments[tourn_id] = Tournament(data, Type.Study, link=page, is_monitored=True)
+                    headers = {}  # {'Authorization': f"Bearer {get_token()}"}
+                    if page.startswith(arena_tournament_page) and i == len(arena_tournament_page) - 1:
+                        r = requests.get(f"https://lichess.org/api/tournament/{tourn_id}", headers=headers)
+                        if r.status_code != 200:
+                            raise Exception(f"ERROR /api/tournament/{tourn_id}: Status Code {r.status_code}")
+                        arena = r.json()
+                        if tourn_id != arena['id']:
+                            raise Exception(f"ERROR {page}: Wrong ID {tourn_id} != {arena['id']}")
+                        self.tournaments[tourn_id] = Tournament(arena, Type.Arena, is_monitored=True)
+                    elif page.startswith(swiss_tournament_page) and i == len(swiss_tournament_page) - 1:
+                        r = requests.get(f"https://lichess.org/api/swiss/{tourn_id}", headers=headers)
+                        if r.status_code != 200:
+                            raise Exception(f"ERROR /api/swiss/{tourn_id}: Status Code {r.status_code}")
+                        swiss = r.json()
+                        if tourn_id != swiss['id']:
+                            raise Exception(f"ERROR {page}: Wrong ID {tourn_id} != {swiss['id']}")
+                        self.tournaments[tourn_id] = Tournament(swiss, Type.Swiss, is_monitored=True)
+                    else:
+                        j = page[0:i].rfind('/')
+                        name = page[j + 1:i] if j > len(str_lichess) and i > j + 1 else tourn_id
+                        data = {'id': tourn_id,
+                                'createdBy': "lichess",
+                                'nbPlayers': 0,
+                                'startsAt': None,
+                                'name': name,
+                                'status': "started"
+                                }
+                        self.tournaments[tourn_id] = Tournament(data, Type.Study, link=page, is_monitored=True)
         self.state_tournaments += 1
         return self.get_tournaments()
 
@@ -1368,11 +1397,6 @@ def get_current_tournaments():
         swiss_data = get_ndjson(url, Accept="application/nd-json")
         for swiss in swiss_data:
             try:
-                i = swiss['startsAt'].rfind('.')
-                if i < 0:
-                    print(f"Error swiss: {swiss}")
-                    continue
-                swiss['startsAt'] = datetime.strptime(swiss['startsAt'][:i], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=tz.tzutc())
                 tourn = Tournament(swiss, Type.Swiss)
                 if tourn.is_active(now_utc):
                     tournaments.append(tourn)
@@ -1387,7 +1411,6 @@ def get_current_tournaments():
             for r in broadcast['rounds']:
                 r['createdBy'] = "lichess"
                 r['nbPlayers'] = 0
-                r['startsAt'] = datetime.fromtimestamp(r['startsAt'] // 1000, tz=tz.tzutc())
                 r['name'] = f"{r['name']} | {broadcast_name}"
                 r['status'] = "finished" if r.get('finished') else "unknown"
                 tourn = Tournament(r, Type.Study, r['url'])
