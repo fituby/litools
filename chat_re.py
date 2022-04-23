@@ -188,18 +188,18 @@ list_res = {
     Re(r"k+y+s+'?(e?d|)", 100,  # added several "+" and "'?(e?d|)"
        reason=Reason.Offensive, info="Critical: kys"),
     # En: suppress self-deprecating
-    Re(r"(me|[Ii]['`]?(\sa|\sA|)[mM](\snot|\sNOT|\sNot|))\s(an?\s|)(idiot|stupid|no{2,10}b|gay|jerk|lo{1,10}ser|moron|retard|trash|weak)", 5,  # added
+    Re(r"(me|i['`]?(\sa|)m(\snot|))\s(an?\s|)(idiot|stupid|no{2,10}b|gay|jerk|lo{1,10}ser|moron|retard|trash|weak)", 5,  # added
        reason=Reason.Spam, info="En: I'm idiot"),
     # En
     Re(r'(f{1,20}|ph)(u|a|e){1,20}c?k{1,}\sme', 5,  # added
        reason=Reason.Offensive, info="En: fuck me"),
-    Re(r'(f{1,20}|ph)(u|a|e){1,20}c?kk?(ers?|rs?|u|t|ing?|ign|en|tard?s?|face|off?|)', 15,  #'+'-->'{1,20}' + changed (...){1,20}  # added several "s?" and "k?"
+    Re(r'(f{1,20}|ph)(u|a|e){1,20}c?kk?(ers?|rs?|u|t|ing?|ign|en|e?d|tard?s?|face|off?|)', 15,  #'+'-->'{1,20}' + changed (...){1,20}  # added several "s?" and "k?"
        reason=Reason.Offensive, info="En: fuck"),
     Re(r'(f|ph)agg?([oi]t|)s?', 30,  # added "s?"
        reason=Reason.Offensive, ban=80, info="En: faggot"),
     Re(r'[ck]um(shots?|)',  # added "s?"
        reason=Reason.Offensive, info="En: cum"),
-    Re(r'[ck]unt(ing|s|)', 30,  # added "|s"
+    Re(r'[ck]unt(ing?|ign|s|)', 30,  # added "|s"
        reason=Reason.Offensive, ban=80, info="En: cunt"),
     Re(r'abortion',
        reason=Reason.Other, info="En: abortion"),
@@ -245,7 +245,7 @@ list_res = {
        reason=Reason.Other, info="En: bukkake"),
     Re(r'bull?shit',
        reason=Reason.Offensive, info="En: bullshit"),
-    Re(r'ch(e{1,20}a?|i{1,20})t(ing|er{1,20}|)s?',  # ea --> (e{1,20}a?|i{1,20}) added "s?", added "{1,20}"
+    Re(r'ch(e{1,20}a?|i{1,20})tt?(ing?|ign|er{1,20}s?|e?d|s?)',  # ea --> (e{1,20}a?|i{1,20}) added "s?", added "{1,20}"
        reason=Reason.Shaming, info="En: cheater"),
     Re(r'chess(|-|_)bot(.?com)?', 50,
        reason=Reason.Spam, info="En: chess-bot.com"),
@@ -257,7 +257,7 @@ list_res = {
        reason=Reason.Other, info="En: clitoris"),
     Re(r'clowns?', 20,  # added "s?"
        reason=Reason.Offensive, info="En: clown"),
-    Re(r'cock(suc?k(ers?|ing)|)', 50,  # added "s?"
+    Re(r'cock(suc?k(ers?|ing?|ign|e?d)|)', 50,  # added "s?"
        reason=Reason.Offensive, info="En: cocksucker"),
     Re(r'condoms?',  # added "s?"
        reason=Reason.Offensive, info="En: condom"),
@@ -281,11 +281,11 @@ list_res = {
        reason=Reason.Offensive, info="En: dyke"),
     Re(r'engine',
        reason=Reason.Shaming, info="En: engine"),
-    Re(r'fck(er|r|u|k|t|ing?|ign|tard?|face|off?|)',
+    Re(r'fck(er|r|u|k|t|ing?|ign|tard?|face|off?|e?d|)',
        reason=Reason.Offensive, info="En: fck"),
     Re(r'f[oa]llow\s?(me|(4|for)\s?f[oa]llow)', 25,  # added
        reason=Reason.Spam, info="En: follow"),
-    Re(r'fools?',  # added
+    Re(r'fo{1,10}l{1,10}(s|e?d|ing?|ign|)',  # added
        reason=Reason.Offensive, info="En: fool"),
     Re(r'foreskin',
        reason=Reason.Other, info="En: foreskin"),
@@ -333,7 +333,7 @@ list_res = {
        reason=Reason.Offensive, info="En: lesbo"),
     Re(r'lo{1,20}sers?', 30,  # '+'-->'{1,20}'  # added "s?"
        reason=Reason.Offensive, info="En: loser"),
-    Re(r'masturbat(e|ion|ing)',
+    Re(r'masturbat(e|ion|ing?|ign|t?e?d)',
        reason=Reason.Other, info="En: masturbation"),
     Re(r'milf',
        reason=Reason.Other, info="En: milf"),
@@ -377,7 +377,7 @@ list_res = {
        reason=Reason.Offensive, info="En: poof"),
     Re(r'poon',
        reason=Reason.Other, info="En: poon"),
-    Re(r'po{2,20}p(face|)',  # 'oo+'-->'o{2,20}'
+    Re(r'po{2,20}p(face|e?d|ing?|ign|)',  # 'oo+'-->'o{2,20}'
        reason=Reason.Spam, info="En: poop"),
     Re(r'porn(hub|)',
        reason=Reason.Spam, info="En: porn"),
@@ -391,25 +391,27 @@ list_res = {
        reason=Reason.Offensive, info="En: pussy"),
     Re(r'queer', 20,
        reason=Reason.Offensive, info="En: queer"),
-    Re(r'rape',
+    Re(r'rape(s|d|)',
        reason=Reason.Offensive, info="En: rape"),
     Re(r'rapist',
        reason=Reason.Offensive, info="En: rapist"),
     Re(r'rect(al|um)',
        reason=Reason.Offensive, info="En: rekt"),
+    Re(r'report(e?d|ing?|ign|)', 30,
+       reason=Reason.Shaming, info="En: report"),
     Re(r'retard', 30,
        reason=Reason.Offensive, info="En: retard"),
     Re(r'rimjob',
        reason=Reason.Other, info="En: rimjob"),
     Re(r'run', 5,
        reason=Reason.Offensive, info="En: run"),
-    Re(r'sandbagg?(er|ing|)', 20,
+    Re(r'sandbagg?(er|ing?|ign|e?d|)', 20,
        reason=Reason.Shaming, info="En: sandbagger"),
-    Re(r'scare',
+    Re(r'scared?',
        reason=Reason.Offensive, info="En: scare"),
     Re(r'schlong',
        reason=Reason.Other, info="En: schlong"),
-    Re(r'screw', 5,
+    Re(r'screw(e?d|ing?|ign|)', 5,
        reason=Reason.Offensive, info="En: screw"),
     Re(r'scrotum',
        reason=Reason.Other, info="En: scrotum"),
@@ -425,7 +427,9 @@ list_res = {
        reason=Reason.Other, info="En: shag"),
     Re(r'shemale', 20,
        reason=Reason.Offensive, info="En: shemale"),
-    Re(r'shit(z|e|y|ty|bag|)', 5,
+    Re(r'shitt?(z|e|y|bag|ed|s|en|ing?|ign|)', 5,  # corrected
+       reason=Reason.Offensive, info="En: shit"),
+    Re(r'shat', 5,  # added
        reason=Reason.Offensive, info="En: shit"),
     Re(r'sissy', 20,
        reason=Reason.Offensive, info="En: sissy"),
@@ -447,7 +451,7 @@ list_res = {
        reason=Reason.Other, info="En: spooge"),
     Re(r'spunk',
        reason=Reason.Other, info="En: spunk"),
-    Re(r'smurff?(er|ing|)s?', 30,  # added "s?"
+    Re(r'smurff?(er|ing?|ign|)s?', 30,  # added "s?"
        reason=Reason.Shaming, info="En: smurf"),
     Re(r'stfu', 20,
        reason=Reason.Offensive, info="En: stfu"),
@@ -638,7 +642,7 @@ list_res = {
     Re(r'читер(|ила?|ить?|ишь?|ша|ы|ам?|у|ов)',
        reason=Reason.Shaming, info="Ru: читер"),
     Re(r'ч[её]рн[оа]жоп(ый?|ого|ому|ыми?|ая|ой|ую|ые|ых|)', 80,
-       reason=Reason.Spam, info="Ru: чёрножопый"),
+       reason=Reason.Offensive, info="Ru: чёрножопый"),
     Re(r'член[оа]сос(|а|у|ом|е|ы|ов|ами?|ах|ка|ке|ки|ку|кой)', 50,  # added
        ban=-2, reason=Reason.Offensive, info="Ru: членосос"),
     Re(r'чмо(|шник|тнутый|тнутая|тнутые)', 50,  # added '|тнутый|тнутая|тнутые'
@@ -743,12 +747,34 @@ list_res = {
         reason=Reason.Offensive, info="It: sparati"),
 ],
 'Hi': [
-    Re(r'(madar|be?hen|beti)chod',
-        reason=Reason.Offensive, info="Hi: madarchod"),
-    Re(r'chut(iya|)',
-        reason=Reason.Offensive, info="Hi: chutiya"),
+    Re(r'(madar|be?hen|beti)chod', 60,
+        reason=Reason.Offensive, info="Hi: motherfucker"),
+    Re(r'chutiya', 50,
+        reason=Reason.Offensive, info="Hi: fucker/bastard"),
+    Re(r'chut',
+        reason=Reason.Other, info="Hi: pussy"),
+    Re(r'lund',
+        reason=Reason.Other, info="Hi: dick"),
+    Re(r'gadha',
+        reason=Reason.Offensive, info="Hi: donkey"),
+    Re(r'bhadwa',
+        reason=Reason.Offensive, info="Hi: pimp"),
+    Re(r'bhadwachod', 50,
+        reason=Reason.Offensive, info="Hi: fuck you pimp"),
     Re(r'gaa?nd',
-        reason=Reason.Offensive, info="Hi: gaand"),
+        reason=Reason.Offensive, info="Hi: ass"),
+    Re(r'gaand\smardunga', 60,
+        reason=Reason.Offensive, info="Hi: I'll fuck your ass"),
+    Re(r'gaa?ndu', 40,
+        reason=Reason.Offensive, info="Hi: asshole"),
+    Re(r'hijra',
+        reason=Reason.Offensive, info="Hi: transgender"),
+    Re(r'suwar',
+        reason=Reason.Offensive, info="Hi: pig"),
+    Re(r'jha(a|n)t',
+        reason=Reason.Other, info="Hi: pubic hair"),
+    Re(r'jha(a|n)tu', 40,
+        reason=Reason.Offensive, info="Hi: you're pubic hair"),
 ],
 'Fr': [
     Re(r'fdp',
@@ -816,8 +842,10 @@ list_res = {
     Re(r'https?:\/\/(www\.)?lichess\.org\/streamer\/[-a-zA-Z0-9@:%._\+~#=]{5,8}', 40,
        reason=Reason.Spam, info="Link"),
     Re(r'^https?:\/\/(www\.)?lichess\.org\/racer\/[-a-zA-Z0-9@:%._\+~#=]{5,8}$', 60, is_separate_word=False,
-       ban=-1, reason=Reason.Spam, info="Link"),
-    Re(r'https?:\/\/(www\.)?(youtu|youtube|twitch|instagram)[-a-zA-Z0-9@:%._\+~#=]{0,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)', 50,
+       ban=-1, reason=Reason.Spam, info="Link: racer"),
+    Re(r'https?:\/\/(www\.)?youtube.com\/watch\?v=dQw4w9WgXcQ', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'https?:\/\/(www\.)?(youtu|youtube|twitch|instagram)[-a-zA-Z0-9@:%._\+~#=]{0,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)', 40,
        reason=Reason.Spam, info="Link"),
     Re(r'https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)', 10,
        reason=Reason.Spam, info="Link"),

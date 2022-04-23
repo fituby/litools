@@ -47,7 +47,7 @@ MULTI_MSG_MIN_TIMEOUT_SCORE = 300
 MAX_LEN_TEXT = 140
 CHAT_NUM_PLAYED_GAMES = [100, 250]
 CHAT_CREATED_DAYS_AGO = [30, 60]
-STD_SHORT_MESSAGES = ["hi", "hello", "good luck", "bye", "gl", "hf", "thanks", "gg", "wp", "ggs", "ty", "gtg"]
+STD_SHORT_MESSAGES = ["hi", "hello", "good luck", "bye", "gl", "hf", "thanks", "gg", "wp", "ggs", "ty", "gtg", "thx", "u2"]
 
 official_teams = [
     "lichess-swiss",
@@ -431,9 +431,9 @@ class Tournament:
             if r.status_code != 200:
                 if r.status_code >= 500:
                     if self.errors_500 and self.errors_500[-1].is_ongoing():
-                        return
+                        return new_messages, deleted_messages
                     self.errors_500.append(Error500(now_utc, r.status_code))
-                    return
+                    return new_messages, deleted_messages
                 raise Exception(f"Failed to download {url}<br>Status Code {r.status_code}")
             if self.errors_500 and self.errors_500[-1].is_ongoing():
                 self.errors_500[-1].complete(now_utc)
