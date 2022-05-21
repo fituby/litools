@@ -5,11 +5,11 @@ import time
 import json
 from fake_useragent import UserAgent
 import traceback
-from enum import Enum, IntFlag
+from enum import IntFlag
 from multiprocessing import Lock
 import yaml
 import html
-from elements import Reason, get_token, get_ndjson, deltaseconds, deltaperiod, shorten, log, config_file, Error500
+from elements import Reason, TournType, get_token, get_ndjson, deltaseconds, deltaperiod, shorten, log, config_file, Error500
 from elements import STYLE_WORD_BREAK, get_notes, add_note, load_mod_log, get_mod_log, ModActionType, UserData
 from chat_re import ReUser, list_res, list_res_variety, re_spaces, LANGUAGES
 
@@ -148,7 +148,7 @@ class Message:
 
     def __eq__(self, other):
         return self.username.lower() == other.username.lower() and self.text == other.text \
-               and self.tournament == other.tournament
+               and self.tournament.id == other.tournament.id
 
     def __repr__(self):
         return f"[{self.username}]: {self.text}"
@@ -163,7 +163,8 @@ class Message:
             text = re_spaces.sub(" ", self.text)
             # Add usernames and evaluate
             res_all = re_usernames.copy()
-            res_all.extend(Message.list_res)
+            res_all.extend([re_i for re_i in Message.list_res
+                            if (re_i.exclude_tournaments is None or self.tournament.t_type not in re_i.exclude_tournaments)])
             result_all = res_all[0].eval(text, res_all, 0)
             result_variety = Message.list_res_variety[0].eval(text, Message.list_res_variety, 0)
             ban_points_all = sum(result_all.ban_points)
@@ -186,8 +187,8 @@ class Message:
             self.score = 0
 
     def is_hidden(self):
-        return self.is_deleted or self.is_removed or self.is_disabled or \
-               self.is_reset or self.is_timed_out or self.is_official
+        return self.is_removed or self.is_disabled or \
+               self.is_reset or self.is_timed_out or self.is_official  # or self.is_deleted
 
     def get_info(self, tag, show_hidden=None, add_buttons=None, base_time=None, rename_dismiss=None, add_user=True,
                  add_mscore=False, add_reason=None, highlight_user=None, is_selected=False, is_centered=False,
@@ -207,8 +208,8 @@ class Message:
         else:
             ds = deltaseconds(self.time, base_time)
             dt = f"{abs(ds)}s" if abs(ds) < 60 \
-                else f"{abs(ds // 60)}m{abs(ds % 60):02d}s" if abs(ds) < 300 \
-                else f"{abs(int(round(ds / 60)))}m"
+                else f"{abs(ds) // 60}m{abs(ds) % 60:02d}s" if abs(ds) < 300 \
+                else f"{int(round(abs(ds) / 60))}m"
             str_time = f"&minus;{dt} " if ds < 0 else f'+{dt} ' if ds > 0 else "== "
             str_time = f'<abbr title="{self.time.astimezone(tz=None):%H:%M:%S}" class="user-select-none" ' \
                        f'style="text-decoration:none;">{str_time}</abbr>'
@@ -282,13 +283,6 @@ class Message:
         return f'<div style="{highlight_style}">{div}</div>' if highlight_style else div
 
 
-class Type(Enum):
-    Unknown = 0
-    Arena = 1
-    Swiss = 2
-    Study = 3
-
-
 def add_timeout_msg(timeouts, msg):
     user_msg = timeouts.get(msg.username)
     if user_msg is None or msg.score > user_msg.score:
@@ -313,7 +307,7 @@ class Tournament:
                 self.startsAt = datetime.strptime(startsAt[:i], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=tz.tzutc())
         else:
             self.startsAt = datetime.fromtimestamp(startsAt // 1000, tz=tz.tzutc())
-        if t_type == Type.Arena:
+        if t_type == TournType.Arena:
             self.name = tourney['fullName'].rstrip('Arena').strip()
             finishesAt = tourney.get('finishesAt')
             if finishesAt:
@@ -321,7 +315,7 @@ class Tournament:
             else:
                 self.finishesAt = self.startsAt + timedelta(minutes=tourney['minutes'])
         else:
-            self.name = f"Swiss {tourney['name']}" if t_type == Type.Swiss else tourney['name']
+            self.name = f"Swiss {tourney['name']}" if t_type == TournType.Swiss else tourney['name']
             self.finishesAt = (tourney['status'] == 'finished')
         self.messages = []
         self.user_names = set()
@@ -334,6 +328,7 @@ class Tournament:
         self.is_enabled = True
         self.link = link
         self.last_update: datetime = None
+        self.is_just_added = False
 
     def update(self, tourn):
         self.startsAt = tourn.startsAt
@@ -341,9 +336,9 @@ class Tournament:
         self.num_players = tourn.num_players
 
     def finish_time_estimated(self):
-        if self.t_type == Type.Arena:
+        if self.t_type == TournType.Arena:
             return self.finishesAt
-        elif self.t_type == Type.Swiss:
+        elif self.t_type == TournType.Swiss:
             minutes = 300 if "Classical" in self.name else 120 if "Rapid" in self.name else \
                 100 if "SuperBlitz" in self.name else 120 if "Blitz" in self.name else \
                 20 if "HyperBullet" in self.name else 40 if "Bullet" in self.name else None
@@ -378,8 +373,8 @@ class Tournament:
         return now_utc < self.startsAt
 
     def is_finished(self, now_utc):
-        return (self.t_type == Type.Arena and now_utc >= self.finishesAt) \
-               or (self.t_type != Type.Arena and self.finishesAt)
+        return (self.t_type == TournType.Arena and now_utc >= self.finishesAt) \
+               or (self.t_type != TournType.Arena and self.finishesAt)
 
     def priority_score(self):
         return self.max_score * 9999 + self.total_score
@@ -399,7 +394,7 @@ class Tournament:
         if self.is_monitored:
             return 1
         if self.is_ongoing(now_utc):
-            if self.t_type != Type.Study or len(self.messages) > 5:
+            if self.t_type != TournType.Study or len(self.messages) > 5:
                 return 1
             delta_min = deltaseconds(now_utc, self.startsAt) // 60
             return max(2, delta_min // 15)
@@ -414,7 +409,8 @@ class Tournament:
         return max(2, (delta_min - len(self.messages)) // 10)
 
     def get_type(self):
-        return "tournament" if self.t_type == Type.Arena else "swiss" if self.t_type == Type.Swiss else None
+        return "tournament" if self.t_type == TournType.Arena else \
+            "swiss" if self.t_type == TournType.Swiss else None
 
     def download(self, msg_lock, now_utc):
         new_messages = []
@@ -444,9 +440,9 @@ class Tournament:
             self.last_update = now_utc
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(str(exception))
+            self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
         except:
-            self.errors.append("ERROR")
+            self.errors.append(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC")
         self.re_usernames = []  # TODO: initialize with user names of tournament players (fetch once?)
         for user in self.user_names:
             re_user = r"(https?:\/\/)?(lichess\.org\/)?@?\/?" + user
@@ -474,7 +470,7 @@ class Tournament:
         can_be_old = True
         is_new = True
         for d in data:
-            msg = Message(d, self.id, now_utc, delay)
+            msg = Message(d, self, now_utc, delay)
             if can_be_old:
                 is_new = True
                 for i in range(i_msg, len(self.messages)):
@@ -517,8 +513,9 @@ class Tournament:
         for msg in self.messages:
             if msg.score is None:
                 msg.evaluate(self.re_usernames)
-            is_msg_visible = not msg.is_reset and not msg.is_deleted and not msg.is_removed \
-                             and not msg.is_disabled and not msg.is_official  # if not msg.is_hidden(): # w/o is_timed_out
+            is_msg_visible = not msg.is_reset and not msg.is_removed \
+                and not msg.is_disabled and not msg.is_official  # if not msg.is_hidden(): # w/o is_timed_out
+            #   and not msg.is_deleted
             if is_msg_visible:
                 if msg.score > self.max_score:
                     self.max_score = msg.score
@@ -537,11 +534,11 @@ class Tournament:
     def get_status(self, now_utc):
         if now_utc < self.startsAt:
             return f'<abbr title="Starts in {deltaperiod(self.startsAt, now_utc)}" class="text-info">Created</abbr>'
-        if self.t_type == Type.Arena and now_utc < self.finishesAt:
+        if self.t_type == TournType.Arena and now_utc < self.finishesAt:
             return f'<abbr title="Finishes in {deltaperiod(self.finishesAt, now_utc)}" class="text-success">Started</abbr>'
-        if self.t_type != Type.Arena and not self.finishesAt:
+        if self.t_type != TournType.Arena and not self.finishesAt:
             return f'<abbr title="Started {deltaperiod(now_utc, self.startsAt)} ago" class="text-success">Started</abbr>'
-        if self.t_type == Type.Arena:
+        if self.t_type == TournType.Arena:
             return f'<abbr title="Finished {deltaperiod(now_utc, self.finishesAt)} ago" class="text-muted">Finished</abbr>'
         return f'<abbr title="Started {deltaperiod(now_utc, self.startsAt)} ago" class="text-muted">Finished</abbr>'
 
@@ -607,7 +604,7 @@ class Tournament:
             if len(real_msgs) >= 3:
                 lengths = [len(um.text) for um in real_msgs]
                 mean_len = (sum(lengths) - max(lengths)) / (len(lengths) - 1)
-                len_real_msgs = len(real_msgs) if self.t_type == Type.Study else (2 * len(real_msgs) - len(msgs))
+                len_real_msgs = len(real_msgs) if self.t_type == TournType.Study else (2 * len(real_msgs) - len(msgs))
                 if len_real_msgs >= 8:
                     coef = 20 if mean_len < 3 else 15 if mean_len < 4 else 10 if mean_len < 5 else 5 if mean_len < 6 \
                               else 2 if mean_len < 10 else 1.5 if mean_len < 15 else 1
@@ -712,7 +709,7 @@ class Tournament:
         for msg in self.messages:
             if msg.is_removed or msg.is_official:
                 continue
-            is_to_be_processed = not msg.is_deleted and not msg.is_disabled and not msg.is_timed_out
+            is_to_be_processed = not msg.is_disabled and not msg.is_timed_out  # and not msg.is_deleted
             is_among_first_messages = deltaseconds(msg.time, first_msg_time) < max(1.0, API_TOURNEY_PAGE_DELAY)
             keys = list(user_msgs.keys())
             for username in keys:
@@ -737,17 +734,17 @@ class Tournament:
         return output, multi_messages, to_timeout
 
     def get_list_item(self, now_utc):
-        checked = ' checked=""' if (self.t_type != Type.Swiss or CHAT_UPDATE_SWISS) and self.is_active(now_utc) else ""
-        disabled = "" if self.t_type != Type.Swiss or CHAT_UPDATE_SWISS else ' disabled'
+        checked = ' checked=""' if (self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS) and self.is_active(now_utc) else ""
+        disabled = "" if self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS else ' disabled'
         if now_utc < self.startsAt:
             info = f'{deltaperiod(self.startsAt, now_utc, short=True)}'
-        elif self.t_type == Type.Arena and now_utc < self.finishesAt:
+        elif self.t_type == TournType.Arena and now_utc < self.finishesAt:
             info = f'{deltaperiod(self.finishesAt, now_utc, short=True)}'
-        elif self.t_type == Type.Arena:
+        elif self.t_type == TournType.Arena:
             info = f'{deltaperiod(now_utc, self.finishesAt, short=True)}'
         else:
             info = f'started {deltaperiod(now_utc, self.startsAt, short=True)} ago'
-        num_messages = f'{len(self.messages):03d}' if self.t_type != Type.Swiss or CHAT_UPDATE_SWISS \
+        num_messages = f'{len(self.messages):03d}' if self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS \
                        else "&minus;&minus;&minus;"
         if len(self.messages) > 0:
             tag = 'T'
@@ -790,8 +787,8 @@ class ChatAnalysis:
         self.recommended_timeouts = set()
         self.state_tournaments = 1
         self.state_reports = 1
-        self.cache_tournaments = {'state': 0}
-        self.cache_reports = {'state': 0}
+        self.cache_tournaments = {'state_tournaments': 0}
+        self.cache_reports = {'state_reports': 0}
         try:
             with open(config_file) as stream:
                 config = yaml.safe_load(stream)
@@ -855,9 +852,9 @@ class ChatAnalysis:
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             if not self.tournaments:
-                self.errors.append(str(exception))  # only if it doesn't work from the very beginning
+                self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")  # only if it doesn't work from the very beginning
         except:
-            self.errors.append("ERROR")
+            self.errors.append("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC")
         self.is_processing = False
 
     def run(self):
@@ -865,23 +862,26 @@ class ChatAnalysis:
             return
         self.is_processing = True
         self.wait_refresh()
+        now_utc = datetime.now(tz=tz.tzutc())
         try:
-            now_utc = datetime.now(tz=tz.tzutc())
             keys = list(self.tournaments.keys())  # needed as self.tournaments may be changed from add_tournament()
             for tourn_id in keys:
                 tourn = self.tournaments[tourn_id]
-                if not tourn.is_enabled:
+                if tourn.t_type == TournType.Swiss and not CHAT_UPDATE_SWISS:
                     continue
-                if tourn.t_type == Type.Swiss and not CHAT_UPDATE_SWISS:
-                    continue
-                is_ongoing = tourn.is_ongoing(now_utc)
-                if self.update_count == 0 and not is_ongoing:
-                    continue
-                if not is_ongoing:
-                    hash_num = sum(ord(ch) for ch in tourn_id)
-                    update_period = tourn.update_period(now_utc)
-                    if self.update_count % update_period != hash_num % update_period:
+                if tourn.is_just_added:
+                    tourn.is_just_added = False
+                else:
+                    if not tourn.is_enabled:
                         continue
+                    is_ongoing = tourn.is_ongoing(now_utc)
+                    if self.update_count == 0 and not is_ongoing:
+                        continue
+                    if not is_ongoing:
+                        hash_num = sum(ord(ch) for ch in tourn_id)
+                        update_period = tourn.update_period(now_utc)
+                        if self.update_count % update_period != hash_num % update_period:
+                            continue
                 self.wait_api()
                 new_messages, deleted_messages = tourn.download(self.msg_lock, now_utc)
                 with self.msg_lock:
@@ -895,9 +895,9 @@ class ChatAnalysis:
                         add_timeout_msg(self.to_timeout, m)
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(str(exception))
+            self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
         except:
-            self.errors.append("ERROR")
+            self.errors.append("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC")
         self.update_count += 1
         self.state_reports += 1
         self.is_processing = False
@@ -909,16 +909,17 @@ class ChatAnalysis:
                 msg.is_reset = True
                 if msg.score > 20:
                     reason_tag = Reason.to_tag(msg.best_reason())
-                    chan = "tournament" if self.tournaments[msg.tournament].t_type == Type.Arena \
-                        else "swiss" if self.tournaments[msg.tournament].t_type == Type.Swiss \
-                        else "study" if self.tournaments[msg.tournament].t_type == Type.Study \
+                    chan = "tournament" if msg.tournament.t_type == TournType.Arena \
+                        else "swiss" if msg.tournament.t_type == TournType.Swiss \
+                        else "study" if msg.tournament.t_type == TournType.Study \
                         else None
                     log(f"[reset] {reason_tag.upper()} @{msg.username} score={msg.score} "
-                        f"{chan.upper()}={msg.tournament}: {msg.text}")
+                        f"{chan.upper()}={msg.tournament.id}: {msg.text}")
                 self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(str(exception))
+            now_utc = datetime.now(tz=tz.tzutc())
+            self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
 
     def set_multi_msg_ok(self, msg_id):
         try:
@@ -928,43 +929,45 @@ class ChatAnalysis:
                 del self.multi_messages[msg_id]
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(str(exception))
+            now_utc = datetime.now(tz=tz.tzutc())
+            self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
 
     def api_timeout(self, msg, reason, is_timeout_manual):
         reason_tag = Reason.to_tag(reason)
         if reason_tag is None:
-            self.errors.append("Error timeout: Unknown reason")
+            self.errors.append(f"Error timeout: Unknown reason at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC")
             return
-        if msg.tournament not in self.tournaments:
-            self.errors.append(f"Error timeout: Tournament {msg.tournament} deleted")
+        if msg.tournament.id not in self.tournaments:
+            self.errors.append(f"Error timeout: Tournament {msg.tournament.id} deleted "
+                               f"as of {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC")
             return
-        chan = "tournament" if self.tournaments[msg.tournament].t_type == Type.Arena \
-            else "swiss" if self.tournaments[msg.tournament].t_type == Type.Swiss \
-            else "study" if self.tournaments[msg.tournament].t_type == Type.Study \
+        chan = "tournament" if msg.tournament.t_type == TournType.Arena \
+            else "swiss" if msg.tournament.t_type == TournType.Swiss \
+            else "study" if msg.tournament.t_type == TournType.Study \
             else None
         headers = {'Authorization': f"Bearer {get_token()}"}
         url = "https://lichess.org/mod/public-chat/timeout"
         text = f'{msg.text[:MAX_LEN_TEXT-1]}…' if len(msg.text) > MAX_LEN_TEXT else msg.text
         data = {'reason': reason_tag,
                 'userId': msg.username.lower(),
-                'roomId': msg.tournament,
+                'roomId': msg.tournament.id,
                 'chan': chan,
                 'text': text}
         if is_timeout_manual or DO_AUTO_TIMEOUTS:
             r = requests.post(url, headers=headers, json=data)
-            timeout_tag = ('[MANUAL] ' if is_timeout_manual else '[AUTO] ') if DO_AUTO_TIMEOUTS else ""
+            timeout_tag = ('' if is_timeout_manual else '[AUTO] ') if DO_AUTO_TIMEOUTS else ""
             if len(msg.text) > MAX_LEN_TEXT:
                 text = f'{text}{msg.text[MAX_LEN_TEXT-1:]}'
             if r.status_code == 200 and r.text == "ok":
                 log(f"{timeout_tag}{reason_tag.upper()} @{msg.username} score={msg.score} "
-                    f"{chan.upper()}={msg.tournament}: {text}", True)
+                    f"{chan.upper()}={msg.tournament.id}: {text}", True)
                 start_time = msg.time - timedelta(minutes=TIMEOUT_RANGE[0])
                 end_time = msg.time + timedelta(minutes=TIMEOUT_RANGE[1])
                 for m in self.all_messages.values():
                     if m.username == msg.username and start_time < m.time < end_time:
                         m.is_timed_out = True
                         m.is_reset = False
-                for m in self.tournaments[msg.tournament].messages:
+                for m in msg.tournament.messages:
                     if m.username == msg.username:
                         m.is_timed_out = True
                         m.is_reset = False
@@ -973,7 +976,7 @@ class ChatAnalysis:
                 status_info = "invalid token?" if r.status_code == 200 else f"status: {r.status_code}"
                 self.errors.append(f"Timeout error ({status_info}):<br>{timeout_tag}{reason_tag.upper()} "
                                    f"<u>Score</u>: {msg.score} <u>User</u>: {msg.username} "
-                                   f"<u>RoomId</u>: {msg.tournament} <u>Channel</u>: {chan} <u>Text</u>: {text}")
+                                   f"<u>RoomId</u>: {msg.tournament.id} <u>Channel</u>: {chan} <u>Text</u>: {text}")
         else:
             if msg.id not in self.recommended_timeouts:
                 print(f"Recommended to time out: {data}")
@@ -991,7 +994,7 @@ class ChatAnalysis:
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(str(exception))
+            self.errors.append(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}")
 
     def timeout_multi(self, mmsg_id, reason):
         try:
@@ -1009,7 +1012,7 @@ class ChatAnalysis:
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(str(exception))
+            self.errors.append(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}")
 
     def custom_timeout(self, msg_ids, reason):
         try:
@@ -1039,7 +1042,7 @@ class ChatAnalysis:
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(str(exception))
+            self.errors.append(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}")
 
     def set_update(self, i_update_frequency):
         if i_update_frequency is None:
@@ -1216,7 +1219,7 @@ class ChatAnalysis:
                         arena = r.json()
                         if tourn_id != arena['id']:
                             raise Exception(f"ERROR {page}: Wrong ID {tourn_id} != {arena['id']}")
-                        self.tournaments[tourn_id] = Tournament(arena, Type.Arena, is_monitored=True)
+                        self.tournaments[tourn_id] = Tournament(arena, TournType.Arena, is_monitored=True)
                     elif page.startswith(swiss_tournament_page) and i == len(swiss_tournament_page) - 1:
                         r = requests.get(f"https://lichess.org/api/swiss/{tourn_id}", headers=headers)
                         if r.status_code != 200:
@@ -1224,7 +1227,7 @@ class ChatAnalysis:
                         swiss = r.json()
                         if tourn_id != swiss['id']:
                             raise Exception(f"ERROR {page}: Wrong ID {tourn_id} != {swiss['id']}")
-                        self.tournaments[tourn_id] = Tournament(swiss, Type.Swiss, is_monitored=True)
+                        self.tournaments[tourn_id] = Tournament(swiss, TournType.Swiss, is_monitored=True)
                     else:
                         j = page[0:i].rfind('/')
                         name = page[j + 1:i] if j > len(str_lichess) and i > j + 1 else tourn_id
@@ -1235,7 +1238,8 @@ class ChatAnalysis:
                                 'name': name,
                                 'status': "started"
                                 }
-                        self.tournaments[tourn_id] = Tournament(data, Type.Study, link=page, is_monitored=True)
+                        self.tournaments[tourn_id] = Tournament(data, TournType.Study, link=page, is_monitored=True)
+                self.tournaments[tourn_id].is_just_added = True
         self.state_tournaments += 1
         return self.get_tournaments()
 
@@ -1251,7 +1255,7 @@ class ChatAnalysis:
 
     def get_all(self):
         with self.reports_lock:
-            if self.state_reports == self.cache_reports['state']:
+            if self.state_reports == self.cache_reports['state_reports']:
                 return self.cache_reports
             # Main content
             now_utc = datetime.now(tz=tz.tzutc())
@@ -1277,13 +1281,13 @@ class ChatAnalysis:
             messages_nearby = self.get_messages_nearby(self.selected_msg_id)
             str_time = f"{now:%H:%M}"
             self.cache_reports = {'reports': info, 'multiline-reports': info_frequent,
-                                  'time': str_time, 'state': self.state_reports}
+                                  'time': str_time, 'state_reports': self.state_reports}
             self.cache_reports.update(messages_nearby)
             return self.cache_reports
 
     def get_tournaments(self, active_tournaments=None):
         with self.tournaments_lock:
-            if self.state_tournaments == self.cache_tournaments['state']:
+            if self.state_tournaments == self.cache_tournaments['state_tournaments']:
                 return self.cache_tournaments
 
             # Lists
@@ -1351,7 +1355,7 @@ class ChatAnalysis:
                     self.cache_tournaments['tournaments'].append(tournament.get_list_item(now_utc))
             for state, t in self.cache_tournaments.items():
                 self.cache_tournaments[state] = "".join(t)
-            self.cache_tournaments['state'] = self.state_tournaments
+            self.cache_tournaments['state_tournaments'] = self.state_tournaments
             return self.cache_tournaments
 
     def send_note(self, note, username):
@@ -1366,7 +1370,7 @@ class ChatAnalysis:
                     return {'selected-user': username, 'mod-notes': mod_notes}
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(str(exception))
+            self.errors.append(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}")
         return {'selected-user': username, 'mod-notes': ""}
 
 
@@ -1388,7 +1392,7 @@ def get_current_tournaments():
     tournaments = []
     now_utc = datetime.now(tz=tz.tzutc())
     for arena in arenas:
-        tourn = Tournament(arena, Type.Arena)
+        tourn = Tournament(arena, TournType.Arena)
         if tourn.is_active(now_utc):
             tournaments.append(tourn)
     # Swiss
@@ -1397,7 +1401,7 @@ def get_current_tournaments():
         swiss_data = get_ndjson(url, Accept="application/nd-json")
         for swiss in swiss_data:
             try:
-                tourn = Tournament(swiss, Type.Swiss)
+                tourn = Tournament(swiss, TournType.Swiss)
                 if tourn.is_active(now_utc):
                     tournaments.append(tourn)
             except Exception as exception:
@@ -1413,7 +1417,7 @@ def get_current_tournaments():
                 r['nbPlayers'] = 0
                 r['name'] = f"{r['name']} | {broadcast_name}"
                 r['status'] = "finished" if r.get('finished') else "unknown"
-                tourn = Tournament(r, Type.Study, r['url'])
+                tourn = Tournament(r, TournType.Study, r['url'])
                 if tourn.is_active(now_utc):
                     tournaments.append(tourn)
         except Exception as exception:

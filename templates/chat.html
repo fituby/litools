@@ -75,7 +75,7 @@
         </div>
       </div>
       <div class="d-flex flex-row align-content-start flex-wrap mt-3">
-        <div class="col align-content-start px-0" style="min-width:350px;max-width:500px;">
+        <div class="col align-content-start px-1" style="min-width:350px;max-width:500px;">
           <div id="selection_header" class="d-none user-select-none justify-content-between py-1" style="background-color:rgba(128,128,128,0.2);">
             <span>
               <button id="btn_filter_msgs" class="btn btn-outline-success align-baseline py-0 px-1 mr-1" type="button" onclick="filter_toggle()">Process</button>
@@ -108,7 +108,7 @@
             </div>
           </div>
         </div>
-        <div class="col align-content-start mb-3 p-0">
+        <div class="col align-content-start mb-3 px-1">
           <div id="user-info" class="col d-none align-content-start mr-2 px-0" style="min-width:350px;max-width:500px;">
           </div>
           <div id="mod-notes" class="col d-none flex-wrap align-content-start px-0" style="min-width:350px;max-width:500px;">
@@ -207,9 +207,9 @@
      return content;
   };
   #}function update_data(data_chats) {
-    if (data_chats['state'] == state_reports)
+    if (data_chats['state_reports'] == state_reports)
       return false;
-    state_reports = data_chats['state'];
+    state_reports = data_chats['state_reports'];
     if (data_chats["reports"] || data_chats["multiline-reports"]) {
       $("#dubious_messages").css("display","block");
       $("#multiline_messages").css("display","block");
@@ -239,9 +239,9 @@
     return true;
   }
   function update_tournament_list(data) {
-    if (data['state'] == state_tournaments)
+    if (data['state_tournaments'] == state_tournaments)
       return;
-    state_tournaments = data['state'];
+    state_tournaments = data['state_tournaments'];
     $('#tournaments_tournaments').html(data['tournaments']);
     $('#tournaments_created').html(data['created']);
     $('#tournaments_started').html(data['started']);
@@ -260,7 +260,7 @@
     }
   }
   function set_ok(msg_id) {
-    if (!is_clickable()) return;
+    //if (!is_clickable()) return;
     if (!msg_id.startsWith('C') && !msg_id.startsWith('F'))
       $(`#msg${msg_id}`).css("display","none");
     hide_msg(msg_id, true);
@@ -384,6 +384,11 @@
       return;
     username = (msg_id == "--" || msg_id.startsWith('T') || $(`#msg${msg_id} a`).length == 0) ? "" : $(`#msg${msg_id} a`)[0].text;
     update_user_button(username);
+    if (notes_user != username) {
+      notes_msgs = [];
+      $('#notes').val('');
+      update_notes();
+    }
     if (msg_id.startsWith('F'))
       add_to_notes(username, msg_id);
     $.ajax({url: `/chat/select_message/${msg_id}`, type: "post"})
@@ -489,6 +494,7 @@
         .done(function(data, textStatus, jqXHR) {
           $("#tournament_link")[0].value = "";
           update_tournament_list(data);
+          update_data(data);
         });
   }
   function update_notes() {

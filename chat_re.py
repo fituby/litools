@@ -1,6 +1,6 @@
 import html
 import re
-from elements import Reason
+from elements import Reason, TournType
 from elements import STYLE_WORD_BREAK
 
 
@@ -40,6 +40,7 @@ class TextVariety:
         self.reason = reason
         self.info = info
         self.class_name = class_name
+        self.exclude_tournaments = None
 
     def eval(self, original_msg, res, it):
         result = EvalResult(original_msg)
@@ -84,7 +85,8 @@ class TextVariety:
 
 class Re:
     def __init__(self, str_re, score=10, max_score=None, ban=None, reason=Reason.No, info="",
-                 class_name="text-warning", is_separate_word=True, is_capturing_groups=False):
+                 class_name="text-warning", is_separate_word=True, is_capturing_groups=False, exclude_tournaments=None):
+        self.exclude_tournaments = exclude_tournaments
         self.is_capturing_groups = is_capturing_groups
         if is_capturing_groups:
             assert str_re[0] == "(" and str_re[-1] == ")"
@@ -179,9 +181,9 @@ list_res = {
     # Critical
     Re(r'cancers?', 50, max_score=-2,  # added "s?"
        reason=Reason.Offensive, info="Critical: cancer"),
-    Re(r'(ho?pe ((yo)?[uy](r family)?( and )*)+ (die|burn)s?|((die|burn)s? irl))', 90,
+    Re(r'(ho?pe ((yo)?[uy](r (famil[yi]|m[ou]m|mother))?( and )*)+ (die|burn)s?|((die|burn)s? irl))', 90,
        reason=Reason.Offensive, ban=-1, info="Critical: Hope you die"),
-    Re(r'kill ((yo)?[uy]r ?(self|family)( and )?)+', 90,
+    Re(r'kill ((yo)?[uy]r ?(self|famil[yi]|m[ou]m|mother)( and )?)+', 90,
        reason=Reason.Offensive, ban=-1, info="Critical: Kill yourself"),
     Re(r'(hang|neck) ((yo)?[uy]r ?(self|family)( and )?)+', 90,
        reason=Reason.Offensive, ban=-2, info="Critical: Hang yourself"),
@@ -279,7 +281,7 @@ list_res = {
        reason=Reason.Offensive, info="En: douchebag"),
     Re(r'dykes?', 30,  # added "s?"
        reason=Reason.Offensive, info="En: dyke"),
-    Re(r'engine',
+    Re(r'engine', exclude_tournaments=[TournType.Study],
        reason=Reason.Shaming, info="En: engine"),
     Re(r'fck(er|r|u|k|t|ing?|ign|tard?|face|off?|e?d|)',
        reason=Reason.Offensive, info="En: fck"),
@@ -430,7 +432,7 @@ list_res = {
     Re(r'shitt?(z|e|y|bag|ed|s|en|ing?|ign|)', 5,  # corrected
        reason=Reason.Offensive, info="En: shit"),
     Re(r'shat', 5,  # added
-       reason=Reason.Offensive, info="En: shit"),
+       reason=Reason.Other, info="En: shit"),
     Re(r'sissy', 20,
        reason=Reason.Offensive, info="En: sissy"),
     Re(r'slags?', 20,  # added "s?"
@@ -511,19 +513,21 @@ list_res = {
        reason=Reason.Offensive, info="Ru: мудак"),
     Re(r'(|от|под?)cос(и|ать|ала?|)', 40,
        reason=Reason.Offensive, info="Ru: отсоси"),
-    Re(r'(|от|с)пизд(а|ы|е|у|ить?|ил?а?|или|ошить?|ошил?а?|ошили|охать|охала?|охали|юлить|юлил?а?|юлили|ярить?|ярила?|ярили|яхать|яхала?|яхали|ячить?|ячила?|ячили|якать|якала?|якали|ец|ецкий?|атый?)', 30,  # corrected
+    Re(r'(|от|с)п[ие]зд(а|ы|е|у|ить?|ил?а?|или|ошить?|ошил?а?|ошили|охать|охала?|охали|юлить|юлил?а?|юлили|ярить?|ярила?|ярили|яхать|яхала?|яхали|ячить?|ячила?|ячили|якать|якала?|якали|ец|ецкий?|атый?)', 30,  # corrected
        reason=Reason.Offensive, info="Ru: пизда"),
-    Re(r'пизд[ао]бол(|а|ы|е|у|ом|ов|ав|ами?|ах)', 50,  # added
+    Re(r'п[ие]зд[ао]бол(|а|ы|е|у|ом|ов|ав|ами?|ах)', 50,  # added
        reason=Reason.Offensive, info="Ru: пиздабол"),
     Re(r'(|отъ?|вы|до|за|у|про|съ?)[её]ба(л|ла|ли|ло|лся|льник|ть|на|нул|нула|нулся|нн?ый|нутый?|нутая|нутые)', 50,  # added '|нутый?|нутая|нутые', '(е|ё)'-->'[её]'
        reason=Reason.Offensive, info="Ru: заебал"),
-    Re(r'у?[её]бл(а|о|у|ану?|я|ю)', 50,  # added 'у?', '(е|ё)'-->'[её]', '|я|ю'
+    Re(r'у?[её]бл(а|о|у|я|ю|е)', 40,  # added 'у?', '(е|ё)'-->'[её]', '|я|ю'
+       reason=Reason.Offensive, info="Ru: ёбля"),
+    Re(r'у?еблан(|чик)(|а|е|у|ами?|ы|ов|оми?|ах|и)', 50,  # added
        ban=-2, reason=Reason.Offensive, info="Ru: еблан"),
     Re(r'([оа]сл[оа])?[её]б(ах?|е|ом?|у|ы|ов|ами?|)', 50,  # added 'у?', '(е|ё)'-->'[её]', etc.
        ban=-2, reason=Reason.Offensive, info="Ru: ёб"),
     Re(r'(|отъ?|вы|до|за|у|про)[её]б(нут|ан+)(ый?|ая|ые|ым|ого|ому?|ой|ую?|ых|ыми?|ых|учка|)', 50,  # added
        ban=-3, reason=Reason.Offensive, info="Ru: ёбнутый"),
-    Re(r'(|отъ?|вы|до|за|у|про|съ?)(е|ё)б(аш)?(у|и|ите?|ишь?|им|ым|ыте?|ышь?|ать?)', 40,  # added
+    Re(r'(|отъ?|вы|до|за|у|про|съ?)(е|ё)б(аш)?(ут?|и|ите?|ишь?|им|ым|ыте?|ышь?|ать?|[её]шь?|[её]т|[её]м|[её]те)', 40,  # added
        ban=-3, reason=Reason.Offensive, info="Ru: отъеби"),
     Re(r'(|за|отъ?|у|съ?)ебись',
        reason=Reason.Offensive, info="Ru: заебись"),
@@ -543,6 +547,8 @@ list_res = {
        ban=-2, reason=Reason.Offensive, info="Ru: "),
     Re(r'вы[её]бывае?(ть?ся|тесь)',
        reason=Reason.Offensive, info="Ru: выёбываться"),
+    Re(r'вступ(ай|айте|ить|аем|ете?)',  # added
+       reason=Reason.Spam, info="Ru: вступайте"),
     Re(r'г[ао]ндон(|у|ам?|ы|ов)', 50,
        ban=-2, reason=Reason.Offensive, info="Ru: гандон"),
     Re(r'ген[оа]ц[иы]д(|а|е|у|ом)', 20,  # added
@@ -601,6 +607,8 @@ list_res = {
        reason=Reason.Offensive, info="Ru: придурок"),
     Re(r'[сc][уy][кk](а|a|ин?ы?|е|у|ам)', 40,  # added 'н?ы?'
        ban=-3, reason=Reason.Offensive, info="Ru: сука"),
+    Re(r'(с|з|по)дохн(и|ите?|ишь?|ут)', 60,  # added
+       ban=-3, reason=Reason.Offensive, info="Ru: сдохни"),
     Re(r'сос(и|ите|унок|унку|унке|унков|унками?|унках|унка)', 40,  # added
        reason=Reason.Offensive, info="Ru: соси"),
     Re(r'сперм(а|у|ой|е)', 30,  # added
@@ -619,6 +627,10 @@ list_res = {
        ban=-2, reason=Reason.Offensive, info="Ru: ублюдок"),
     Re(r'у(ё|е)бищ(е|а|ам|у)', 80,
        ban=-2, reason=Reason.Offensive, info="Ru: уёбище"),
+    Re(r'урод(е|а|ами?|у|оми?|ы|ов|ах|)', 40,  #added
+       reason=Reason.Offensive, info="Ru: урод"),
+    Re(r'вырод(ок|ка|ку|коми?|ке|ки|ков|ками?|ках)', 40,  #added
+       reason=Reason.Offensive, info="Ru: выродок"),
     Re(r'у(ё|е)б(ок|ка|ку|ком|ке|ки|ков|ками?|ках)', 60,  #added
        ban=-2, reason=Reason.Offensive, info="Ru: уёбок"),
     Re(r'фаш[иы]с[тц]с?(а?|у|ом|е|ы|ов|ами?|ах|кий|кого|кому|кими|ком|кие?|ких|кими?|ких)', 50,  # added
@@ -837,13 +849,27 @@ list_res = {
        reason=Reason.No),
     Re(r'https?:\/\/(www\.)?lichess\.org\/page\/?[-a-zA-Z0-9@:%._\+~#=]{0,40}', 0, class_name="text-success",
        reason=Reason.No),
+    Re(r'^https?:\/\/(www\.)?lichess\.org\/racer\/[-a-zA-Z0-9@:%._\+~#=]{5,8}$', 60, is_separate_word=False,
+       ban=-1, reason=Reason.Spam, info="Link: racer"),
     Re(r'https?:\/\/(www\.)?lichess\.org\/racer\/[-a-zA-Z0-9@:%._\+~#=]{5,8}', 50,
        reason=Reason.Spam, info="Link"),
     Re(r'https?:\/\/(www\.)?lichess\.org\/streamer\/[-a-zA-Z0-9@:%._\+~#=]{5,8}', 40,
        reason=Reason.Spam, info="Link"),
-    Re(r'^https?:\/\/(www\.)?lichess\.org\/racer\/[-a-zA-Z0-9@:%._\+~#=]{5,8}$', 60, is_separate_word=False,
-       ban=-1, reason=Reason.Spam, info="Link: racer"),
-    Re(r'https?:\/\/(www\.)?youtube.com\/watch\?v=dQw4w9WgXcQ', 60,
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)dQw4w9WgXcQ', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)55DLs_7VJNE', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)oHg5SJYRHA0', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)lNv3pcPVhlY', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)lpiB2wMc49g', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)iik25wqIuFo', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)xvFZjo5PgG0', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)j8PxqgliIno', 60,
        ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
     Re(r'https?:\/\/(www\.)?(youtu|youtube|twitch|instagram)[-a-zA-Z0-9@:%._\+~#=]{0,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)', 40,
        reason=Reason.Spam, info="Link"),
@@ -877,11 +903,11 @@ list_res = {
        ban=-2, reason=Reason.Spam, info="Spam: [$7] x25..39"),
     Re(r'[\W_\-\d]{15,24}', 10, is_separate_word=False,
        reason=Reason.Spam, info="Spam: [$7] x15..24"),
-    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0600-\u06FF' '\u0E00-\u0E7F' ']{45,}', 80, is_separate_word=False,
+    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0590-\u06FF' '\u0E00-\u0E7F' ']{45,}', 80, is_separate_word=False,
        ban=-2, reason=Reason.Spam, info="Spam: [^ -.] x45"),
-    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0600-\u06FF' '\u0E00-\u0E7F' ']{35,44}', 50, is_separate_word=False,
+    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0590-\u06FF' '\u0E00-\u0E7F' ']{35,44}', 50, is_separate_word=False,
        reason=Reason.Spam, info="Spam: [^ -.] x35..44"),
-    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0600-\u06FF' '\u0E00-\u0E7F' ']{25,34}', 10, is_separate_word=False,
+    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0590-\u06FF' '\u0E00-\u0E7F' ']{25,34}', 10, is_separate_word=False,
        reason=Reason.Spam, info="Spam: [^ -.] x25..34"),
     Re(r'[qwrtpsdfghjklzxcvbnmйцкнгшщзхъфвпрлджчсмтьб]{50,}', 80, is_separate_word=False,
        ban=-1, reason=Reason.Spam, info="Spam: [b] x50"),  # without y

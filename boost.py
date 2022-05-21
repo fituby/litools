@@ -529,11 +529,6 @@ class Games:
 
     def download(self, since=None, before=None):
         now_utc = datetime.now(tz=tz.tzutc())
-        ts_6months_ago = int((now_utc - timedelta(days=182)).timestamp() * 1000)
-        if since is None:
-            since = ts_6months_ago
-        else:
-            since = max(ts_6months_ago, int(since.timestamp() * 1000))
         self.until = None
         if before:
             try:
@@ -546,6 +541,11 @@ class Games:
         else:
             str_until = ""
             self.until = now_utc
+        ts_6months_ago = int((self.until - timedelta(days=182)).timestamp() * 1000)
+        if since is None or (self.until != now_utc and since >= self.until):
+            since = ts_6months_ago
+        else:
+            since = max(ts_6months_ago, int(since.timestamp() * 1000))
         max_num_games = int(round(self.max_num_games * (1 + PERCENT_EXTRA_GAMES_TO_DOWNLOAD / 100)))
         url = f"https://lichess.org/api/games/user/{self.user_id}?rated=true&finished=true&max={max_num_games}" \
               f"&since={since}{str_until}"

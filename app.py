@@ -194,7 +194,9 @@ def chat_flip_tournament_group(group):
 @app.route('/chat/add_tournament', methods=['POST'])
 def chat_add_tournament():
     page = request.form.get("page", "")
-    resp = make_response(chat.add_tournament(page))
+    data = chat.add_tournament(page)
+    data.update(chat.get_all())
+    resp = make_response(data)
     return resp
 
 
