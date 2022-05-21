@@ -215,6 +215,10 @@ list_res = {
        reason=Reason.Offensive, info="En: anus"),
     Re(r'arse(holes?|wipe|)',  # added "s?"
        reason=Reason.Offensive, info="En: arse"),
+    Re(r'autist(ic|)',
+       reason=Reason.Offensive, info="En: autist"),
+    Re(r'dumb',
+       reason=Reason.Offensive, info="En: dumb"),
     Re(r'(dumb|)ass',
        reason=Reason.Offensive, info="En: ass"),
     Re(r'ass?(hole|fag)s?', 20,  # added "s?"
@@ -317,7 +321,7 @@ list_res = {
        reason=Reason.Other, info="En: horny"),
     Re(r'humping',
        reason=Reason.Other, info="En: humping"),
-    Re(r'idiots?', 30,  # added "s?"
+    Re(r'idiot(s|a|)', 30,  # corrected
        reason=Reason.Offensive, info="En: idiot"),
     Re(r'incest',
        reason=Reason.Other, info="En: incest"),
@@ -341,6 +345,8 @@ list_res = {
        reason=Reason.Other, info="En: milf"),
     Re(r'molest(er|)',
        reason=Reason.Offensive, info="En: molester"),
+    Re(r'monkeys?',
+       reason=Reason.Offensive, info="En: monkey"),
     Re(r'morons?', 30,  # added "s?"
        reason=Reason.Offensive, info="En: moron"),
     Re(r'mother', 20,  # split
@@ -789,6 +795,8 @@ list_res = {
         reason=Reason.Offensive, info="Hi: you're pubic hair"),
 ],
 'Fr': [
+    Re(r'connard',
+        reason=Reason.Offensive, info="Fr: asshole"),
     Re(r'fdp',
         reason=Reason.Offensive, info="Fr: fdp"),
     Re(r'pd',
