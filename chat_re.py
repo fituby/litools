@@ -1,5 +1,6 @@
 import html
 import re
+import traceback
 from elements import Reason, TournType
 from elements import STYLE_WORD_BREAK
 
@@ -21,7 +22,12 @@ class EvalResult:
     def __init__(self, text):
         self.scores = [0] * Reason.Size
         self.ban_points = [0] * Reason.Size
-        self.element = html.escape(text)
+        try:
+            self.element = html.escape(text)
+        except Exception as exception:
+            print(f"ERROR when processing: {text}")
+            self.element = text
+            traceback.print_exception(type(exception), exception, exception.__traceback__)
 
     def __iadd__(self, o):
         for i in range(Reason.Size):
@@ -51,7 +57,11 @@ class TextVariety:
         num_special_symbols = len(text_wo_spaces) - len(text)
         s = set(text)
         if len(s) < 12:
-            if 3 * len(s) + 50 < len(text):
+            if len(s) == 2 and len(text) >= 24:
+                result.scores[self.reason] += 80
+            elif len(s) == 3 and len(text) >= 36:
+                result.scores[self.reason] += 80
+            elif 3 * len(s) + 50 < len(text):
                 result.scores[self.reason] += 80
             elif 3 * len(s) + 20 < len(text):
                 result.scores[self.reason] += 50
@@ -321,7 +331,7 @@ list_res = {
        reason=Reason.Other, info="En: horny"),
     Re(r'humping',
        reason=Reason.Other, info="En: humping"),
-    Re(r'idiot(s|a|)', 30,  # corrected
+    Re(r'idiota?s?', 30,  # corrected
        reason=Reason.Offensive, info="En: idiot"),
     Re(r'incest',
        reason=Reason.Other, info="En: incest"),
@@ -499,7 +509,7 @@ list_res = {
        reason=Reason.Offensive, info="En: whore"),
     Re(r'wanc?k(er|)', 20,
        reason=Reason.Offensive, info="En: wanker"),
-    Re(r'weak', 5,
+    Re(r'weak', 5, exclude_tournaments=[TournType.Study],
        reason=Reason.Offensive, info="En: weak"),
     Re(r'wetback', 20,
        reason=Reason.Offensive, info="En: wetback"),
@@ -527,7 +537,7 @@ list_res = {
        reason=Reason.Offensive, info="Ru: заебал"),
     Re(r'у?[её]бл(а|о|у|я|ю|е)', 40,  # added 'у?', '(е|ё)'-->'[её]', '|я|ю'
        reason=Reason.Offensive, info="Ru: ёбля"),
-    Re(r'у?еблан(|чик)(|а|е|у|ами?|ы|ов|оми?|ах|и)', 50,  # added
+    Re(r'у?ебл?ан(|чик|[ие][шщ])(|а|е|у|ами?|ы|ов|оми?|ах|и)', 50,  # added
        ban=-2, reason=Reason.Offensive, info="Ru: еблан"),
     Re(r'([оа]сл[оа])?[её]б(ах?|е|ом?|у|ы|ов|ами?|)', 50,  # added 'у?', '(е|ё)'-->'[её]', etc.
        ban=-2, reason=Reason.Offensive, info="Ru: ёб"),
@@ -779,7 +789,7 @@ list_res = {
         reason=Reason.Offensive, info="Hi: pimp"),
     Re(r'bhadwachod', 50,
         reason=Reason.Offensive, info="Hi: fuck you pimp"),
-    Re(r'gaa?nd',
+    Re(r'gaa?ndu?',
         reason=Reason.Offensive, info="Hi: ass"),
     Re(r'gaand\smardunga', 60,
         reason=Reason.Offensive, info="Hi: I'll fuck your ass"),
@@ -846,9 +856,15 @@ list_res = {
 ],
 'Spam': [
     # Broadcasts
+    Re(r'^b+l+u+e+n+d+e+r+$', 60, exclude_tournaments=[TournType.Arena, TournType.Swiss],
+       reason=Reason.Spam, info="Spam: [broadcast] blunder"),
+    Re(r'^d+r+a+w+$', 60, exclude_tournaments=[TournType.Arena, TournType.Swiss],
+       reason=Reason.Spam, info="Spam: [broadcast] draw"),
     # Re(r"bl[ue]+nder+", 20,  # added
     #    reason=Reason.Spam, info="Spam: blunder"),
     # Website links
+    Re(r'https?:\/\/(www\.)?lichess\.org\/@\/blog\/', 40,
+       reason=Reason.Spam, info="Link: Link: blog"),
     Re(r'https?:\/\/(www\.)?lichess\.org\/@\/[-a-zA-Z0-9@:%._\+~#=]{0,30}', 0, class_name="text-success",
        reason=Reason.No),
     Re(r'https?:\/\/(www\.)?lichess\.org\/[-a-zA-Z0-9@:%._\+~#=]{8,12}', 0, class_name="text-success",
@@ -879,6 +895,12 @@ list_res = {
        ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
     Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)j8PxqgliIno', 60,
        ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)PyoRdu-i0AQ', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)HIcSWuKMwOw', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)RoozSjudh0I', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Spam"),
     Re(r'https?:\/\/(www\.)?(youtu|youtube|twitch|instagram)[-a-zA-Z0-9@:%._\+~#=]{0,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)', 40,
        reason=Reason.Spam, info="Link"),
     Re(r'https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)', 10,
@@ -911,11 +933,13 @@ list_res = {
        ban=-2, reason=Reason.Spam, info="Spam: [$7] x25..39"),
     Re(r'[\W_\-\d]{15,24}', 10, is_separate_word=False,
        reason=Reason.Spam, info="Spam: [$7] x15..24"),
-    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0590-\u06FF' '\u0E00-\u0E7F' ']{45,}', 80, is_separate_word=False,
+    Re(r'[a-zа-я\d]{50,}', 80, is_separate_word=False,
+       reason=Reason.Spam, info="Spam: [ab] x50"), #ban=-1,
+    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0590-\u06FF' '\u0E00-\u0E7F' '\u3041-\u3096' '\u30A0-\u30FF' ']{45,}', 80, is_separate_word=False,
        ban=-2, reason=Reason.Spam, info="Spam: [^ -.] x45"),
-    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0590-\u06FF' '\u0E00-\u0E7F' ']{35,44}', 50, is_separate_word=False,
+    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0590-\u06FF' '\u0E00-\u0E7F' '\u3041-\u3096' '\u30A0-\u30FF' ']{35,44}', 50, is_separate_word=False,
        reason=Reason.Spam, info="Spam: [^ -.] x35..44"),
-    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0590-\u06FF' '\u0E00-\u0E7F' ']{25,34}', 10, is_separate_word=False,
+    Re(r'[^\s\.,_!\-?;:\+\\\/' '\u0590-\u06FF' '\u0E00-\u0E7F' '\u3041-\u3096' '\u30A0-\u30FF' ']{25,34}', 10, is_separate_word=False,
        reason=Reason.Spam, info="Spam: [^ -.] x25..34"),
     Re(r'[qwrtpsdfghjklzxcvbnmйцкнгшщзхъфвпрлджчсмтьб]{50,}', 80, is_separate_word=False,
        ban=-1, reason=Reason.Spam, info="Spam: [b] x50"),  # without y

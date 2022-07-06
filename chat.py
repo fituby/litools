@@ -35,7 +35,7 @@ DELAY_ERROR_READ_MOD_LOG = 60  # [min]
 
 CHAT_NUM_VISIBLE_MSGS = 450
 CHAT_MAX_NUM_MSGS = 500
-CHAT_FREQUENT_MSGS_MIN_SCORE = [5, 10]
+CHAT_FREQUENT_MSGS_MIN_SCORE = [15, 30]
 CHAT_BEGINNING_MESSAGES_TEXT = '"name":"Chat room","lines":['
 CHAT_END_MESSAGES_TEXT = '],"userId":'
 TOURNEY_STANDING_BEGINNING_TEXT = '"standing":{"page":1,"players":['
@@ -58,7 +58,8 @@ official_teams = [
     "lichess-horde",
     "lichess-king-of-the-hill",
     "lichess-racing-kings",
-    "lichess-three-check"
+    "lichess-three-check",
+    "team-chessable"
 ]
 
 arena_tournament_page = "https://lichess.org/tournament/"
