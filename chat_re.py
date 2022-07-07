@@ -803,6 +803,8 @@ list_res = {
         reason=Reason.Other, info="Hi: pubic hair"),
     Re(r'jha(a|n)tu', 40,
         reason=Reason.Offensive, info="Hi: you're pubic hair"),
+    Re(r'bh?o?sdi?\s?ke?', 50,
+        reason=Reason.Offensive, info="Hi: meaning: different sexual/obscene connotations"),
 ],
 'Fr': [
     Re(r'connard',

@@ -92,6 +92,16 @@ country_names = {'GB-WLS': 'Wales󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-SCT': 'Scotland�
          "_united-nations": "United Nations", '_earth': 'Earth', "_lichess": "Lichess Flag", "_russia-wbw": "Russia BWB"}
 
 
+def get_highlight_style(opacity):
+    return f"background-color:rgba(0,160,119,{opacity});"
+
+
+def add_timeout_msg(timeouts, msg):
+    user_msg = timeouts.get(msg.username)
+    if user_msg is None or msg.score > user_msg.score:
+        timeouts[msg.username] = msg
+
+
 def load_config():
     global token, log_file, port, embed_lichess
     if token is None:
