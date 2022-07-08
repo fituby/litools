@@ -10,7 +10,7 @@ from elements import get_notes, add_note, load_mod_log, get_mod_log, get_highlig
 from elements import ModActionType, UserData
 from chat_message import Message
 from chat_tournament import Tournament
-from consts import *
+from chat_consts import *
 
 
 official_teams = [
@@ -153,6 +153,10 @@ class ChatAnalysis:
                 self.wait_api()
                 new_messages, deleted_messages = tourn.download(self.msg_lock, now_utc)
                 with self.msg_lock:
+                    if not new_messages and tourn.is_error_404_too_long(now_utc) \
+                            and not [msg for msg in tourn.messages if msg.score and not msg.is_hidden()]:
+                        del self.tournaments[tourn_id]
+                        continue
                     self.tournament_messages.update({msg.id: tourn_id for msg in new_messages})
                     self.all_messages.update({msg.id: msg for msg in new_messages})
                     for del_msg in deleted_messages:
@@ -161,6 +165,14 @@ class ChatAnalysis:
                     to_timeout_i = tourn.analyse()
                     for m in to_timeout_i.values():
                         add_timeout_msg(self.to_timeout, m)
+                    # Process multiline messages and do timeouts
+                    multi_msgs, to_timeout_i = tourn.process_frequent_data(now_utc, self.reset_multi_messages)
+                    self.multi_messages.update(multi_msgs)
+                    for m in to_timeout_i.values():
+                        add_timeout_msg(self.to_timeout, m)
+                    for msg in self.to_timeout.values():
+                        self.api_timeout(msg, msg.best_ban_reason(), False)
+                    self.to_timeout.clear()
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
@@ -183,6 +195,9 @@ class ChatAnalysis:
                         else None
                     log(f"[reset] {reason_tag.upper()} @{msg.username} score={msg.score} "
                         f"{chan.upper()}={msg.tournament.id}: {msg.text}")
+                now_utc = datetime.now(tz=tz.tzutc())
+                with self.msg_lock:
+                    msg.tournament.update_reports(now_utc, self.reset_multi_messages)
                 self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -194,6 +209,9 @@ class ChatAnalysis:
             msg_id = int(msg_id[1:])
             self.reset_multi_messages.add(msg_id)
             if msg_id in self.multi_messages:
+                now_utc = datetime.now(tz=tz.tzutc())
+                with self.msg_lock:
+                    self.multi_messages[msg_id][0].tournament.update_reports(now_utc, self.reset_multi_messages)
                 del self.multi_messages[msg_id]
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -259,6 +277,8 @@ class ChatAnalysis:
                     if reason == 0:
                         reason = msg.best_reason()
                     self.api_timeout(msg, reason, True)
+                    now_utc = datetime.now(tz=tz.tzutc())
+                    msg.tournament.update_reports(now_utc, self.reset_multi_messages)
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -277,6 +297,9 @@ class ChatAnalysis:
                     combined_msg = Message({'u': msgs[0].username, 't': combined_text}, msgs[0].tournament, msgs[0].time)
                     combined_msg.evaluate(self.tournaments[self.tournament_messages[msg_id]].re_usernames)
                     self.api_timeout(combined_msg, reason, True)
+                    now_utc = datetime.now(tz=tz.tzutc())
+                    tournament = self.tournaments[self.tournament_messages[msg_id]]
+                    tournament.process_frequent_data(now_utc, self.reset_multi_messages)
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -299,6 +322,7 @@ class ChatAnalysis:
                     reason = int(reason)
                     if reason == 0:
                         reason = Reason.Spam  # msg.best_reason()
+                    now_utc = datetime.now(tz=tz.tzutc())
                     if len(msgs) > 1:
                         combined_text = f'[multiline] {" | ".join([m.text for m in msgs])}'
                         combined_msg = Message({'u': msgs[0].username, 't': combined_text}, msgs[0].tournament, msgs[0].time)
@@ -307,6 +331,7 @@ class ChatAnalysis:
                         self.api_timeout(combined_msg, reason, True)
                     else:
                         self.api_timeout(msgs[0], reason, True)
+                    msgs[0].tournament.update_reports(now_utc, self.reset_multi_messages)
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -529,18 +554,11 @@ class ChatAnalysis:
             now_utc = datetime.now(tz=tz.tzutc())
             now = datetime.now()
             active_tournaments = self.get_score_sorted_tournaments(now_utc)
-            info = "".join([tourn.get_info(now_utc) for tourn in active_tournaments])
+            info = "".join([tourn.reports for tourn in active_tournaments])  # TODO: update time status in the header
             output = []
             for tourn in active_tournaments:
-                output_i, multi_msgs, to_timeout_i = tourn.get_frequent_data(now_utc, self.reset_multi_messages)
-                if output_i:
-                    output.extend(output_i)
-                    self.multi_messages.update(multi_msgs)
-                for m in to_timeout_i.values():
-                    add_timeout_msg(self.to_timeout, m)
-            for msg in self.to_timeout.values():
-                self.api_timeout(msg, msg.best_ban_reason(), False)
-            self.to_timeout.clear()
+                if tourn.multiline_reports:
+                    output.extend(tourn.multiline_reports)
             output.sort(key=lambda t: t[0], reverse=True)
             info_frequent = "".join([info for score, info in output])
             if self.errors:

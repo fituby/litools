@@ -7,7 +7,7 @@ from fake_useragent import UserAgent
 from elements import Reason, TournType, deltaseconds, deltaperiod, shorten, add_timeout_msg, Error500
 from chat_re import ReUser
 from chat_message import Message
-from consts import *
+from chat_consts import *
 
 
 class Tournament:
@@ -43,6 +43,7 @@ class Tournament:
         self.re_usernames = []
         self.errors = []
         self.errors_500 = []
+        self.last_error_404: datetime = None
         self.max_score = 0
         self.total_score = 0
         self.is_monitored = is_monitored
@@ -50,6 +51,8 @@ class Tournament:
         self.link = link
         self.last_update: datetime = None
         self.is_just_added = False
+        self.reports = ""
+        self.multiline_reports = ""
 
     def update(self, tourn):
         self.startsAt = tourn.startsAt
@@ -97,6 +100,12 @@ class Tournament:
         return (self.t_type == TournType.Arena and now_utc >= self.finishesAt) \
                or (self.t_type != TournType.Arena and self.finishesAt)
 
+    def is_error_404_recently(self, now_utc):
+        return self.last_error_404 is not None and deltaseconds(now_utc, self.last_error_404) < DELAY_ERROR_CHAT_404
+
+    def is_error_404_too_long(self, now_utc):
+        return self.last_error_404 is not None and deltaseconds(now_utc, self.last_error_404) >= TIME_CHAT_REMOVED_404
+
     def priority_score(self):
         return self.max_score * 9999 + self.total_score
 
@@ -136,7 +145,7 @@ class Tournament:
     def download(self, msg_lock, now_utc):
         new_messages = []
         deleted_messages = []
-        if self.errors:
+        if self.errors or self.is_error_404_recently(now_utc):
             return new_messages, deleted_messages
         try:
             ua = UserAgent()
@@ -151,13 +160,19 @@ class Tournament:
                         return new_messages, deleted_messages
                     self.errors_500.append(Error500(now_utc, r.status_code))
                     return new_messages, deleted_messages
+                elif r.status_code == 404:
+                    if self.last_error_404 is None:
+                        self.last_error_404 = now_utc
+                    return new_messages, deleted_messages
                 raise Exception(f"Failed to download {url}<br>Status Code {r.status_code}")
+            self.last_error_404 = None
             if self.errors_500 and self.errors_500[-1].is_ongoing():
                 self.errors_500[-1].complete(now_utc)
             delay = None if self.last_update is None else deltaseconds(now_utc, self.last_update)
             with msg_lock:
                 new_messages, deleted_messages = self.process_messages(r.text, now_utc, delay)
             #self.process_usernames(r.text)  # doesn't work with token
+            self.reports = self.get_info(now_utc)
             self.last_update = now_utc
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -169,6 +184,10 @@ class Tournament:
             re_user = r"(https?:\/\/)?(lichess\.org\/)?@?\/?" + user
             self.re_usernames.append(ReUser(re_user, 0, info=user, class_name="text-muted"))
         return new_messages, deleted_messages
+
+    def update_reports(self, now_utc, reset_multi_messages):
+        self.reports = self.get_info(now_utc)
+        self.process_frequent_data(now_utc, reset_multi_messages)
 
     def process_messages(self, text, now_utc, delay):
         new_messages = []
@@ -269,6 +288,9 @@ class Tournament:
             return ""
         errors = self.errors.copy()
         errors.extend([str(err) for err in self.errors_500])
+        if self.last_error_404 and (msgs or errors):
+            errors.extend(f"Tournament removed at {self.last_error_404:%Y-%m-%d %H:%M} UTC"
+                          f" (Failed to download: Status Code 404).")
         header = f'<div class="d-flex user-select-none justify-content-between px-1 mb-1" ' \
                  f'style="background-color:rgba(128,128,128,0.2);">' \
                  f'{self.get_link(short=False)}{self.get_status(now_utc)}</div>'
@@ -276,9 +298,9 @@ class Tournament:
         return f'<div class="col rounded m-1 px-0" style="background-color:rgba(128,128,128,0.2);min-width:350px">' \
                f'{header}{errors}{"".join(msgs)}</div>'
 
-    def get_frequent_data(self, now_utc, reset_multi_messages):
+    def process_frequent_data(self, now_utc, reset_multi_messages):
         if not self.messages:
-            return [], [], {}
+            return [], {}
         output = []
         multi_messages = {}
         user_msgs = {}
@@ -452,7 +474,8 @@ class Tournament:
                 last_user = ""
         for username in user_msgs.keys():
             process_user(username)
-        return output, multi_messages, to_timeout
+        self.multiline_reports = output
+        return multi_messages, to_timeout
 
     def get_list_item(self, now_utc):
         checked = ' checked=""' if (self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS) and self.is_active(now_utc) else ""
