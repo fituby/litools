@@ -4,30 +4,41 @@
 <div class="container-fluid m-0 px-2" style="max-width:96vw">
   <div class="row justify-content-center my-2">
     <div class="col" style="width:420px;min-height:97vh;">
-      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1" style="max-width:500px;">
-        <p class="pr-2 m-0">Mode</p>
-        <div class="btn-group btn-group-toggle">
-          <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
-          <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
-          <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
-        </div>
-      </div>
-      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1" style="max-width:500px;">
-        <p class="pr-2 m-0">Update</p>
-        <div class="btn-group btn-group-toggle">
-          <button id="update_frequency_1" class="btn btn-secondary" onclick="update_frequency(1);">Fast</button>
-          <button id="update_frequency_2" class="btn btn-secondary" onclick="update_frequency(2);">Medium</button>
-          <button id="update_frequency_3" class="btn btn-secondary" onclick="update_frequency(3);">Slow</button>
-          <button id="update_frequency_0" class="btn btn-secondary" onclick="update_frequency(0);">Never</button>
-        </div>
-      </div>
-      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1" style="max-width:500px;">
+      <button class="btn p-0 mb-1" type="button" data-toggle="collapse" data-target="#collapse_settings" aria-expanded="false" aria-controls="collapse_settings">
+        <i class="fas fa-cog text-secondary" style="font-size:23px"></i>
+      </button>
+      <div id="settings" style="max-width:500px;">
+        <div class="card border-0">
+          <div id="collapse_settings" class="collapse" aria-labelledby="set_settings" data-parent="#settings">
+            <div class="card-body p-0">
+              <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
+                <p class="pr-2 m-0">Mode</p>
+                <div class="btn-group btn-group-toggle">
+                  <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
+                  <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
+                  <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
+                </div>
+              </div>
+              <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
+                <p class="pr-2 m-0">Update</p>
+                <div class="btn-group btn-group-toggle">
+                  <button id="update_frequency_1" class="btn btn-secondary" onclick="update_frequency(1);">Fast</button>
+                  <button id="update_frequency_2" class="btn btn-secondary" onclick="update_frequency(2);">Medium</button>
+                  <button id="update_frequency_3" class="btn btn-secondary" onclick="update_frequency(3);">Slow</button>
+                  <button id="update_frequency_0" class="btn btn-secondary" onclick="update_frequency(0);">Never</button>
+                </div>
+              </div>
+              <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
         <span class="pr-2 m-0">Filter scores</span>
         <div class="btn-group btn-group-toggle">
           <button id="filter_score_0" class="btn btn-secondary" type="button" onclick="filter_score(0);">All</button>
           <button id="filter_score_20" class="btn btn-secondary" type="button" onclick="filter_score(20);">20+</button>
           <button id="filter_score_40" class="btn btn-warning" type="button" onclick="filter_score(40);">40+</button>
           <button id="filter_score_60" class="btn btn-danger" type="button" onclick="filter_score(60);">60+</button>
+        </div>
+      </div>
+            </div>
+          </div>
         </div>
       </div>
       <div id="tournament_settings" class="mb-1" style="max-width:500px;">
