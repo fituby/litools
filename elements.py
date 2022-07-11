@@ -817,14 +817,24 @@ class ChatModAction(ModAction):
             return "table-muted" if self.is_old(now_utc) else "table-info"
         if self.action in ['engine', 'booster', 'troll', 'alt', 'closeAccount']:
             return "table-danger"
-        if self.action in ['deletePost', 'terminateTournament', 'cheatDetected']:
+        if self.action in ['terminateTournament', 'cheatDetected']:
             return "table-secondary" if self.is_old(now_utc) else "table-warning"
-        if self.action in ['chatTimeout']:
+        if self.action in ['deletePost', 'chatTimeout']:
             return "table-secondary" if self.is_old(now_utc) else "table-success"
         if self.action in ['permissions', 'setTitle', 'appealPost', 'setKidMode',
                            'unengine', 'unbooster', 'untroll', 'unalt', 'reopenAccount']:
             return "table-info"
         return self.get_date_class(now_utc)
+
+    def is_timeout(self):
+        return self.action == 'chatTimeout'
+
+    def is_comm_warning(self):
+        return self.action == 'modMessage' and (
+            self.details.startswith("Warning: Accusations") or self.details.startswith("Warning: Offensive") or
+            self.details.startswith("Warning: Spam") or self.details.startswith("Warning: Chat") or
+            self.details.startswith("Warning: Advertisements") or self.details.startswith("Warning: Team") or
+            self.details.startswith("Warning: Excessive"))
 
 
 def warn_user(username, subject):

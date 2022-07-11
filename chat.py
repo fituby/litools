@@ -68,6 +68,8 @@ class ChatAnalysis:
             self.to_read_notes = True
         self.last_mod_log_error = None
         self.last_notes_error = None
+        self.selected_user_num_recent_timeouts = 0
+        self.selected_user_num_recent_comm_warnings = 0
 
     def wait_api(self):
         now = datetime.now()
@@ -299,7 +301,7 @@ class ChatAnalysis:
                     self.api_timeout(combined_msg, reason, True)
                     now_utc = datetime.now(tz=tz.tzutc())
                     tournament = self.tournaments[self.tournament_messages[msg_id]]
-                    tournament.process_frequent_data(now_utc, self.reset_multi_messages)
+                    tournament.update_reports(now_utc, self.reset_multi_messages)
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -353,22 +355,35 @@ class ChatAnalysis:
             if not msg:
                 return
             user = UserData(msg.username)
-            now = datetime.now()
+            now_utc = datetime.now(tz=tz.tzutc())
             if self.to_read_mod_log and (self.last_mod_log_error is None
-                                         or now > self.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
+                                         or now_utc > self.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
+                self.selected_user_num_recent_timeouts = 0
+                self.selected_user_num_recent_comm_warnings = 0
                 mod_log_data = load_mod_log(msg.username)
                 if mod_log_data is None:
-                    self.last_mod_log_error = now
+                    self.last_mod_log_error = now_utc
                 else:
-                    user.mod_log, _ = get_mod_log(mod_log_data, ModActionType.Chat)
+                    user.mod_log, actions = get_mod_log(mod_log_data, ModActionType.Chat)
+                    time_last_comm_warning = None
+                    for action in actions:
+                        if action.is_comm_warning() and not action.is_old(now_utc):
+                            self.selected_user_num_recent_comm_warnings += 1
+                            dt = action.get_datetime()
+                            if time_last_comm_warning is None or dt > time_last_comm_warning:
+                                time_last_comm_warning = dt
+                    for action in actions:
+                        if action.is_timeout() and not action.is_old(now_utc) and \
+                                (time_last_comm_warning is None or action.get_datetime() > time_last_comm_warning):
+                            self.selected_user_num_recent_timeouts += 1
                     self.last_mod_log_error = None
             else:
                 mod_log_data = None
             if self.to_read_notes and (self.last_notes_error is None
-                                       or now > self.last_notes_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
+                                       or now_utc > self.last_notes_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
                 user.notes = get_notes(msg.username, mod_log_data)
                 if user.notes is None:
-                    self.last_notes_error = now
+                    self.last_notes_error = now_utc
                     user.notes = ""
                 else:
                     self.last_notes_error = None
@@ -400,9 +415,19 @@ class ChatAnalysis:
         def create_output(info, tournament, user_data, filtered_info=None):
             data = {'selected-messages': info, 'filtered-messages': filtered_info or info, 'selected-tournament': tournament}
             if user_data:
+                user_info = user_data.user.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES)
+                add_info = ""
+                if self.selected_user_num_recent_comm_warnings > 0:
+                    add_info = f'<span class="text-danger"><b>{self.selected_user_num_recent_comm_warnings}</b> ' \
+                               f'comm warning{"" if self.selected_user_num_recent_comm_warnings == 1 else "s"}</span>'
+                if self.selected_user_num_recent_timeouts > 0:
+                    add_info = f'{add_info}{" + " if add_info else ""}<span class="text-warning">' \
+                               f'<b>{self.selected_user_num_recent_timeouts}</b> ' \
+                               f'timeout{"" if self.selected_user_num_recent_timeouts == 1 else "s"}</span>'
+                if add_info:
+                    user_info = f'{user_info}<div>{add_info}</div>'
                 data.update({'selected-user': user_data.user.name, 'user-profile': user_data.user.get_profile(),
-                             'user-info': user_data.user.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES),
-                             'mod-notes': user_data.notes, 'mod-log': user_data.mod_log})
+                             'user-info': user_info, 'mod-notes': user_data.notes, 'mod-log': user_data.mod_log})
             else:
                 data.update({'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': ""})
             return data
