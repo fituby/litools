@@ -365,17 +365,24 @@ class ChatAnalysis:
                     self.last_mod_log_error = now_utc
                 else:
                     user.mod_log, actions = get_mod_log(mod_log_data, ModActionType.Chat)
+                    time_last_SB = None
+                    for action in actions:
+                        if action.is_SB() and (time_last_SB is None or action.get_datetime() > time_last_SB):
+                            time_last_SB = action.get_datetime()
                     time_last_comm_warning = None
                     for action in actions:
                         if action.is_comm_warning() and not action.is_old(now_utc):
-                            self.selected_user_num_recent_comm_warnings += 1
                             dt = action.get_datetime()
-                            if time_last_comm_warning is None or dt > time_last_comm_warning:
-                                time_last_comm_warning = dt
+                            if time_last_SB is None or dt > time_last_SB:
+                                self.selected_user_num_recent_comm_warnings += 1
+                                if time_last_comm_warning is None or dt > time_last_comm_warning:
+                                    time_last_comm_warning = dt
                     for action in actions:
-                        if action.is_timeout() and not action.is_old(now_utc) and \
-                                (time_last_comm_warning is None or action.get_datetime() > time_last_comm_warning):
-                            self.selected_user_num_recent_timeouts += 1
+                        if action.is_timeout() and not action.is_old(now_utc):
+                            dt = action.get_datetime()
+                            if (time_last_comm_warning is None or dt > time_last_comm_warning) and \
+                               (time_last_SB is None or dt > time_last_SB):
+                                self.selected_user_num_recent_timeouts += 1
                     self.last_mod_log_error = None
             else:
                 mod_log_data = None
@@ -418,10 +425,12 @@ class ChatAnalysis:
                 user_info = user_data.user.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES)
                 add_info = ""
                 if self.selected_user_num_recent_comm_warnings > 0:
-                    add_info = f'<span class="text-danger"><b>{self.selected_user_num_recent_comm_warnings}</b> ' \
+                    text_theme = "text-danger" if self.selected_user_num_recent_comm_warnings > 1 else "text-warning"
+                    add_info = f'<span class="{text_theme}"><b>{self.selected_user_num_recent_comm_warnings}</b> ' \
                                f'comm warning{"" if self.selected_user_num_recent_comm_warnings == 1 else "s"}</span>'
                 if self.selected_user_num_recent_timeouts > 0:
-                    add_info = f'{add_info}{" + " if add_info else ""}<span class="text-warning">' \
+                    text_theme = "text-danger" if self.selected_user_num_recent_timeouts >= 5 else "text-warning"
+                    add_info = f'{add_info}{" + " if add_info else ""}<span class="{text_theme}">' \
                                f'<b>{self.selected_user_num_recent_timeouts}</b> ' \
                                f'timeout{"" if self.selected_user_num_recent_timeouts == 1 else "s"}</span>'
                 if add_info:

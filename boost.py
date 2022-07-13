@@ -1,6 +1,6 @@
 import requests
 import statistics
-from datetime import datetime, timedelta
+from datetime import datetime
 from dateutil import tz
 import time
 import traceback
@@ -8,7 +8,7 @@ from collections import defaultdict
 import math
 from elements import get_token, get_user, get_ndjson, shorten, deltaseconds
 from elements import get_notes, add_note, load_mod_log, get_mod_log
-from elements import ModActionType, WarningStats, User
+from elements import ModActionType, WarningStats, User, Games
 from elements import warn_sandbagging, warn_boosting, mark_booster, decode_string
 
 
@@ -40,7 +40,7 @@ MIN_NUM_TOURNEY_GAMES = 4
 MAX_LEN_TOURNEY_NAME = 22
 API_TOURNEY_DELAY = 0.5  # [s]
 BOOST_RING_TOOL = b'iSfVR3ICd3lHqSQf2ucEkLvyvCf0'
-STATUSES_TO_DISCARD = ["created", "started", "aborted", "unknownFinish", "draw", "cheat"]
+STATUSES_TO_DISCARD_BOOST = ["created", "started", "aborted", "unknownFinish", "draw", "cheat"]
 PERCENT_EXTRA_GAMES_TO_DOWNLOAD = 10
 
 
@@ -515,72 +515,13 @@ class UserTournament:
         return row
 
 
-class Games:
+class BoostGames(Games):
     def __init__(self, user_id, max_num_games):
-        self.user_id = user_id
-        self.games = []
+        super().__init__(user_id, max_num_games, 182, STATUSES_TO_DISCARD_BOOST, PERCENT_EXTRA_GAMES_TO_DOWNLOAD)
         self.arena_tournaments = {}
         self.swiss_tournaments = {}
         self.median_rating = {}
         self.all_user_ratings = {}
-        self.since: int = None
-        self.until: datetime = None
-        self.max_num_games: int = max_num_games
-
-    def download(self, since=None, before=None):
-        now_utc = datetime.now(tz=tz.tzutc())
-        self.until = None
-        if before:
-            try:
-                self.until = datetime.strptime(before, '%Y-%m-%dT%H:%M').replace(tzinfo=tz.tzutc())
-            except Exception as exception:
-                before = None
-                traceback.print_exception(type(exception), exception, exception.__traceback__)
-        if before:
-            str_until = f"&until={int(self.until.timestamp() * 1000)}"
-        else:
-            str_until = ""
-            self.until = now_utc
-        ts_6months_ago = int((self.until - timedelta(days=182)).timestamp() * 1000)
-        if since is None or (self.until != now_utc and since >= self.until):
-            since = ts_6months_ago
-        else:
-            since = max(ts_6months_ago, int(since.timestamp() * 1000))
-        max_num_games = int(round(self.max_num_games * (1 + PERCENT_EXTRA_GAMES_TO_DOWNLOAD / 100)))
-        url = f"https://lichess.org/api/games/user/{self.user_id}?rated=true&finished=true&max={max_num_games}" \
-              f"&since={since}{str_until}"
-        self.since = None if since == ts_6months_ago else since
-        games = get_ndjson(url)
-        if len(games) > self.max_num_games:
-            num_to_delete = len(games) - self.max_num_games
-            self.games = []
-            for game in games:
-                if num_to_delete > 0 and (game['status'] in STATUSES_TO_DISCARD):
-                    num_to_delete -= 1
-                else:
-                    self.games.append(game)
-            if len(self.games) > self.max_num_games:
-                self.games = self.games[:self.max_num_games]
-        else:
-            self.games = games
-
-    def get_num(self):
-        str_s = "" if len(self.games) == 1 else "s"
-        str_num = f'<abbr title="{len(self.games)} latest game{str_s} analyzed ({self.max_num_games} requested)" ' \
-                  f'style="text-decoration:none;"><b>{len(self.games)} game{str_s}</b></abbr>'
-        first_createdAt: datetime = None
-        if self.games:
-            first_createdAt = datetime.fromtimestamp(self.games[-1]['createdAt'] // 1000, tz=tz.tzutc())
-        if len(self.games) > 1:
-            last_createdAt = datetime.fromtimestamp(self.games[0]['createdAt'] // 1000, tz=tz.tzutc())
-            num_days = (last_createdAt - first_createdAt).days
-            str_num = f'{str_num} for <b>{num_days} day{"" if num_days == 1 else "s"}</b>'
-        if self.since:
-            since = datetime.fromtimestamp(self.since // 1000, tz=tz.tzutc())
-            str_num = f'{str_num} from <abbr title="Date/Time of the last manual warning">{since:%Y-%m-%d %H:%M} UTC</abbr>'
-        elif self.games:
-            str_num = f'{str_num} from {first_createdAt:%Y-%m-%d %H:%M} UTC'
-        return f'<div class="mb-3">{str_num}</div>'
 
     def analyse(self, is_sandbagging=True):
         analyses = []
@@ -602,7 +543,7 @@ class Games:
                 if not game['rated']:
                     raise Exception("Error games: not a rated game")
                 status = game['status']
-                if status not in STATUSES_TO_DISCARD:
+                if status not in STATUSES_TO_DISCARD_BOOST:
                     black_id = game['players']['black']['user']['id']
                     white_id = game['players']['white']['user']['id']
                     if white_id == self.user_id:
@@ -698,7 +639,7 @@ class Boost:
         self.errors = []
         self.variants = []
         self.storm = Storm()
-        self.games = Games(self.user.id, num_games)
+        self.games = BoostGames(self.user.id, num_games)
         self.sandbagging = []
         self.boosting = []
         self.tournaments = []

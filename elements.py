@@ -1,6 +1,6 @@
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import tz
 from dateutil.relativedelta import relativedelta
 from enum import IntEnum, Enum
@@ -22,6 +22,7 @@ log_file: str = None
 port: int = 5000
 embed_lichess = False
 
+STATUSES_TO_DISCARD = ["created", "started", "aborted", "unknownFinish", "cheat"]
 
 STYLE_WORD_BREAK = "word-break:break-word;"  # "word-break:break-all;"
 re_link = re.compile(r'\bhttps?:\/\/(?:www\.)?[-_a-zA-Z0-9]*\.?lichess\.(?:ovh|org)\/[-a-zA-Z0-9@:%&\?\$\.,_\+~#=\/]+\b', re.IGNORECASE)
@@ -323,6 +324,75 @@ def get_user(username):
         return None, str(exception)
     except:
         return None, "ERROR"
+
+
+class Games:
+    def __init__(self, user_id, max_num_games, max_num_days, statuses_to_discard,
+                 percent_extra_games_to_download=0, to_download_moves=True):
+        self.user_id = user_id
+        self.games = []
+        self.since: int = None
+        self.until: datetime = None
+        self.max_num_games: int = max_num_games
+        self.max_num_days = max_num_days
+        self.percent_extra_games_to_download = percent_extra_games_to_download
+        self.to_download_moves = to_download_moves
+
+    def download(self, since=None, before=None):
+        now_utc = datetime.now(tz=tz.tzutc())
+        self.until = None
+        if before:
+            try:
+                self.until = datetime.strptime(before, '%Y-%m-%dT%H:%M').replace(tzinfo=tz.tzutc())
+            except Exception as exception:
+                before = None
+                traceback.print_exception(type(exception), exception, exception.__traceback__)
+        if before:
+            str_until = f"&until={int(self.until.timestamp() * 1000)}"
+        else:
+            str_until = ""
+            self.until = now_utc
+        ts_Xmonths_ago = int((self.until - timedelta(days=self.max_num_days)).timestamp() * 1000)
+        if since is None or (self.until != now_utc and since >= self.until):
+            since = ts_Xmonths_ago
+        else:
+            since = max(ts_Xmonths_ago, int(since.timestamp() * 1000))
+        max_num_games = int(round(self.max_num_games * (1 + self.percent_extra_games_to_download / 100)))
+        moves = "" if self.to_download_moves else "&moves=false"
+        url = f"https://lichess.org/api/games/user/{self.user_id}?rated=true&finished=true&max={max_num_games}" \
+              f"{moves}&since={since}{str_until}"
+        self.since = None if since == ts_Xmonths_ago else since
+        games = get_ndjson(url)
+        if len(games) > self.max_num_games:
+            num_to_delete = len(games) - self.max_num_games
+            self.games = []
+            for game in games:
+                if num_to_delete > 0 and (game['status'] in STATUSES_TO_DISCARD):
+                    num_to_delete -= 1
+                else:
+                    self.games.append(game)
+            if len(self.games) > self.max_num_games:
+                self.games = self.games[:self.max_num_games]
+        else:
+            self.games = games
+
+    def get_num(self):
+        str_s = "" if len(self.games) == 1 else "s"
+        str_num = f'<abbr title="{len(self.games)} latest game{str_s} analyzed ({self.max_num_games} requested)" ' \
+                  f'style="text-decoration:none;"><b>{len(self.games)} game{str_s}</b></abbr>'
+        first_createdAt: datetime = None
+        if self.games:
+            first_createdAt = datetime.fromtimestamp(self.games[-1]['createdAt'] // 1000, tz=tz.tzutc())
+        if len(self.games) > 1:
+            last_createdAt = datetime.fromtimestamp(self.games[0]['createdAt'] // 1000, tz=tz.tzutc())
+            num_days = (last_createdAt - first_createdAt).days
+            str_num = f'{str_num} for <b>{num_days} day{"" if num_days == 1 else "s"}</b>'
+        if self.since:
+            since = datetime.fromtimestamp(self.since // 1000, tz=tz.tzutc())
+            str_num = f'{str_num} from <abbr title="Date/Time of the last manual warning">{since:%Y-%m-%d %H:%M} UTC</abbr>'
+        elif self.games:
+            str_num = f'{str_num} from {first_createdAt:%Y-%m-%d %H:%M} UTC'
+        return f'<div class="mb-3">{str_num}</div>'
 
 
 def get_ndjson(url, Accept="application/x-ndjson"):
@@ -835,6 +905,9 @@ class ChatModAction(ModAction):
             self.details.startswith("Warning: Spam") or self.details.startswith("Warning: Chat") or
             self.details.startswith("Warning: Advertisements") or self.details.startswith("Warning: Team") or
             self.details.startswith("Warning: Excessive"))
+
+    def is_SB(self):
+        return self.action == 'troll'
 
 
 def warn_user(username, subject):
