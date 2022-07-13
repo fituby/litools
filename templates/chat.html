@@ -14,27 +14,27 @@
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
                 <p class="pr-2 m-0">Mode</p>
                 <div class="btn-group btn-group-toggle">
-                  <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
-                  <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
-                  <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
+                  <button id="mode_0" class="btn btn-secondary py-1" onclick="update_mode(0);">Auto</button>
+                  <button id="mode_1" class="btn btn-secondary py-1" onclick="update_mode(1);">Dark</button>
+                  <button id="mode_2" class="btn btn-secondary py-1" onclick="update_mode(2);">Light</button>
                 </div>
               </div>
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
                 <p class="pr-2 m-0">Update</p>
                 <div class="btn-group btn-group-toggle">
-                  <button id="update_frequency_1" class="btn btn-secondary" onclick="update_frequency(1);">Fast</button>
-                  <button id="update_frequency_2" class="btn btn-secondary" onclick="update_frequency(2);">Medium</button>
-                  <button id="update_frequency_3" class="btn btn-secondary" onclick="update_frequency(3);">Slow</button>
-                  <button id="update_frequency_0" class="btn btn-secondary" onclick="update_frequency(0);">Never</button>
+                  <button id="update_frequency_1" class="btn btn-secondary py-1" onclick="update_frequency(1);">Fast</button>
+                  <button id="update_frequency_2" class="btn btn-secondary py-1" onclick="update_frequency(2);">Medium</button>
+                  <button id="update_frequency_3" class="btn btn-secondary py-1" onclick="update_frequency(3);">Slow</button>
+                  <button id="update_frequency_0" class="btn btn-secondary py-1" onclick="update_frequency(0);">Never</button>
                 </div>
               </div>
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
         <span class="pr-2 m-0">Filter scores</span>
         <div class="btn-group btn-group-toggle">
-          <button id="filter_score_0" class="btn btn-secondary" type="button" onclick="filter_score(0);">All</button>
-          <button id="filter_score_20" class="btn btn-secondary" type="button" onclick="filter_score(20);">20+</button>
-          <button id="filter_score_40" class="btn btn-warning" type="button" onclick="filter_score(40);">40+</button>
-          <button id="filter_score_60" class="btn btn-danger" type="button" onclick="filter_score(60);">60+</button>
+          <button id="filter_score_0" class="btn btn-secondary py-1" type="button" onclick="filter_score(0);">All</button>
+          <button id="filter_score_20" class="btn btn-secondary py-1" type="button" onclick="filter_score(20);">20+</button>
+          <button id="filter_score_40" class="btn btn-warning py-1" type="button" onclick="filter_score(40);">40+</button>
+          <button id="filter_score_60" class="btn btn-danger py-1" type="button" onclick="filter_score(60);">60+</button>
         </div>
       </div>
             </div>
@@ -46,10 +46,10 @@
           <div class="d-flex flex-row justify-content-between align-items-baseline p-0" id="set_tournaments" style="box-shadow: none;">
             <p class="pr-2 m-0">Chats</p>
             <div class="btn-group" role="group">
-              <button id="tab_tournaments" class="btn btn-secondary px-2" type="button" data-toggle="collapse" data-target="#collapse_tournaments" aria-expanded="false" aria-controls="collapse_tournaments" onclick="check_collapse('tournaments');">Monitored</button>
-              <button id="tab_started" class="btn btn-secondary px-2" type="button" data-toggle="collapse" data-target="#collapse_started" aria-expanded="false" aria-controls="collapse_started" onclick="check_collapse('started');">Ongoing</button>
-              <button id="tab_created" class="btn btn-secondary px-2" type="button" data-toggle="collapse" data-target="#collapse_created" aria-expanded="false" aria-controls="collapse_created" onclick="check_collapse('created');">Created</button>
-              <button id="tab_finished" class="btn btn-secondary px-2" type="button" data-toggle="collapse" data-target="#collapse_finished" aria-expanded="false" aria-controls="collapse_finished" onclick="check_collapse('finished');">Finished</button>
+              <button id="tab_tournaments" class="btn btn-secondary px-2 py-1" type="button" data-toggle="collapse" data-target="#collapse_tournaments" aria-expanded="false" aria-controls="collapse_tournaments" onclick="check_collapse('tournaments');">Monitored</button>
+              <button id="tab_started" class="btn btn-secondary px-2 py-1" type="button" data-toggle="collapse" data-target="#collapse_started" aria-expanded="false" aria-controls="collapse_started" onclick="check_collapse('started');">Ongoing</button>
+              <button id="tab_created" class="btn btn-secondary px-2 py-1" type="button" data-toggle="collapse" data-target="#collapse_created" aria-expanded="false" aria-controls="collapse_created" onclick="check_collapse('created');">Created</button>
+              <button id="tab_finished" class="btn btn-secondary px-2 py-1" type="button" data-toggle="collapse" data-target="#collapse_finished" aria-expanded="false" aria-controls="collapse_finished" onclick="check_collapse('finished');">Finished</button>
             </div>
           </div>
           <div style="max-height:50vh;overflow-y:auto;">
@@ -180,6 +180,7 @@
   var state_reports = 0;
   var hidden_msgs = new Set();
   var last_update = new Date().getTime();
+  var is_reviewed = false;
   function is_clickable() {
     return (new Date().getTime()) >= last_update + 1000;
   }
@@ -198,7 +199,6 @@
           $.ajax({url: `/chat/process/`, type: "post"})
             .done(function(data_chats, textStatus, jqXHR) {
               console.log('refresh:done');
-              $("#chat_downloading").removeClass("d-flex").addClass("d-none");
               is_new = update_data(data_chats);
               if (is_new)
                 last_update = new Date().getTime();
@@ -225,10 +225,13 @@
       $("#dubious_messages").css("display","block");
       $("#multiline_messages").css("display","block");
       $("#clean_messages").removeClass("d-flex").addClass("d-none");
+      is_reviewed = true;
+      $("#chat_downloading").removeClass("d-flex").addClass("d-none");
     } else {
       $("#dubious_messages").css("display","none");
       $("#multiline_messages").css("display","none");
-      $("#clean_messages").removeClass("d-none").addClass("d-flex");
+      if (is_reviewed)
+        $("#clean_messages").removeClass("d-none").addClass("d-flex");
     }
     $('#chat_reports').html(data_chats["reports"]);
     $('#multiline_chat_reports').html(data_chats["multiline-reports"]);
