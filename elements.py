@@ -272,13 +272,15 @@ class User:
         return f'<div class="d-flex justify-content-between align-items-baseline mt-3">' \
                f'{self.get_name_info(limits_created_days_ago)}{self.get_num_games(limits_num_played_games)}</div>'
 
+    def get_createdAt(self):
+        return datetime.fromtimestamp(self.createdAt // 1000, tz=tz.tzutc()) if self.createdAt else None
+
     def get_created(self, limits_created_days_ago):
         if not self.createdAt:
             return ""
         now_utc = datetime.now(tz=tz.tzutc())
         created_ago = timestamp_to_ago(self.createdAt, now_utc)
-        t = datetime.fromtimestamp(self.createdAt // 1000, tz=tz.tzutc())
-        days = (now_utc - t).days
+        days = (now_utc - self.get_createdAt()).days
         class_created = ' class="text-danger"' if days <= limits_created_days_ago[0] \
             else ' class="text-warning"' if days <= limits_created_days_ago[1] else ""
         return f'<abbr{class_created} title="Account created {created_ago}" style="text-decoration:none;">' \
@@ -301,12 +303,12 @@ class User:
             self.profile.set(user.get('profile', {}))
 
 
-class UserData:
+class UserData(User):
     def __init__(self, username):
+        super().__init__(username)
         user_data, api_error = get_user(username)
-        self.user = User(username)
         if user_data and not api_error:
-            self.user.set(user_data)
+            self.set(user_data)
         self.mod_log = ""
         self.notes = ""
 
@@ -498,6 +500,16 @@ def shorten(original_name, max_len):
     else:
         name = "?"
     return name
+
+
+def get_tc(game):
+    try:
+        t1 = int(game['clock']['initial'])
+        t2 = int(game['clock']['increment'])
+        str_t1 = "1/4" if t1 == 15 else "1/2" if t1 == 30 else "3/4" if t1 == 45 else "1.5" if t1 == 90 else str(t1 // 60)
+        return f"{str_t1}+{t2}"
+    except:
+        return "Unknown"
 
 
 class Reason(IntEnum):

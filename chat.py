@@ -422,7 +422,7 @@ class ChatAnalysis:
         def create_output(info, tournament, user_data, filtered_info=None):
             data = {'selected-messages': info, 'filtered-messages': filtered_info or info, 'selected-tournament': tournament}
             if user_data:
-                user_info = user_data.user.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES)
+                user_info = user_data.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES)
                 add_info = ""
                 if self.selected_user_num_recent_comm_warnings > 0:
                     text_theme = "text-danger" if self.selected_user_num_recent_comm_warnings > 1 else "text-warning"
@@ -435,7 +435,7 @@ class ChatAnalysis:
                                f'timeout{"" if self.selected_user_num_recent_timeouts == 1 else "s"}</span>'
                 if add_info:
                     user_info = f'{user_info}<div>{add_info}</div>'
-                data.update({'selected-user': user_data.user.name, 'user-profile': user_data.user.get_profile(),
+                data.update({'selected-user': user_data.name, 'user-profile': user_data.get_profile(),
                              'user-info': user_info, 'mod-notes': user_data.notes, 'mod-log': user_data.mod_log})
             else:
                 data.update({'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': ""})

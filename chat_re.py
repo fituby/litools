@@ -193,7 +193,7 @@ list_res = {
        reason=Reason.Offensive, info="Critical: cancer"),
     Re(r'(ho?pe ((yo)?[uy](r (famil[yi]|m[ou]m|mother))?( and )*)+ (die|burn)s?|((die|burn)s? irl))', 90,
        reason=Reason.Offensive, ban=-1, info="Critical: Hope you die"),
-    Re(r'kill ((yo)?[uy]r ?(self|famil[yi]|m[ou]m|mother)( and )?)+', 90,
+    Re(r'^kill ((yo)?[uy]r ?(self|famil[yi]|m[ou]m|mother)( and )?)+', 90, is_separate_word=False,
        reason=Reason.Offensive, ban=-1, info="Critical: Kill yourself"),
     Re(r'(hang|neck) ((yo)?[uy]r ?(self|family)( and )?)+', 90,
        reason=Reason.Offensive, ban=-2, info="Critical: Hang yourself"),
@@ -623,7 +623,7 @@ list_res = {
        reason=Reason.Offensive, info="Ru: придурок"),
     Re(r'[сc][уy][кk](а|a|ин?ы?|е|у|ам)', 40,  # added 'н?ы?'
        ban=-3, reason=Reason.Offensive, info="Ru: сука"),
-    Re(r'(с|з|по)дохн(и|ите?|ишь?|ут)', 60,  # added
+    Re(r'(с|з|по)дох(ни|ните?|нишь?|нут|)', 60,  # added
        ban=-3, reason=Reason.Offensive, info="Ru: сдохни"),
     Re(r'сос(и|ите|унок|унку|унке|унков|унками?|унках|унка)', 40,  # added
        reason=Reason.Offensive, info="Ru: соси"),
