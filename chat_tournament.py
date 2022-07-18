@@ -7,7 +7,7 @@ from fake_useragent import UserAgent
 from elements import Reason, TournType, deltaseconds, deltaperiod, shorten, add_timeout_msg, Error500
 from chat_re import ReUser
 from chat_message import Message
-from chat_consts import *
+from consts import *
 
 
 class Tournament:

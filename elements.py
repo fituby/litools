@@ -14,6 +14,7 @@ import math
 import base64
 import random
 import struct
+from consts import *
 
 
 config_file = "config.yml"
@@ -21,8 +22,6 @@ token: str = None
 log_file: str = None
 port: int = 5000
 embed_lichess = False
-
-STATUSES_TO_DISCARD = ["created", "started", "aborted", "unknownFinish", "cheat"]
 
 STYLE_WORD_BREAK = "word-break:break-word;"  # "word-break:break-all;"
 re_link = re.compile(r'\bhttps?:\/\/(?:www\.)?[-_a-zA-Z0-9]*\.?lichess\.(?:ovh|org)\/[-a-zA-Z0-9@:%&\?\$\.,_\+~#=\/]+\b', re.IGNORECASE)
@@ -203,7 +202,7 @@ class User:
     def is_titled(self):
         return self.title and self.title != "BOT"
 
-    def get_name(self):
+    def get_name(self, postfix=""):
         if self.title:
             if self.title == "BOT":
                 title = f'<span style="color:#cd63d9">{self.title}</span> '
@@ -211,7 +210,7 @@ class User:
                 title = f'<span class="text-warning">{self.title}</span> '
         else:
             title = ""
-        return f'{title}<a href="https://lichess.org/@/{self.id}" target="_blank">{self.name}</a>'
+        return f'{title}<a href="https://lichess.org/@/{self.id}{postfix}" target="_blank">{self.name}</a>'
 
     def get_disabled(self):
         if not self.disabled:
@@ -306,9 +305,9 @@ class User:
 class UserData(User):
     def __init__(self, username):
         super().__init__(username)
-        user_data, api_error = get_user(username)
-        if user_data and not api_error:
-            self.set(user_data)
+        self.data, api_error = get_user(username)
+        if self.data and not api_error:
+            self.set(self.data)
         self.mod_log = ""
         self.notes = ""
 
@@ -328,6 +327,183 @@ def get_user(username):
         return None, "ERROR"
 
 
+class VariantPlayed:
+    def __init__(self, variant_name, perf, add_note_links=False):
+        self.name = variant_name
+        self.rd = perf.get('rd', 0)
+        self.prov = perf.get('prov', False)
+        self.rating = perf.get('rating', 0)
+        self.num_games = perf.get('games', 0)
+        self.progress = perf.get('prog', 0)
+        self.min_rating: int = None
+        self.max_rating: int = None
+        self.stable_rating_range = []  # [self.rating, self.rating]
+        # ^  pre-initialization might have been needed for check_variants(), see below
+        self.detailed_progress = []
+        self.num_recent_games = 0
+        self.add_note_links = add_note_links
+
+    def get_rating(self):
+        if self.rating == 0:
+            rating = "?"
+        else:
+            rating = str(self.rating)
+            if self.prov:
+                if self.num_recent_games == 0:
+                    rating += '?'
+                else:
+                    rating += '<span class="text-warning">?</span>'
+            progress = f"&plusmn;{self.rd} " if self.rd > 60 else ""
+            class_rating = ""
+            if abs(self.progress) > BOOST_SUS_PROGRESS:
+                progress = f"{progress}progress: +{self.progress}" if self.progress > 0 \
+                    else f"{progress}progress: &minus;{abs(self.progress)}"
+                class_rating = "" if self.num_recent_games == 0 else ' class="text-danger" style="text-decoration:none;"' \
+                    if self.num_games >= BOOST_SUS_NUM_GAMES else ' class="text-warning" style="text-decoration:none;"'
+            if progress:
+                rating = f'<abbr title="{progress}"{class_rating}>{rating}</abbr>'
+        return rating
+
+    def get_info(self):
+        if self.num_games == 0:
+            return ""
+        if self.name:
+            name = f"{self.name[0].upper()}{self.name[1:]}"
+        else:
+            name = "Unknown Variant"
+        if abs(self.progress) > BOOST_SUS_PROGRESS:
+            progress = f"+{self.progress}" if self.progress > 0 else f"&minus;{abs(self.progress)}"
+            prog = f'<span class="text-danger px-1">{progress}</span>'
+        else:
+            prog = ""
+        return f'<div><span class="text-success">{name}</span>: {self.get_rating()} ' \
+               f'over {self.num_games:,} game{"" if self.num_games == 1 else "s"}{prog}</div>'
+
+    def get_table_row(self):
+        if self.num_games == 0:
+            return ""
+        if self.name:
+            name = f"{self.name[0].upper()}{self.name[1:]}"
+        else:
+            name = "Unknown Variant"
+        if self.min_rating is None or self.max_rating is None or self.num_recent_games <= 1:
+            str_range = ""
+        else:
+            rating_diff = self.stable_rating_range[1] - self.stable_rating_range[0]
+            color = ' class="text-danger"' if rating_diff >= BOOST_SUS_RATING_DIFF[1] else ' class="text-warning"' \
+                if rating_diff >= BOOST_SUS_RATING_DIFF[0] else ""
+            str_detailed_progress = "&Delta;{}: {}".format(rating_diff, " &rarr; ".join(reversed(self.detailed_progress)))
+            if rating_diff == 0:
+                str_range = f"{self.stable_rating_range[0]}?"
+            else:
+                str_range = f'<span{color}>{self.stable_rating_range[0]}</span>&hellip;' \
+                            f'<span{color}>{self.stable_rating_range[1]}</span>'
+            is_min_stable = self.stable_rating_range[0] == self.min_rating
+            is_max_stable = self.stable_rating_range[1] == self.max_rating
+            if not is_min_stable or not is_max_stable:
+                str_detailed_progress = f'{self.min_rating}{"" if is_min_stable else "?"}&hellip;' \
+                                        f'{self.max_rating}{"" if is_max_stable else "?"} {str_detailed_progress}'
+            str_range = f'<abbr title="{str_detailed_progress}" style="text-decoration:none;">{str_range}</abbr>'
+        str_num_recent_games = "&ndash;" if self.num_recent_games == 0 else f"{self.num_recent_games:,}"
+        row_class = ' class="text-muted"' if self.num_recent_games == 0 else ""
+        perf_link = ""
+        if self.num_recent_games > 0 and self.add_note_links:
+            link = f'https://lichess.org/@/{{username}}/perf/{self.name}'
+            perf_link = f'<a href="{link}" target="_blank">open</a>'
+            name = f'<button class="btn btn-primary w-100 py-0" ' \
+                   f'onclick="add_to_notes(this)" data-selection=\'{link}\'>{name}</button>'
+        row = f'''<tr{row_class}>
+                    <td class="text-left">{name}</td>
+                    <td class="text-left">{perf_link}</td>
+                    <td class="text-left">{self.get_rating()}</td>
+                    <td class="text-center">{str_num_recent_games}</td>
+                    <td class="text-center">{str_range}</td>
+                    <td class="text-right">{self.num_games:,}</td>
+                  </tr>'''
+        return row
+
+
+class Storm:
+    def __init__(self, perfs=None):
+        perf = perfs.get('storm', {}) if perfs else {}
+        self.runs = perf.get('runs', 0)
+        self.score = perf.get('score', 0)
+
+    def is_ok(self):
+        return self.runs > 0 and self.score > 0
+
+    def get_info(self):
+        if not self.is_ok():
+            return ""
+        return f'<div class="mb-3 px-2">Strom: {self.score} over {self.runs} runs</div>'
+
+
+class Variants:
+    def __init__(self, add_note_links=False):
+        self.variants = []
+        self.storm = Storm()
+        self.add_note_links = add_note_links
+
+    def set(self, perfs):
+        self.storm = Storm(perfs)
+        for variant_name, perf in perfs.items():
+            if variant_name != "strom":
+                self.variants.append(VariantPlayed(variant_name, perf, self.add_note_links))
+        self.variants.sort(key=lambda variant: (-999999 if variant.name == "puzzle" else 0) + variant.num_games,
+                           reverse=True)
+
+    def get_table(self, num_games):
+        rows = [variant.get_table_row() for variant in self.variants]
+        if not rows:
+            return ""
+        str_games = f'Number of games played among the last ' \
+                    f'{num_games} game{"" if num_games == 1 else "s"} analyzed'
+        table = f'''<div class="column">
+            <table id="variants_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
+              <thead><tr>
+                <th class="text-left" style="cursor:default;">Variant</th>
+                <th></th>
+                <th class="text-left" style="cursor:default;">Rating</th>
+                <th class="text-center" style="cursor:default;"><abbr title="{str_games}" 
+                    style="text-decoration:none;"><i class="fas fa-hashtag"></i></abbr></th>
+                <th class="text-center" style="cursor:default;">Range</th>
+                <th class="text-right" style="cursor:default;"><abbr title="Total number of rated games played" 
+                    style="text-decoration:none;"># games</abbr></th>
+              </tr></thead>
+              {"".join(rows)}
+            </table>
+          </div>'''
+        return f"{table}{self.storm.get_info()}"
+
+    def set_rating_ranges(self, games):
+        for variant, ratings in games.all_user_ratings.items():
+            for v in self.variants:
+                if v.name == variant:
+                    v.min_rating = min(ratings)
+                    v.max_rating = max(ratings)
+                    if len(ratings) <= 10:
+                        v.detailed_progress = [str(rating) for rating in ratings]
+                    else:
+                        step = len(ratings) / 10
+                        v.detailed_progress = [str(ratings[int(round(i * step))]) for i in range(10)]
+                    v.num_recent_games = len(ratings)
+                    num_stable_games = v.num_games - NUM_FIRST_GAMES_TO_EXCLUDE
+                    # Ratings are in reverse order
+                    i_end = min(len(ratings), num_stable_games)
+                    stable_ratings = ratings[:i_end] if i_end > 0 else [ratings[0]]
+                    v.stable_rating_range = [min(stable_ratings), max(stable_ratings)]
+
+    def __iter__(self):
+        return iter(self.variants)
+
+
+def add_variant_rating(ratings, variant, rating):
+    if variant in ratings:
+        ratings[variant].append(rating)
+    else:
+        ratings[variant] = [rating]
+
+
 class Games:
     def __init__(self, user_id, max_num_games, max_num_days, statuses_to_discard,
                  percent_extra_games_to_download=0, to_download_moves=True):
@@ -339,6 +515,8 @@ class Games:
         self.max_num_days = max_num_days
         self.percent_extra_games_to_download = percent_extra_games_to_download
         self.to_download_moves = to_download_moves
+        self.statuses_to_discard = statuses_to_discard
+        self.all_user_ratings = {}
 
     def download(self, since=None, before=None):
         now_utc = datetime.now(tz=tz.tzutc())
@@ -369,7 +547,7 @@ class Games:
             num_to_delete = len(games) - self.max_num_games
             self.games = []
             for game in games:
-                if num_to_delete > 0 and (game['status'] in STATUSES_TO_DISCARD):
+                if num_to_delete > 0 and (game['status'] in self.statuses_to_discard):
                     num_to_delete -= 1
                 else:
                     self.games.append(game)
@@ -377,6 +555,30 @@ class Games:
                 self.games = self.games[:self.max_num_games]
         else:
             self.games = games
+        # Get variant ratings
+        self.all_user_ratings = {}
+        for game in self.games:
+            black_id = game['players']['black']['user']['id']
+            white_id = game['players']['white']['user']['id']
+            if white_id == self.user_id:
+                opp_color = 'black'
+                user_color = 'white'
+            elif black_id == self.user_id:
+                opp_color = 'white'
+                user_color = 'black'
+            else:
+                raise Exception("Error games: no player")
+            variant = game['variant']
+            if variant == "standard":
+                variant = game['speed']
+            user_rating = game['players'][user_color]['rating']
+            add_variant_rating(self.all_user_ratings, variant, user_rating)
+
+    def __iter__(self):
+        return iter(self.games)
+
+    def __len__(self):
+        return len(self.games)
 
     def get_num(self):
         str_s = "" if len(self.games) == 1 else "s"

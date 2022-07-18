@@ -7,154 +7,13 @@ import traceback
 from collections import defaultdict
 import math
 from elements import get_token, get_user, get_ndjson, shorten, deltaseconds
-from elements import get_notes, add_note, load_mod_log, get_mod_log
-from elements import ModActionType, WarningStats, User, Games
+from elements import get_notes, add_note, load_mod_log, get_mod_log, add_variant_rating
+from elements import ModActionType, WarningStats, User, Games, Variants
 from elements import warn_sandbagging, warn_boosting, mark_booster, decode_string
-
-
-BOOST_UPDATE_PERIOD = 5 * 60  # seconds
-
-BOOST_SUS_PROGRESS = 50
-BOOST_SUS_NUM_GAMES = 50
-BOOST_SUS_RATING_DIFF = [150, 300]
-BOOST_NUM_GAMES = [100, 200, 500]
-BOOST_NUM_MOVES = [0, 5, 10, 15]
-BOOST_BAD_GAME_PERCENT = {0: [0.05, 0.10], 5: [0.08, 0.15], 10: [0.10, 0.20], 15: [0.15, 0.33]}
-BOOST_STREAK_TIME = 10 * 60  # interval between games [s]
-BOOST_STREAK_REPORTABLE = 3
-BOOST_NUM_RESIGN_REPORTABLE = 3
-BOOST_NUM_TIMEOUT_REPORTABLE = 3
-BOOST_NUM_OUT_OF_TIME_REPORTABLE = 3
-BOOST_SIGNIFICANT_RATING_DIFF = 150
-BOOST_SUS_STREAK = 3
-BOOST_NUM_PLAYED_GAMES = [100, 250]
-BOOST_CREATED_DAYS_AGO = [30, 60]
-BOOST_ANALYSIS_SCORE = 2
-BOOST_NUM_GAMES_FREQUENT_OPP = 4
-BOOST_PERCENT_FREQUENT_OPP = 0.30
-BOOST_MIN_DECENT_RATING = 1500  # TODO: different for different variants
-NUM_FIRST_GAMES_TO_EXCLUDE = 15
-MAX_NUM_TOURNEY_PLAYERS = 20
-STD_NUM_TOURNEYS = 5
-MIN_NUM_TOURNEY_GAMES = 4
-MAX_LEN_TOURNEY_NAME = 22
-API_TOURNEY_DELAY = 0.5  # [s]
-BOOST_RING_TOOL = b'iSfVR3ICd3lHqSQf2ucEkLvyvCf0'
-STATUSES_TO_DISCARD_BOOST = ["created", "started", "aborted", "unknownFinish", "draw", "cheat"]
-PERCENT_EXTRA_GAMES_TO_DOWNLOAD = 10
+from consts import *
 
 
 boosts = {}
-
-
-class VariantPlayed:
-    def __init__(self, variant_name, perf):
-        self.name = variant_name
-        self.rd = perf.get('rd', 0)
-        self.prov = perf.get('prov', False)
-        self.rating = perf.get('rating', 0)
-        self.num_games = perf.get('games', 0)
-        self.progress = perf.get('prog', 0)
-        self.min_rating: int = None
-        self.max_rating: int = None
-        self.stable_rating_range = []  # [self.rating, self.rating]
-        # ^  pre-initialization might have been needed for check_variants(), see below
-        self.detailed_progress = []
-        self.num_recent_games = 0
-
-    def get_rating(self):
-        if self.rating == 0:
-            rating = "?"
-        else:
-            rating = str(self.rating)
-            if self.prov:
-                if self.num_recent_games == 0:
-                    rating += '?'
-                else:
-                    rating += '<span class="text-warning">?</span>'
-            progress = f"&plusmn;{self.rd} " if self.rd > 60 else ""
-            class_rating = ""
-            if abs(self.progress) > BOOST_SUS_PROGRESS:
-                progress = f"{progress}progress: +{self.progress}" if self.progress > 0 \
-                    else f"{progress}progress: &minus;{abs(self.progress)}"
-                class_rating = "" if self.num_recent_games == 0 else ' class="text-danger" style="text-decoration:none;"' \
-                    if self.num_games >= BOOST_SUS_NUM_GAMES else ' class="text-warning" style="text-decoration:none;"'
-            if progress:
-                rating = f'<abbr title="{progress}"{class_rating}>{rating}</abbr>'
-        return rating
-
-    def get_info(self):
-        if self.num_games == 0:
-            return ""
-        if self.name:
-            name = f"{self.name[0].upper()}{self.name[1:]}"
-        else:
-            name = "Unknown Variant"
-        if abs(self.progress) > BOOST_SUS_PROGRESS:
-            progress = f"+{self.progress}" if self.progress > 0 else f"&minus;{abs(self.progress)}"
-            prog = f'<span class="text-danger px-1">{progress}</span>'
-        else:
-            prog = ""
-        return f'<div><span class="text-success">{name}</span>: {self.get_rating()} ' \
-               f'over {self.num_games:,} game{"" if self.num_games == 1 else "s"}{prog}</div>'
-
-    def get_table_row(self):
-        if self.num_games == 0:
-            return ""
-        if self.name:
-            name = f"{self.name[0].upper()}{self.name[1:]}"
-        else:
-            name = "Unknown Variant"
-        if self.min_rating is None or self.max_rating is None or self.num_recent_games <= 1:
-            str_range = ""
-        else:
-            rating_diff = self.stable_rating_range[1] - self.stable_rating_range[0]
-            color = ' class="text-danger"' if rating_diff >= BOOST_SUS_RATING_DIFF[1] else ' class="text-warning"' \
-                if rating_diff >= BOOST_SUS_RATING_DIFF[0] else ""
-            str_detailed_progress = "&Delta;{}: {}".format(rating_diff, " &rarr; ".join(reversed(self.detailed_progress)))
-            if rating_diff == 0:
-                str_range = f"{self.stable_rating_range[0]}?"
-            else:
-                str_range = f'<span{color}>{self.stable_rating_range[0]}</span>&hellip;' \
-                            f'<span{color}>{self.stable_rating_range[1]}</span>'
-            is_min_stable = self.stable_rating_range[0] == self.min_rating
-            is_max_stable = self.stable_rating_range[1] == self.max_rating
-            if not is_min_stable or not is_max_stable:
-                str_detailed_progress = f'{self.min_rating}{"" if is_min_stable else "?"}&hellip;' \
-                                        f'{self.max_rating}{"" if is_max_stable else "?"} {str_detailed_progress}'
-            str_range = f'<abbr title="{str_detailed_progress}" style="text-decoration:none;">{str_range}</abbr>'
-        str_num_recent_games = "&ndash;" if self.num_recent_games == 0 else f"{self.num_recent_games:,}"
-        row_class = ' class="text-muted"' if self.num_recent_games == 0 else ""
-        perf_link = ""
-        if self.num_recent_games > 0:
-            link = f'https://lichess.org/@/{{username}}/perf/{self.name}'
-            perf_link = f'<a href="{link}" target="_blank">open</a>'
-            name = f'<button class="btn btn-primary w-100 py-0" ' \
-                   f'onclick="add_to_notes(this)" data-selection=\'{link}\'>{name}</button>'
-        row = f'''<tr{row_class}>
-                    <td class="text-left">{name}</td>
-                    <td class="text-left">{perf_link}</td>
-                    <td class="text-left">{self.get_rating()}</td>
-                    <td class="text-center">{str_num_recent_games}</td>
-                    <td class="text-center">{str_range}</td>
-                    <td class="text-right">{self.num_games:,}</td>
-                  </tr>'''
-        return row
-
-
-class Storm:
-    def __init__(self, perfs=None):
-        perf = perfs.get('storm', {}) if perfs else {}
-        self.runs = perf.get('runs', 0)
-        self.score = perf.get('score', 0)
-
-    def is_ok(self):
-        return self.runs > 0 and self.score > 0
-
-    def get_info(self):
-        if not self.is_ok():
-            return ""
-        return f'<div class="mb-3 px-2">Strom: {self.score} over {self.runs} runs</div>'
 
 
 class StatsData:
@@ -521,7 +380,6 @@ class BoostGames(Games):
         self.arena_tournaments = {}
         self.swiss_tournaments = {}
         self.median_rating = {}
-        self.all_user_ratings = {}
 
     def analyse(self, is_sandbagging=True):
         analyses = []
@@ -533,7 +391,6 @@ class BoostGames(Games):
             resign = {}
             timeout = {}
             out_of_time = {}
-            self.all_user_ratings = {}
             streak = {}
             best_streak = {}
             analysis.opponents.clear()
@@ -557,8 +414,6 @@ class BoostGames(Games):
                     variant = game['variant']
                     if variant == "standard":
                         variant = game['speed']
-                    user_rating = game['players'][user_color]['rating']
-                    add_variant_rating(self.all_user_ratings, variant, user_rating)
                     opp_rating = game['players'][opp_color]['rating']
                     add_variant_rating(all_games, variant, opp_rating)
                     if to_process_once:
@@ -637,8 +492,7 @@ class Boost:
         self.user = User(username)
         self.before = before
         self.errors = []
-        self.variants = []
-        self.storm = Storm()
+        self.variants = Variants(add_note_links=True)
         self.games = BoostGames(self.user.id, num_games)
         self.sandbagging = []
         self.boosting = []
@@ -652,29 +506,6 @@ class Boost:
         if Boost.ring_tool is None:
             Boost.ring_tool = decode_string(BOOST_RING_TOOL)  # returns "" (not None) if not available
         self.info_games_played = ""
-
-    def get_variants(self):
-        rows = [variant.get_table_row() for variant in self.variants]
-        if not rows:
-            return ""
-        str_games = f'Number of games played among the last ' \
-                    f'{len(self.games.games)} game{"" if len(self.games.games) == 1 else "s"} analyzed'
-        table = f'''<div class="column">
-            <table id="variants_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
-              <thead><tr>
-                <th class="text-left" style="cursor:default;">Variant</th>
-                <th></th>
-                <th class="text-left" style="cursor:default;">Rating</th>
-                <th class="text-center" style="cursor:default;"><abbr title="{str_games}" 
-                    style="text-decoration:none;"><i class="fas fa-hashtag"></i></abbr></th>
-                <th class="text-center" style="cursor:default;">Range</th>
-                <th class="text-right" style="cursor:default;"><abbr title="Total number of rated games played" 
-                    style="text-decoration:none;"># games</abbr></th>
-              </tr></thead>
-              {"".join(rows).format(username=self.user.name)}
-            </table>
-          </div>'''
-        return f"{table}{self.storm.get_info()}"
 
     def get_errors(self):
         if not self.errors:
@@ -703,9 +534,9 @@ class Boost:
         return f"{main}{num_games}{self.get_errors()}{analysis}{additional_tools}"
 
     def get_info_2(self):
-        variants = self.get_variants()
+        variants = self.variants.get_table(len(self.games))
         if variants:
-            variants = f'<div class="my-3">{variants}</div>'
+            variants = f'<div class="my-3">{variants.format(username=self.user.name)}</div>'
         profile = self.user.get_profile()
         if profile:
             profile = f'<div class="my-3">{profile}</div>'
@@ -728,12 +559,7 @@ class Boost:
             self.errors.append('Account closed')
         else:
             perfs = user.get('perfs', {})
-            self.storm = Storm(perfs)
-            for variant_name, perf in perfs.items():
-                if variant_name != "strom":
-                    self.variants.append(VariantPlayed(variant_name, perf))
-            self.variants.sort(key=lambda variant: (-999999 if variant.name == "puzzle" else 0) + variant.num_games,
-                               reverse=True)
+            self.variants.set(perfs)
         self.update_mod_log()
         self.analyse_games()
 
@@ -745,7 +571,7 @@ class Boost:
                 self.info_games_played = f' played before {self.games.until:%Y-%m-%d %H:%M} UTC'
             else:
                 self.info_games_played = ""
-            if len(self.games.games) != self.games.max_num_games and self.games.since:
+            if len(self.games) != self.games.max_num_games and self.games.since:
                 since = datetime.fromtimestamp(self.games.since // 1000, tz=tz.tzutc())
                 self.info_games_played += ' and' if self.info_games_played else ' played'
                 self.info_games_played += f' since the previous warning on {since:%Y-%m-%d} at {since:%H:%M} UTC'
@@ -754,7 +580,7 @@ class Boost:
             exc = e
         self.sandbagging = self.games.analyse(True)
         self.boosting = self.games.analyse(False)
-        self.set_rating_range()
+        self.variants.set_rating_ranges(self.games)
         for sandbag in self.sandbagging:
             sandbag.check_variants(self.variants)
         if exc:
@@ -806,24 +632,6 @@ class Boost:
             self.last_update_tournaments = now
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-
-    def set_rating_range(self):
-        for variant, ratings in self.games.all_user_ratings.items():
-            for v in self.variants:
-                if v.name == variant:
-                    v.min_rating = min(ratings)
-                    v.max_rating = max(ratings)
-                    if len(ratings) <= 10:
-                        v.detailed_progress = [str(rating) for rating in ratings]
-                    else:
-                        step = len(ratings) / 10
-                        v.detailed_progress = [str(ratings[int(round(i * step))]) for i in range(10)]
-                    v.num_recent_games = len(ratings)
-                    num_stable_games = v.num_games - NUM_FIRST_GAMES_TO_EXCLUDE
-                    # Ratings are in reverse order
-                    i_end = min(len(ratings), num_stable_games)
-                    stable_ratings = ratings[:i_end] if i_end > 0 else [ratings[0]]
-                    v.stable_rating_range = [min(stable_ratings), max(stable_ratings)]
 
     def get_analysis(self):
         tables = [("Sandbagging", self.sandbagging), ("Boosting", self.boosting)]
@@ -968,13 +776,6 @@ class Boost:
         output.update({'part-1': self.get_info_1(), 'part-2': self.get_info_2(),
                        'num-games': self.games.max_num_games, 'datetime-before': before})
         return output
-
-
-def add_variant_rating(ratings, variant, rating):
-    if variant in ratings:
-        ratings[variant].append(rating)
-    else:
-        ratings[variant] = [rating]
 
 
 def get_boost_data(username, num_games=None, before=None):

@@ -10,7 +10,7 @@ from elements import get_notes, add_note, load_mod_log, get_mod_log, get_highlig
 from elements import ModActionType, UserData
 from chat_message import Message
 from chat_tournament import Tournament
-from chat_consts import *
+from consts import *
 
 
 official_teams = [
