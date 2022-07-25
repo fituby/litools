@@ -194,6 +194,7 @@ class User:
         self.title = ""
         self.country = ""
         self.createdAt: int = None
+        self.seenAt: int = None
         self.num_games = 0
         self.num_rated_games = 0
         self.profile = Profile()
@@ -211,6 +212,12 @@ class User:
         else:
             title = ""
         return f'{title}<a href="https://lichess.org/@/{self.id}{postfix}" target="_blank">{self.name}</a>'
+
+    def get_short_name(self, max_len=10):
+        if len(self.name) > max_len:
+            title_name = f'{self.title} {self.name}'.strip()
+            return f'<abbr title="{title_name}" style="text-decoration:none;">{shorten(self.name, max_len)}</abbr>'
+        return self.name
 
     def get_disabled(self):
         if not self.disabled:
@@ -274,6 +281,11 @@ class User:
     def get_createdAt(self):
         return datetime.fromtimestamp(self.createdAt // 1000, tz=tz.tzutc()) if self.createdAt else None
 
+    def get_created_days_ago(self):
+        if not self.createdAt:
+            return "&mdash;"
+        return datetime.fromtimestamp(self.createdAt // 1000, tz=tz.tzutc()) if self.createdAt else None
+
     def get_created(self, limits_created_days_ago):
         if not self.createdAt:
             return ""
@@ -284,6 +296,17 @@ class User:
             else ' class="text-warning"' if days <= limits_created_days_ago[1] else ""
         return f'<abbr{class_created} title="Account created {created_ago}" style="text-decoration:none;">' \
                f'<b>{created_ago}</b></abbr>'
+
+    def get_seenAt(self):
+        return datetime.fromtimestamp(self.seenAt // 1000, tz=tz.tzutc()) if self.seenAt else None
+
+    def get_seen(self):
+        if not self.seenAt:
+            return ""
+        now_utc = datetime.now(tz=tz.tzutc())
+        seen_ago = timestamp_to_ago(self.seenAt, now_utc)
+        return f'<abbr title="Account active {seen_ago}" style="text-decoration:none;">' \
+               f'<b>{seen_ago}</b></abbr>'
 
     def get_profile(self):
         return self.profile.get_info()
@@ -297,6 +320,7 @@ class User:
             self.verified = user.get('verified', False)
             self.title = user.get('title', "")
             self.createdAt = user['createdAt']
+            self.seenAt = user.get('seenAt', None)
             self.num_games = user['count']['all']
             self.num_rated_games = user['count']['rated']
             self.profile.set(user.get('profile', {}))
@@ -310,6 +334,8 @@ class UserData(User):
             self.set(self.data)
         self.mod_log = ""
         self.notes = ""
+        self.errors = [api_error] if api_error else []
+        self.is_error = not not api_error
 
 
 def get_user(username):
@@ -318,7 +344,7 @@ def get_user(username):
         url = f"https://lichess.org/api/user/{username}"
         r = requests.get(url, headers=headers)
         if r.status_code == 200:
-            return r.json(), None
+            return r.json(), ""
         return None, f"ERROR /api/user/: Status Code {r.status_code}"
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -340,7 +366,7 @@ class VariantPlayed:
         self.stable_rating_range = []  # [self.rating, self.rating]
         # ^  pre-initialization might have been needed for check_variants(), see below
         self.detailed_progress = []
-        self.num_recent_games = 0
+        self.num_recent_games: int = None
         self.add_note_links = add_note_links
 
     def get_rating(self):
@@ -349,7 +375,7 @@ class VariantPlayed:
         else:
             rating = str(self.rating)
             if self.prov:
-                if self.num_recent_games == 0:
+                if not self.num_recent_games:
                     rating += '?'
                 else:
                     rating += '<span class="text-warning">?</span>'
@@ -358,7 +384,7 @@ class VariantPlayed:
             if abs(self.progress) > BOOST_SUS_PROGRESS:
                 progress = f"{progress}progress: +{self.progress}" if self.progress > 0 \
                     else f"{progress}progress: &minus;{abs(self.progress)}"
-                class_rating = "" if self.num_recent_games == 0 else ' class="text-danger" style="text-decoration:none;"' \
+                class_rating = "" if not self.num_recent_games else ' class="text-danger" style="text-decoration:none;"' \
                     if self.num_games >= BOOST_SUS_NUM_GAMES else ' class="text-warning" style="text-decoration:none;"'
             if progress:
                 rating = f'<abbr title="{progress}"{class_rating}>{rating}</abbr>'
@@ -379,45 +405,51 @@ class VariantPlayed:
         return f'<div><span class="text-success">{name}</span>: {self.get_rating()} ' \
                f'over {self.num_games:,} game{"" if self.num_games == 1 else "s"}{prog}</div>'
 
-    def get_table_row(self):
+    def get_table_row(self, are_recent_games):
         if self.num_games == 0:
             return ""
         if self.name:
             name = f"{self.name[0].upper()}{self.name[1:]}"
         else:
             name = "Unknown Variant"
-        if self.min_rating is None or self.max_rating is None or self.num_recent_games <= 1:
-            str_range = ""
-        else:
-            rating_diff = self.stable_rating_range[1] - self.stable_rating_range[0]
-            color = ' class="text-danger"' if rating_diff >= BOOST_SUS_RATING_DIFF[1] else ' class="text-warning"' \
-                if rating_diff >= BOOST_SUS_RATING_DIFF[0] else ""
-            str_detailed_progress = "&Delta;{}: {}".format(rating_diff, " &rarr; ".join(reversed(self.detailed_progress)))
-            if rating_diff == 0:
-                str_range = f"{self.stable_rating_range[0]}?"
+        if are_recent_games:
+            if self.min_rating is None or self.max_rating is None or self.num_recent_games is None\
+                    or self.num_recent_games <= 1:
+                str_range = ""
             else:
-                str_range = f'<span{color}>{self.stable_rating_range[0]}</span>&hellip;' \
-                            f'<span{color}>{self.stable_rating_range[1]}</span>'
-            is_min_stable = self.stable_rating_range[0] == self.min_rating
-            is_max_stable = self.stable_rating_range[1] == self.max_rating
-            if not is_min_stable or not is_max_stable:
-                str_detailed_progress = f'{self.min_rating}{"" if is_min_stable else "?"}&hellip;' \
-                                        f'{self.max_rating}{"" if is_max_stable else "?"} {str_detailed_progress}'
-            str_range = f'<abbr title="{str_detailed_progress}" style="text-decoration:none;">{str_range}</abbr>'
-        str_num_recent_games = "&ndash;" if self.num_recent_games == 0 else f"{self.num_recent_games:,}"
-        row_class = ' class="text-muted"' if self.num_recent_games == 0 else ""
+                rating_diff = self.stable_rating_range[1] - self.stable_rating_range[0]
+                color = ' class="text-danger"' if rating_diff >= BOOST_SUS_RATING_DIFF[1] else ' class="text-warning"' \
+                    if rating_diff >= BOOST_SUS_RATING_DIFF[0] else ""
+                str_detailed_progress = "&Delta;{}: {}".format(rating_diff,
+                                                               " &rarr; ".join(reversed(self.detailed_progress)))
+                if rating_diff == 0:
+                    str_range = f"{self.stable_rating_range[0]}?"
+                else:
+                    str_range = f'<span{color}>{self.stable_rating_range[0]}</span>&hellip;' \
+                                f'<span{color}>{self.stable_rating_range[1]}</span>'
+                is_min_stable = self.stable_rating_range[0] == self.min_rating
+                is_max_stable = self.stable_rating_range[1] == self.max_rating
+                if not is_min_stable or not is_max_stable:
+                    str_detailed_progress = f'{self.min_rating}{"" if is_min_stable else "?"}&hellip;' \
+                                            f'{self.max_rating}{"" if is_max_stable else "?"} {str_detailed_progress}'
+                str_range = f'<abbr title="{str_detailed_progress}" style="text-decoration:none;">{str_range}</abbr>'
+            str_num_recent_games = "&ndash;" if not self.num_recent_games else f"{self.num_recent_games:,}"
+            rows_recent_games = f'<td class="text-center">{str_num_recent_games}</td>' \
+                                f'<td class="text-center">{str_range}</td>'
+        else:
+            rows_recent_games = ""
         perf_link = ""
-        if self.num_recent_games > 0 and self.add_note_links:
+        if self.num_recent_games and self.add_note_links:
             link = f'https://lichess.org/@/{{username}}/perf/{self.name}'
             perf_link = f'<a href="{link}" target="_blank">open</a>'
             name = f'<button class="btn btn-primary w-100 py-0" ' \
                    f'onclick="add_to_notes(this)" data-selection=\'{link}\'>{name}</button>'
+        row_class = ' class="text-muted"' if not self.num_recent_games else ""
         row = f'''<tr{row_class}>
                     <td class="text-left">{name}</td>
                     <td class="text-left">{perf_link}</td>
                     <td class="text-left">{self.get_rating()}</td>
-                    <td class="text-center">{str_num_recent_games}</td>
-                    <td class="text-center">{str_range}</td>
+                    {rows_recent_games}
                     <td class="text-right">{self.num_games:,}</td>
                   </tr>'''
         return row
@@ -443,6 +475,7 @@ class Variants:
         self.variants = []
         self.storm = Storm()
         self.add_note_links = add_note_links
+        self.are_recent_games = False
 
     def set(self, perfs):
         self.storm = Storm(perfs)
@@ -453,20 +486,21 @@ class Variants:
                            reverse=True)
 
     def get_table(self, num_games):
-        rows = [variant.get_table_row() for variant in self.variants]
+        rows = [variant.get_table_row(self.are_recent_games) for variant in self.variants]
         if not rows:
             return ""
         str_games = f'Number of games played among the last ' \
                     f'{num_games} game{"" if num_games == 1 else "s"} analyzed'
+        rows_recent_games = f'<th class="text-center" style="cursor:default;"><abbr title="{str_games}"' \
+                            f' style="text-decoration:none;"><i class="fas fa-hashtag"></i></abbr></th>' \
+                            f'<th class="text-center" style="cursor:default;">Range</th>' if self.are_recent_games else ""
         table = f'''<div class="column">
             <table id="variants_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
               <thead><tr>
                 <th class="text-left" style="cursor:default;">Variant</th>
                 <th></th>
                 <th class="text-left" style="cursor:default;">Rating</th>
-                <th class="text-center" style="cursor:default;"><abbr title="{str_games}" 
-                    style="text-decoration:none;"><i class="fas fa-hashtag"></i></abbr></th>
-                <th class="text-center" style="cursor:default;">Range</th>
+                {rows_recent_games}
                 <th class="text-right" style="cursor:default;"><abbr title="Total number of rated games played" 
                     style="text-decoration:none;"># games</abbr></th>
               </tr></thead>
@@ -492,6 +526,7 @@ class Variants:
                     i_end = min(len(ratings), num_stable_games)
                     stable_ratings = ratings[:i_end] if i_end > 0 else [ratings[0]]
                     v.stable_rating_range = [min(stable_ratings), max(stable_ratings)]
+        self.are_recent_games = True
 
     def __iter__(self):
         return iter(self.variants)
@@ -504,9 +539,25 @@ def add_variant_rating(ratings, variant, rating):
         ratings[variant] = [rating]
 
 
+def get_user_ids(game):
+    if 'user' in game['players']['black']:
+        black_id = game['players']['black']['user']['id']
+    elif 'aiLevel' in game['players']['black']:
+        black_id = "AI"
+    else:
+        black_id = "Unknown Player"
+    if 'user' in game['players']['white']:
+        white_id = game['players']['white']['user']['id']
+    elif 'aiLevel' in game['players']['white']:
+        white_id = "AI"
+    else:
+        white_id = "Unknown Player"
+    return white_id, black_id
+
+
 class Games:
     def __init__(self, user_id, max_num_games, max_num_days, statuses_to_discard,
-                 percent_extra_games_to_download=0, to_download_moves=True):
+                 percent_extra_games_to_download=0, download_moves=True, only_rated=True, use_correspondence_games=True):
         self.user_id = user_id
         self.games = []
         self.since: int = None
@@ -514,7 +565,9 @@ class Games:
         self.max_num_games: int = max_num_games
         self.max_num_days = max_num_days
         self.percent_extra_games_to_download = percent_extra_games_to_download
-        self.to_download_moves = to_download_moves
+        self.download_moves = download_moves
+        self.only_rated = only_rated
+        self.use_correspondence_games = use_correspondence_games
         self.statuses_to_discard = statuses_to_discard
         self.all_user_ratings = {}
 
@@ -538,8 +591,11 @@ class Games:
         else:
             since = max(ts_Xmonths_ago, int(since.timestamp() * 1000))
         max_num_games = int(round(self.max_num_games * (1 + self.percent_extra_games_to_download / 100)))
-        moves = "" if self.to_download_moves else "&moves=false"
-        url = f"https://lichess.org/api/games/user/{self.user_id}?rated=true&finished=true&max={max_num_games}" \
+        moves = "" if self.download_moves else "&moves=false"
+        rated = "rated=true&" if self.only_rated else ""
+        perfType = "perfType=ultraBullet,bullet,blitz,rapid,classical,chess960,crazyhouse,antichess,atomic,horde," \
+                   "kingOfTheHill,racingKings,threeCheck" if not self.use_correspondence_games else ""
+        url = f"https://lichess.org/api/games/user/{self.user_id}?{rated}{perfType}finished=true&max={max_num_games}" \
               f"{moves}&since={since}{str_until}"
         self.since = None if since == ts_Xmonths_ago else since
         games = get_ndjson(url)
@@ -555,11 +611,19 @@ class Games:
                 self.games = self.games[:self.max_num_games]
         else:
             self.games = games
+        # Delete correspondence games in variants
+        if not self.use_correspondence_games:
+            for i in range(len(self.games) - 1, -1, -1):
+                if self.games[i]['speed'] == "correspondence":
+                    del self.games[i]
+        # TODO: Delete AI games?
+        # for i in range(len(self.games) - 1, -1, -1):
+        #     if 'aiLevel' in self.games[i]['players']['black'] or 'aiLevel' in self.games[i]['players']['white']:
+        #         del self.games[i]
         # Get variant ratings
         self.all_user_ratings = {}
         for game in self.games:
-            black_id = game['players']['black']['user']['id']
-            white_id = game['players']['white']['user']['id']
+            white_id, black_id = get_user_ids(game)
             if white_id == self.user_id:
                 opp_color = 'black'
                 user_color = 'white'
@@ -576,6 +640,9 @@ class Games:
 
     def __iter__(self):
         return iter(self.games)
+
+    def __getitem__(self, key):
+        return self.games[key]
 
     def __len__(self):
         return len(self.games)
@@ -618,8 +685,7 @@ def get_ndjson(url, Accept="application/x-ndjson"):
     return data
 
 
-def timestamp_to_ago(ts_ms, now_utc=None):
-    t = datetime.fromtimestamp(ts_ms // 1000, tz=tz.tzutc())
+def datetime_to_ago(t, now_utc=None):
     if now_utc is None:
         now_utc = datetime.now(tz=tz.tzutc())
     years = relativedelta(now_utc, t).years
@@ -648,6 +714,11 @@ def timestamp_to_ago(ts_ms, now_utc=None):
     return "right now"
 
 
+def timestamp_to_ago(ts_ms, now_utc=None):
+    t = datetime.fromtimestamp(ts_ms // 1000, tz=tz.tzutc())
+    return datetime_to_ago(t, now_utc)
+
+
 def timestamp_to_abbr_ago(ts_ms, now_utc=None):
     t = datetime.fromtimestamp(ts_ms // 1000, tz=tz.tzutc())
     return f'<abbr title="{t:%Y-%m-%d %H:%M:%S} UTC" style="text-decoration:none;">{timestamp_to_ago(ts_ms, now_utc)}</abbr>'
@@ -660,6 +731,11 @@ def deltaseconds(dt2, dt1):
 
 def deltaperiod(dt2, dt1, short=False, show_seconds=False):
     seconds = deltaseconds(dt2, dt1)
+    return deltainterval(seconds, short, show_seconds)
+
+
+def deltainterval(seconds, short=False, show_seconds=False):
+    seconds = int(seconds)
     if seconds >= 24 * 60 * 60:
         hours = int(round(seconds / (60 * 60)))
         days = hours // 24
@@ -706,12 +782,16 @@ def shorten(original_name, max_len):
 
 def get_tc(game):
     try:
-        t1 = int(game['clock']['initial'])
-        t2 = int(game['clock']['increment'])
+        if 'clock' not in game:
+            if game['speed'] == "correspondence":
+                return "Correspondence"
+            return "Unknown"
+        t1 = game['clock']['initial']
+        t2 = game['clock']['increment']
         str_t1 = "1/4" if t1 == 15 else "1/2" if t1 == 30 else "3/4" if t1 == 45 else "1.5" if t1 == 90 else str(t1 // 60)
         return f"{str_t1}+{t2}"
     except:
-        return "Unknown"
+        return "Unknown_TC"
 
 
 class Reason(IntEnum):

@@ -57,6 +57,12 @@ def update_boost_theme():
     view_boost.set_mode(mode)
 
 
+def update_chat_theme():
+    global view_chat
+    mode = request.cookies.get('theme_mode', '-1')
+    view_chat.set_mode(mode)
+
+
 @app.route('/boost/', methods=['GET', 'POST'])
 @app.route('/boost', methods=['GET', 'POST'])
 def create_boost():
@@ -105,9 +111,7 @@ def boost_mod_action():
 @app.route('/chat/', methods=['GET'])
 @app.route('/chat', methods=['GET'])
 def create_chat():
-    global view_chat
-    mode = request.cookies.get('theme_mode', '-1')
-    view_chat.set_mode(mode)
+    update_chat_theme()
     resp = make_response(render_template('/chat.html', update_frequency=chat.i_update_frequency, view=view_chat))
     return resp
 

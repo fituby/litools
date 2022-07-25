@@ -57,9 +57,11 @@ class TextVariety:
         num_special_symbols = len(text_wo_spaces) - len(text)
         s = set(text)
         if len(s) < 12:
-            if len(s) == 2 and len(text) >= 24:
+            if len(s) in [2, 3, 4] and num_special_symbols <= 30 and '0' in s and '1' in s and len(text) >= 35:
+                result.scores[self.reason] += 50 if len(text) >= 45 else 20  # binary code
+            elif len(s) == 2 and len(text) >= 35:
                 result.scores[self.reason] += 80
-            elif len(s) == 3 and len(text) >= 36:
+            elif len(s) == 3 and len(text) >= 45:
                 result.scores[self.reason] += 80
             elif 3 * len(s) + 50 < len(text):
                 result.scores[self.reason] += 80

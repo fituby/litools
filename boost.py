@@ -787,8 +787,7 @@ def get_boost_data(username, num_games=None, before=None):
         num_games = int(num_games)
     if boost and (boost.before == before or before is None) \
             and (boost.games.max_num_games == num_games or num_games is None):
-        delta = now - last_update
-        if delta.days*24*60*60 + delta.seconds < BOOST_UPDATE_PERIOD:
+        if deltaseconds(now, last_update) < BOOST_UPDATE_PERIOD:
             return boost
     if not num_games:
         num_games = BOOST_NUM_GAMES[0]
@@ -800,6 +799,9 @@ def get_boost_data(username, num_games=None, before=None):
     else:
         boost.set(user)
         boosts[user_id] = boost, now
+    for user_id in list(boosts.keys()):
+        if deltaseconds(now, boosts[user_id][1]) >= BOOST_UPDATE_PERIOD:
+            del boosts[user_id]
     return boost
 
 
