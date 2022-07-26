@@ -4,6 +4,7 @@ import logging
 import traceback
 from boost import get_boost_data, send_boost_note, send_mod_action
 from chat import ChatAnalysis
+from alt import Alts
 from elements import get_port, get_embed_lichess
 from enum import IntEnum
 
@@ -48,6 +49,7 @@ logger.setLevel(logging.ERROR)
 app = Flask(__name__, template_folder="templates", static_folder="static", static_url_path="/")
 view_boost = View("B/")
 view_chat = View("C/")
+view_alt = View("A/")
 chat = ChatAnalysis()
 
 
@@ -55,6 +57,12 @@ def update_boost_theme():
     global view_boost
     mode = request.cookies.get('theme_mode', '-1')
     view_boost.set_mode(mode)
+
+
+def update_alt_theme():
+    global view_alt
+    mode = request.cookies.get('theme_mode', '-1')
+    view_alt.set_mode(mode)
 
 
 def update_chat_theme():
@@ -105,6 +113,36 @@ def boost_mod_action():
     action = request.form.get("action", None)
     data = send_mod_action(action, user)
     resp = make_response(data)
+    return resp
+
+
+@app.route('/alt', methods=['GET', 'POST'])
+def create_alt():
+    update_alt_theme()
+    alts = request.form.get("alts", None) if request.method == 'POST' else None
+    num_games = request.form.get("num_games", None) if request.method == 'POST' else None
+    resp = make_response(render_template('/alt.html', alts=alts, num_games=num_games,
+                                         embed_lichess=get_embed_lichess(), view=view_alt))
+    return resp
+
+
+@app.route('/alts/<step>/', methods=['POST'])
+def get_alts(step):
+    update_alt_theme()
+    alt_names = request.form.get("alts", None)
+    num_games = request.form.get("num_games", None)
+    usernames = Alts.get_usernames(alt_names)
+    alts = Alts(usernames, num_games, view_alt.theme_color)
+    try:
+        step = int(step)
+    except:
+        step = 0
+    if step >= 1:
+        force_refresh_openings = False if step < 2 else bool(request.form.get("force_refresh_openings", False))
+        alts.process_step1(force_refresh_openings)
+        if step >= 2:
+            alts.process_step2()
+    resp = make_response(alts.get_output())
     return resp
 
 
@@ -227,9 +265,10 @@ def custom_timeout():
 
 @app.route('/set_mode/<mode>', methods=['POST'])
 def set_mode(mode):
-    global view_chat, view_leaderboard, view_boost
+    global view_chat, view_leaderboard, view_boost, view_alt
     view_chat.set_mode(mode)
     view_boost.set_mode(mode)
+    view_alt.set_mode(mode)
     resp = Response(status=204)
     return resp
 

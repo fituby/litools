@@ -1,0 +1,194 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+{% if embed_lichess %}
+<div class="container-fluid m-0 px-2 pb-5" style="max-width:100vw;min-height:60vh;">
+{% else %}
+<div class="container-fluid m-0 px-2 pb-3" style="max-width:100vw;min-height:97vh;">
+{% endif %}
+  <div class="d-flex flex-row flex-wrap justify-content-around my-2">
+    <div class="flex-column ml-1 mr-2" style="width:420px;min-width:370px;max-width:500px;">
+      <table class="w-100 mt-2"><tbody>
+        <tr class="align-items-baseline">
+          <td><label for="alt-names" class="text-nowrap m-0 mr-1">Alts / #games</label></td>
+          <td class="px-1">
+            <div class="d-flex">
+              <input id="alt-names" class="w-100 mr-1" type="text" placeholder="">
+              <select id="num-games" class="flex-shrink-1">
+                <option value="100" title="analyze max 100 games per player">100</option>
+                <option value="200" title="analyze max 200 games per player">200</option>
+                <option value="500" selected="selected" title="analyze max 500 games per player">500</option>
+                <option value="1000" title="analyze max 1000 games per player">1000</option>
+                <option value="5000" title="analyze max 5000 games per player">5000</option>
+                <option value="10000" title="analyze max 10000 games per player">10000</option>
+                <option value="99999" title="analyze max 99999 games per player">99999</option>
+              </select>
+            </div>
+          </td>
+          <td rowspan="2"><button class="btn btn-primary" style="min-height:100%;" onclick="go_alts()">Go</button></td>
+        </tr>
+      </tbody></table>
+      <div id="alts_downloading" class="d-none justify-content-center align-items-center my-3">
+        <div class="spinner-grow text-secondary" role="status"><span class="sr-only">Loading...</span></div>
+        <span id="downloading_text" class="ml-3 text-secondary text-truncate">Downloading user data&hellip;</span>
+      </div>
+      <div id="part-1">
+      </div>
+      <div class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2">
+        <p class="pr-2 m-0">Mode</p>
+        <div class="btn-group btn-group-toggle">
+          <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
+          <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
+          <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
+        </div>
+      </div>
+    </div>
+    <div class="flex-column flex-grow-1 mx-2" style="min-width:420px;max-width:1000px;">
+      <div id="openings_downloading" class="row d-none justify-content-center align-items-center my-3">
+        <div class="spinner-border text-secondary text-truncate" role="status"></div>
+        <span class="ml-3 text-secondary">Downloading openings&hellip;</span>
+      </div>
+      <div id="games_downloading" class="row d-none justify-content-center align-items-center my-3">
+        <div class="spinner-border text-secondary text-truncate" role="status"></div>
+        <span class="ml-3 text-secondary">Downloading games&hellip;</span>
+      </div>
+      <div id="part-2">
+      </div>
+    </div>
+    <div class="flex-column flex-grow-1 ml-2 mr-1" style="min-width:420px;max-width:700px;">
+      <div id="part-3">
+      </div>
+    </div>
+  </div>
+</div> {% if embed_lichess %}
+<div class="container-fluid px-0">
+  <iframe id="embed_frame" class="container-fluid px-0" style="min-width:60vw; min-height:96vh;" src="https://lichess.org/report/list/print" allowtransparency="true" frameborder="0"></iframe>
+</div> {% endif %}
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+  <script>
+  $(document).ready(function() {
+    update_mode({{view.mode|safe}}, false);
+    if (window.matchMedia)
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+        if ($('#mode_0').is('.active'))
+          update_mode(event.matches ? -1 : -2);
+      });
+    $("#loadOverlay").css("display","none");
+    $("#mainOverlay").css("display","block");
+    $("#alt-names").on('keypress', username_entered);
+    {% if alts %}
+    $("#alt-names")[0].value = "{{alts}}";
+    {% if num_games %}
+    $("#num-games").val("{{num_games}}");
+    {% endif %}
+    set_alts('{{alts}}');
+    {% else %}
+    clear_data();
+    {% endif %}
+  });
+  function username_entered(e) {
+    if (!e) e = window.event;
+    var keyCode = e.code || e.key;
+    if (keyCode == 'Enter') {
+      go_alts();
+    }
+  }
+  function go_alts() {
+    set_alts($("#alt-names")[0].value.trim());
+    //$("#alt-names")[0].value = "";
+  }
+  var current_alts = "";
+  function set_alts(alts) {
+    if (alts)
+      current_alts = alts;
+    else
+      alts = current_alts;
+    if (!alts)
+      return;
+    clear_data();
+    //$('#alt-names').attr("placeholder", alts).val("").focus().blur();
+    $('#alts_downloading').removeClass("d-none").addClass("d-flex");
+    $('#downloading_text').html(`Downloading ${alts}&hellip;`);
+    $.ajax({
+      url: `/alts/0/`,
+      type: "post",
+      data: {alts: alts, num_games: $('#num-games').val()}})
+      .done(function(data, textStatus, jqXHR) {
+        $('#alts_downloading').removeClass("d-flex").addClass("d-none");
+        $('#downloading_text').html("Downloading user data&hellip;");
+        $('#part-1').html(data["part-1"]);
+        $('#part-2').html(data["part-2"]);
+        $('#part-3').html(data["part-3"]);
+        $('#openings_downloading').removeClass("d-none").addClass("d-flex");
+        $.ajax({
+          url: `/alts/1/`,
+          type: "post",
+          data: {alts: alts, num_games: $('#num-games').val()}})
+          .done(function(data, textStatus, jqXHR) {
+            $('#openings_downloading').removeClass("d-flex").addClass("d-none");
+            $('#part-1').html(data["part-1"]);
+            $('#part-2').html(data["part-2"]);
+            $('#part-3').html(data["part-3"]);
+            $('#games_downloading').removeClass("d-none").addClass("d-flex");
+            $.ajax({
+              url: `/alts/2/`,
+              type: "post",
+              data: {alts: alts, num_games: $('#num-games').val()}})
+              .done(function(data, textStatus, jqXHR) {
+                $('#games_downloading').removeClass("d-flex").addClass("d-none");
+                $('#part-1').html(data["part-1"]);
+                $('#part-2').html(data["part-2"]);
+                $('#part-3').html(data["part-3"]);
+              });
+          });
+      });
+  }
+  function clear_data() {
+    $('#notes-section').removeClass("d-block").addClass("d-none");
+    $('#part-1').html("");
+    $('#part-2').html("");
+    $('#part-3').html("");
+    $('#user_downloading').removeClass("d-flex").addClass("d-none");
+    $('#downloading_text').html("Downloading user data&hellip;");
+    $('#games_downloading').removeClass("d-flex").addClass("d-none");
+  }
+  function refresh_openings() {
+    $('#refresh-openings').removeClass("d-flex").addClass("d-none");
+    $('#openings_downloading').removeClass("d-none").addClass("d-flex");
+    $.ajax({
+      url: `/alts/2/`,
+      type: "post",
+      data: {alts: current_alts, num_games: $('#num-games').val(), force_refresh_openings: true}})
+      .done(function(data, textStatus, jqXHR) {
+        $('#openings_downloading').removeClass("d-flex").addClass("d-none");
+        $('#part-1').html(data["part-1"]);
+        $('#part-2').html(data["part-2"]);
+        $('#part-3').html(data["part-3"]);
+      });
+  }
+  function update_mode(val, to_request=true) {
+    if (val == 0)
+      val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
+    for (var i = 0; i < 3; i++) {
+      if (val == i || (val < 0 && i == 0))
+        $(`#mode_${i}`).addClass("active");
+      else
+        $(`#mode_${i}`).removeClass("active");
+    }
+    if (to_request && val != "{{view.mode}}") {
+      setCookie('theme_mode', val);
+      $.ajax({url: `/set_mode/${val}`, type: "post"});
+      if (current_alts) {
+        var form = $(`<form action="/alt" method="post"><input type="hidden" name="alts" value="${current_alts}" /><input type="hidden" name="num_games" value="${$('#num-games').val()}" /></form>`);
+        $('body').append(form);
+        form.submit();
+      } else {
+        location.reload();
+      }
+    }
+  }
+  </script>
+{% endblock %}

@@ -903,6 +903,8 @@ list_res = {
        ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
     Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)HIcSWuKMwOw', 60,
        ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
+    Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)g7YjojDbJGY', 60,
+       ban=-1, reason=Reason.Spam, info="Link: Rickrolling"),
     Re(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)RoozSjudh0I', 60,
        ban=-1, reason=Reason.Spam, info="Link: Spam"),
     Re(r'https?:\/\/(www\.)?(youtu|youtube|twitch|instagram)[-a-zA-Z0-9@:%._\+~#=]{0,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)', 40,

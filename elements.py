@@ -735,7 +735,7 @@ def deltaperiod(dt2, dt1, short=False, show_seconds=False):
 
 
 def deltainterval(seconds, short=False, show_seconds=False):
-    seconds = int(seconds)
+    seconds = int(round(seconds))
     if seconds >= 24 * 60 * 60:
         hours = int(round(seconds / (60 * 60)))
         days = hours // 24
@@ -755,10 +755,16 @@ def deltainterval(seconds, short=False, show_seconds=False):
     minutes = seconds // 60
     seconds = (seconds - minutes * 60)
     if show_seconds:
-        out = f"{minutes}m" if short else f"{minutes} minute{'' if minutes == 1 else 's'}"
+        if minutes:
+            out = f"{minutes}m" if short else f"{minutes} minute{'' if minutes == 1 else 's'}"
+        else:
+            out = ""
+        if short:
+            return f"{out}{seconds:02d}s"
         if seconds == 0:
-            return out
-        return f"{out}{seconds:02d}s" if short else f"{out} {seconds} second{'' if seconds == 1 else 's'}"
+            return out if out else "0 seconds"
+        str_seconds = f"{seconds} second{'' if seconds == 1 else 's'}"
+        return f"{out} {str_seconds}" if out else str_seconds
     minutes = int(round(minutes + seconds / 60))
     return f"{minutes}m" if short else f"{minutes} minute{'' if minutes == 1 else 's'}"
 
@@ -944,6 +950,7 @@ class ModActionType(IntEnum):
     Standard = 0
     Boost = 1
     Chat = 2
+    Alt = 1
 
 
 def get_mod_log(data, action_type=ModActionType.Standard):
@@ -955,6 +962,8 @@ def get_mod_log(data, action_type=ModActionType.Standard):
                     actions.append(BoostModAction(action_data))
                 elif action_type == ModActionType.Chat:
                     actions.append(ChatModAction(action_data))
+                elif action_type == ModActionType.Alt:
+                    actions.append(ModAction(action_data))
                 else:
                     actions.append(ModAction(action_data))
         ModAction.update_names(actions)
