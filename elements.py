@@ -333,6 +333,7 @@ class UserData(User):
         if self.data and not api_error:
             self.set(self.data)
         self.mod_log = ""
+        self.actions = []
         self.notes = ""
         self.errors = [api_error] if api_error else []
         self.is_error = not not api_error
@@ -838,18 +839,18 @@ class Reason(IntEnum):
         return "NO" if tag is None else f"{tag[0].upper()}{tag[1:]}"
 
 
-def log(text, to_print=False):
+def log(text, to_print=False, to_save=True):
     global log_file
     if log_file is None:
         load_config()
-    if not log_file:
+    now_utc = datetime.now(tz=tz.tzutc())
+    line = f"{now_utc: %Y-%m-%d %H:%M:%S} UTC: {text}"
+    if to_print:
+        print(line)
+    if not log_file or not to_save:
         return
     try:
-        now_utc = datetime.now(tz=tz.tzutc())
         with open(log_file, "a", encoding="utf-8") as file:
-            line = f"{now_utc: %Y-%m-%d %H:%M:%S} UTC: {text}"
-            if to_print:
-                print(line)
             file.write(f"{line}\n")
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -1037,6 +1038,16 @@ class ModAction:
         'teamMadeOwner': 'made team owner',
         'deleteQaAnswer': 'delete QA answer',
     }
+    warnings = {
+        'spam': "Warning: Spam is not permitted",
+        'insult': "Warning: Offensive language",
+        'shaming': "Warning: Accusations",
+        'trolling': "Warning: Chat/Forum trolling",
+        'ad': "Warning: Advertisements",
+        'team_ad': "Warning: Team advertisements",
+        'stalling': "Warning: leaving games / stalling on time",
+        'kidMode': "Account set to kid mode",
+    }
 
     @staticmethod
     def update_names(actions):
@@ -1069,11 +1080,17 @@ class ModAction:
     def is_warning(self):
         return self.action == 'modMessage' and self.details.startswith("Warning")
 
+    def get_timeout_reason(self):
+        return Reason.Shaming if self.details.startswith('shaming') else \
+            Reason.Offensive if self.details.startswith('insult') else \
+            Reason.Spam if self.details.startswith('spam') else \
+            Reason.Other if self.details.startswith('other') else Reason.No
+
     def get_action(self):
         if self.is_warning():
-            if self.details == "Warning: Spam is not permitted":
+            if self.details == ModAction.warnings['spam']:
                 action = "Warning: Spam"
-            elif self.details == "Warning: leaving games / stalling on time":
+            elif self.details == ModAction.warnings['stalling']:
                 action = "Warning: time burner"
             else:
                 action = self.details  # "warning"
@@ -1184,8 +1201,8 @@ class ChatModAction(ModAction):
 
     def get_class(self, now_utc):
         if self.is_warning():
-            if self.details in ["Warning: Accusations", "Warning: Offensive language",
-                                "Warning: Chat/Forum trolling", "Warning: Spam is not permitted"]:
+            if self.details in [ModAction.warnings['shaming'], ModAction.warnings['insult'],
+                                ModAction.warnings['trolling'], ModAction.warnings['spam']]:
                 return "table-secondary" if self.is_old(now_utc) else "table-warning"
             return "table-muted" if self.is_old(now_utc) else "table-info"
         if self.action in ['engine', 'booster', 'troll', 'alt', 'closeAccount']:
@@ -1202,12 +1219,28 @@ class ChatModAction(ModAction):
     def is_timeout(self):
         return self.action == 'chatTimeout'
 
+    def is_shaming(self):
+        return self.details.startswith("Warning: Accusations")
+
+    def is_insult(self):
+        return self.details.startswith("Warning: Offensive")
+
+    def is_spam(self):
+        return self.details.startswith("Warning: Spam")
+
+    def is_trolling(self):
+        return self.details.startswith("Warning: Chat")
+
+    def is_ad(self):
+        return self.details.startswith("Warning: Advertisements")
+
+    def is_team_ad(self):
+        return self.details.startswith("Warning: Team")
+
     def is_comm_warning(self):
         return self.action == 'modMessage' and (
-            self.details.startswith("Warning: Accusations") or self.details.startswith("Warning: Offensive") or
-            self.details.startswith("Warning: Spam") or self.details.startswith("Warning: Chat") or
-            self.details.startswith("Warning: Advertisements") or self.details.startswith("Warning: Team") or
-            self.details.startswith("Warning: Excessive"))
+            self.is_shaming() or self.is_insult() or self.is_spam() or self.is_trolling() or
+            self.is_ad() or self.is_team_ad() or self.details.startswith("Warning: Excessive"))
 
     def is_SB(self):
         return self.action == 'troll'

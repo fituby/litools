@@ -195,6 +195,13 @@ def chat_set_multi_msg_ok(msg_id):
     return '', 204
 
 
+@app.route('/chat/warn/<username>/<subject>', methods=['POST'])
+def chat_warn(username, subject):
+    chat.warn(username, subject)
+    resp = make_response(chat.get_all())
+    return resp
+
+
 @app.route('/chat/set_update/<update_frequency>', methods=['POST'])
 def chat_set_update(update_frequency):
     chat.set_update(update_frequency)
@@ -204,6 +211,13 @@ def chat_set_update(update_frequency):
 @app.route('/chat/select_message/<msg_id>', methods=['POST'])
 def chat_select_message(msg_id):
     resp = make_response(chat.select_message(msg_id))
+    return resp
+
+
+@app.route('/chat/clear_errors/<tourn_id>', methods=['POST'])
+def chat_clear_errors(tourn_id):
+    chat.clear_errors(tourn_id)
+    resp = make_response(chat.get_all())
     return resp
 
 

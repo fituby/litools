@@ -134,7 +134,6 @@ class Alt:
         if perfs:
             self.variants.set(perfs)
         self.teams = set()
-        self.mod_log_table = ""
         self.num_mod_log_items = 0
         self.mod_notes = ""
         self.time_step1: datetime = None
@@ -222,7 +221,8 @@ class Alt:
         wait_api('api/user/mod-log')
         mod_log_data = load_mod_log(self.user.name)
         if mod_log_data:
-            self.mod_log_table, actions = get_mod_log(mod_log_data, ModActionType.Alt)
+            self.user.mod_log, actions = get_mod_log(mod_log_data, ModActionType.Alt)
+            #                  ^ if necessary, actions can be replaced with self.user.actions
             self.num_mod_log_items = len(actions)
             self.mod_notes = get_notes(self.user.name, mod_log_data)
         return bool(mod_log_data)
@@ -317,7 +317,7 @@ class Alt:
                   f'<button class="btn btn-secondary col py-0" type="button" data-toggle="collapse" ' \
                   f'data-target="#{id_collapse}" aria-expanded="false" aria-controls="{id_collapse}">{header}</button>' \
                   f'</div><div id="{id_collapse}" class="collapse">' \
-                  f'<div class="card card-body p-0">{self.mod_log_table}</div></div></div>' if self.mod_log_table else ""
+                  f'<div class="card card-body p-0">{self.user.mod_log}</div></div></div>' if self.user.mod_log else ""
         return f"{main}{num_games}{profile}{self.mod_notes}{mod_log}{variants}{self.get_errors()}"
 
 
@@ -649,7 +649,7 @@ class Alts:
                       {"".join(rows)}
                     </table>
                     </div>'''
-        # Refresh openings buttons
+        # Refresh openings button
         if self.is_step2:
             now = datetime.now()
             refresh_players = [player.user.name for player in self.players if player.needs_to_refresh_openings(now)]
@@ -661,8 +661,9 @@ class Alts:
                 else:
                     player_list = ", ".join(refresh_players)
                 refresh_openings = f'<div id="refresh-openings" class="d-flex align-items-baseline mt-3">' \
-                                   f'<button class="btn btn-primary py-0 px-2 mr-2"' \
-                                   f' onclick="refresh_openings()">Refresh openings</button> for {player_list}</div>'
+                                   f'<button class="btn btn-warning py-0 px-2 mr-2"' \
+                                   f' onclick="refresh_openings()">Refresh openings</button>' \
+                                   f'<span>for {player_list}</span></div>'
             else:
                 refresh_openings = ""
         else:

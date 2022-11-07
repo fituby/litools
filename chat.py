@@ -5,9 +5,10 @@ import time
 import traceback
 from multiprocessing import Lock
 import yaml
+import re
 from elements import Reason, TournType, get_token, get_ndjson, deltaseconds, log, config_file
 from elements import get_notes, add_note, load_mod_log, get_mod_log, get_highlight_style, add_timeout_msg
-from elements import ModActionType, UserData
+from elements import ModActionType, ModAction, UserData
 from chat_message import Message
 from chat_tournament import Tournament
 from consts import *
@@ -31,6 +32,9 @@ swiss_tournament_page = "https://lichess.org/siwss/"
 
 
 class ChatAnalysis:
+    kid_years = re.compile(r"(?:\b|\D)({})(?:\b|\D)".format("|".join(
+        [f"{y}\s*(?:г|л|y|j)|{datetime.now().year - y}" for y in range(6, 13)])), re.IGNORECASE)
+
     def __init__(self):
         self.tournaments = {}
         self.users = {}
@@ -42,6 +46,7 @@ class ChatAnalysis:
         self.last_refresh: datetime = None
         self.last_tournaments_update: datetime = None
         self.errors = []
+        self.warnings = []
         self.i_update_frequency = 2  # len(API_CHAT_REFRESH_PERIOD) - 1
         self.reset_multi_messages = set()
         self.update_count = 0
@@ -70,6 +75,14 @@ class ChatAnalysis:
         self.last_notes_error = None
         self.selected_user_num_recent_timeouts = 0
         self.selected_user_num_recent_comm_warnings = 0
+        self.selected_user_lock = Lock()
+
+    def add_error(self, text, is_critical=True):
+        if is_critical:
+            self.errors.append(text)
+        else:
+            self.warnings.append(text)
+        log(text, to_print=True, to_save=True)
 
     def wait_api(self):
         now = datetime.now()
@@ -122,9 +135,9 @@ class ChatAnalysis:
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             if not self.tournaments:
-                self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")  # only if it doesn't work from the very beginning
+                self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")  # only if it doesn't work from the very beginning
         except:
-            self.errors.append("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC")
+            self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in update_tournaments")
         self.is_processing = False
 
     def run(self):
@@ -177,9 +190,9 @@ class ChatAnalysis:
                     self.to_timeout.clear()
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
+            self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
         except:
-            self.errors.append("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC")
+            self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in chat.run")
         self.update_count += 1
         self.state_reports += 1
         self.is_processing = False
@@ -204,7 +217,7 @@ class ChatAnalysis:
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             now_utc = datetime.now(tz=tz.tzutc())
-            self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
+            self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
 
     def set_multi_msg_ok(self, msg_id):
         try:
@@ -218,16 +231,16 @@ class ChatAnalysis:
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             now_utc = datetime.now(tz=tz.tzutc())
-            self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
+            self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
 
     def api_timeout(self, msg, reason, is_timeout_manual):
         reason_tag = Reason.to_tag(reason)
         if reason_tag is None:
-            self.errors.append(f"Error timeout: Unknown reason at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC")
+            self.add_error(f"Error timeout: Unknown reason at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC", False)
             return
         if msg.tournament.id not in self.tournaments:
-            self.errors.append(f"Error timeout: Tournament {msg.tournament.id} deleted "
-                               f"as of {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC")
+            self.add_error(f"Error timeout: Tournament {msg.tournament.id} deleted "
+                           f"as of {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC", False)
             return
         chan = "tournament" if msg.tournament.t_type == TournType.Arena \
             else "swiss" if msg.tournament.t_type == TournType.Swiss \
@@ -262,9 +275,9 @@ class ChatAnalysis:
                 self.update_selected_user()
             else:
                 status_info = "invalid token?" if r.status_code == 200 else f"status: {r.status_code}"
-                self.errors.append(f"Timeout error ({status_info}):<br>{timeout_tag}{reason_tag.upper()} "
-                                   f"<u>Score</u>: {msg.score} <u>User</u>: {msg.username} "
-                                   f"<u>RoomId</u>: {msg.tournament.id} <u>Channel</u>: {chan} <u>Text</u>: {text}")
+                self.add_error(f"Timeout error ({status_info}):<br>{timeout_tag}{reason_tag.upper()} "
+                               f"<u>Score</u>: {msg.score} <u>User</u>: {msg.username} "
+                               f"<u>RoomId</u>: {msg.tournament.id} <u>Channel</u>: {chan} <u>Text</u>: {text}", False)
         else:
             if msg.id not in self.recommended_timeouts:
                 print(f"Recommended to time out: {data}")
@@ -284,7 +297,7 @@ class ChatAnalysis:
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}")
+            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}", False)
 
     def timeout_multi(self, mmsg_id, reason):
         try:
@@ -294,7 +307,7 @@ class ChatAnalysis:
                 if msgs is not None:
                     reason = int(reason)
                     if reason == 0:
-                        reason = Reason.Spam  # msg.best_reason()
+                        reason = Reason.Spam #msgs[0].best_reason()
                     combined_text = f'[multiline] {" | ".join([m.text for m in msgs if not m.is_reset])}'
                     combined_msg = Message({'u': msgs[0].username, 't': combined_text}, msgs[0].tournament, msgs[0].time)
                     combined_msg.evaluate(self.tournaments[self.tournament_messages[msg_id]].re_usernames)
@@ -305,7 +318,65 @@ class ChatAnalysis:
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}")
+            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}", False)
+
+    def api_warn(self, username, subject):
+        if subject not in ModAction.warnings.values():
+            self.add_error(f"Warn error: @{username}: <u>Subject</u>: {subject}", False)
+            return
+        headers = {'Authorization': f"Bearer {get_token()}"}
+        url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
+        r = requests.post(url, headers=headers)
+        if r.status_code == 200:
+            log(f"WARNING @{username}: {subject}", True)
+            self.update_selected_user()
+            self.state_reports += 1
+        else:
+            self.add_error(f"Warn error (status: {r.status_code}):<br>@{username}: <u>Subject</u>: {subject}", False)
+
+    def api_kidMode(self, username):
+        headers = {'Authorization': f"Bearer {get_token()}"}
+        url = f"https://lichess.org/mod/{username}/kid"
+        r = requests.post(url, headers=headers)
+        if r.status_code == 200:
+            log(f"ACTION @{username}: kidMode", True)
+            self.update_selected_user()
+            self.state_reports += 1
+        else:
+            self.add_error(f"Action error (status: {r.status_code}):<br>@{username}: kidMode", False)
+
+    def api_SB(self, username):
+        headers = {'Authorization': f"Bearer {get_token()}"}
+        url = f"https://lichess.org/mod/{username}/troll/true"
+        r = requests.post(url, headers=headers)
+        if r.status_code == 200:
+            log(f"SB @{username}", True)
+            self.update_selected_user()
+            self.state_reports += 1
+        else:
+            self.add_error(f"SB error (status: {r.status_code}):<br>@{username}", False)
+
+    def warn(self, username, subject_tag):
+        try:
+            if subject_tag == "SB":
+                self.api_SB(username)
+            else:
+                warning = ModAction.warnings.get(subject_tag)
+                if warning:
+                    if subject_tag == "kidMode":
+                        # TODO: check if kidMode is set already (after?)
+                        self.api_kidMode(username)
+                        self.api_warn(username, warning)
+                    elif subject_tag in ModAction.warnings:
+                        self.api_warn(username, warning)
+                    else:
+                        print(f"WRONG WARNING @{username}: {warning}")
+                else:
+                    self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: @{username}: "
+                                   f"INCORRECT WARNING: {subject_tag}", False)
+        except Exception as exception:
+            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: @{username}: {exception}", False)
 
     def custom_timeout(self, msg_ids, reason):
         try:
@@ -337,7 +408,7 @@ class ChatAnalysis:
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}")
+            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}", False)
 
     def set_update(self, i_update_frequency):
         if i_update_frequency is None:
@@ -358,32 +429,34 @@ class ChatAnalysis:
             now_utc = datetime.now(tz=tz.tzutc())
             if self.to_read_mod_log and (self.last_mod_log_error is None
                                          or now_utc > self.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
-                self.selected_user_num_recent_timeouts = 0
-                self.selected_user_num_recent_comm_warnings = 0
-                mod_log_data = load_mod_log(msg.username)
-                if mod_log_data is None:
-                    self.last_mod_log_error = now_utc
-                else:
-                    user.mod_log, actions = get_mod_log(mod_log_data, ModActionType.Chat)
-                    time_last_SB = None
-                    for action in actions:
-                        if action.is_SB() and (time_last_SB is None or action.get_datetime() > time_last_SB):
-                            time_last_SB = action.get_datetime()
-                    time_last_comm_warning = None
-                    for action in actions:
-                        if action.is_comm_warning() and not action.is_old(now_utc):
+                with self.selected_user_lock:
+                    self.selected_user_num_recent_timeouts = 0
+                    self.selected_user_num_recent_comm_warnings = 0
+                    mod_log_data = load_mod_log(msg.username)
+                    if mod_log_data is None:
+                        self.last_mod_log_error = now_utc
+                    else:
+                        user.mod_log, user.actions = get_mod_log(mod_log_data, ModActionType.Chat)
+                        time_last_SB = None
+                        for action in user.actions:
                             dt = action.get_datetime()
-                            if time_last_SB is None or dt > time_last_SB:
-                                self.selected_user_num_recent_comm_warnings += 1
-                                if time_last_comm_warning is None or dt > time_last_comm_warning:
-                                    time_last_comm_warning = dt
-                    for action in actions:
-                        if action.is_timeout() and not action.is_old(now_utc):
-                            dt = action.get_datetime()
-                            if (time_last_comm_warning is None or dt > time_last_comm_warning) and \
-                               (time_last_SB is None or dt > time_last_SB):
-                                self.selected_user_num_recent_timeouts += 1
-                    self.last_mod_log_error = None
+                            if action.is_SB() and (time_last_SB is None or dt > time_last_SB):
+                                time_last_SB = dt
+                        time_last_comm_warning = None
+                        for action in user.actions:
+                            if action.is_comm_warning() and not action.is_old(now_utc):
+                                dt = action.get_datetime()
+                                if time_last_SB is None or dt > time_last_SB:
+                                    self.selected_user_num_recent_comm_warnings += 1
+                                    if time_last_comm_warning is None or dt > time_last_comm_warning:
+                                        time_last_comm_warning = dt
+                        for action in user.actions:
+                            if action.is_timeout() and not action.is_old(now_utc):
+                                dt = action.get_datetime()
+                                if (time_last_comm_warning is None or dt > time_last_comm_warning) and \
+                                   (time_last_SB is None or dt > time_last_SB):
+                                    self.selected_user_num_recent_timeouts += 1
+                        self.last_mod_log_error = None
             else:
                 mod_log_data = None
             if self.to_read_notes and (self.last_notes_error is None
@@ -419,11 +492,22 @@ class ChatAnalysis:
             return create_info(f'<p class="text-danger">Error: get_messages_near()</p>')
 
     def get_messages_nearby(self, msg_id):
-        def create_output(info, tournament, user_data, filtered_info=None):
-            data = {'selected-messages': info, 'filtered-messages': filtered_info or info, 'selected-tournament': tournament}
-            if user_data:
-                user_info = user_data.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES)
-                add_info = ""
+        def get_warn_btn(subject_tag, btn_title, is_highlighted, user_name, is_disabled=False, txt_class=""):
+            if is_highlighted:
+                btn_title = f'<b class="{txt_class}">{btn_title}</b>' if txt_class and not is_disabled \
+                    else f'<b>{btn_title}</b>'
+            elif txt_class and not is_disabled:
+                btn_title = f'<span class="{txt_class}">{btn_title}</span>'
+            btn_class = "btn-secondary disabled" if is_disabled else "btn-primary"
+            return f'<button class="dropdown-item {btn_class}" onclick="warn(\'{user_name}\',\'{subject_tag}\');">' \
+                   f'{btn_title}</button>'
+
+        def is_recent(times, key, time_now):
+            return (times[key] is not None) and (deltaseconds(time_now, times[key]) <= RECENT_WARNING)
+
+        def add_comm_info(user_data, user_msgs):
+            add_info = ""
+            with self.selected_user_lock:
                 if self.selected_user_num_recent_comm_warnings > 0:
                     text_theme = "text-danger" if self.selected_user_num_recent_comm_warnings > 1 else "text-warning"
                     add_info = f'<span class="{text_theme}"><b>{self.selected_user_num_recent_comm_warnings}</b> ' \
@@ -433,6 +517,89 @@ class ChatAnalysis:
                     add_info = f'{add_info}{" + " if add_info else ""}<span class="{text_theme}">' \
                                f'<b>{self.selected_user_num_recent_timeouts}</b> ' \
                                f'timeout{"" if self.selected_user_num_recent_timeouts == 1 else "s"}</span>'
+            is_mod = self.last_mod_log_error is None  # TODO: get rid of this workaround
+            if is_mod and user_msgs:
+                user_name = user_data.name
+                is_timed_out = False
+                is_banable = False
+                reasons = [0] * Reason.Size
+                for user_msg in user_msgs:
+                    if user_msg.is_timed_out:
+                        is_timed_out = True
+                        i_reason = user_msg.best_reason()
+                        if i_reason:
+                            reasons[i_reason] += 1
+                            is_banable = user_msg.is_banable()
+                last_time = {'SB': None, 'timeout': None, 'spam': None, 'insult': None, 'trolling': None,
+                             'shaming': None, 'ad': None, 'team_ad': None}
+                last_timeout_reason = Reason.No
+                is_SBed = False  # workaround as I have no idea how to get this flag any other way
+                is_kid = False  # same here
+                for action in user_data.actions:
+                    dt = action.get_datetime()
+                    if (action.action == 'troll' or action.action == 'untroll') \
+                            and (last_time['SB'] is None or dt > last_time['SB']):
+                        last_time['SB'] = dt
+                        is_SBed = action.is_SB()
+                    elif action.is_timeout() and (last_time['timeout'] is None or dt > last_time['timeout']):
+                        last_time['timeout'] = dt
+                        last_timeout_reason = action.get_timeout_reason()
+                    elif action.action == 'setKidMode' and dt >= user_msgs[-1].time:
+                        is_kid = True
+                    elif action.action == 'modMessage':
+                        if action.is_spam() and (last_time['spam'] is None or dt > last_time['spam']):
+                            last_time['spam'] = dt
+                        elif action.is_insult() and (last_time['insult'] is None or dt > last_time['insult']):
+                            last_time['insult'] = dt
+                        elif action.is_trolling() and (last_time['trolling'] is None or dt > last_time['trolling']):
+                            last_time['trolling'] = dt
+                        elif action.is_shaming() and (last_time['shaming'] is None or dt > last_time['shaming']):
+                            last_time['shaming'] = dt
+                        elif action.is_ad() and (last_time['ad'] is None or dt > last_time['ad']):
+                            last_time['ad'] = dt
+                        elif action.is_team_ad() and (last_time['team_ad'] is None or dt > last_time['team_ad']):
+                            last_time['team_ad'] = dt
+                now_utc = datetime.now(tz=tz.tzutc())
+                is_recent_timeout = last_time['timeout'] and deltaseconds(now_utc, last_time['timeout']) <= RECENT_TIMEOUT
+                if last_timeout_reason != Reason.No and is_recent_timeout:
+                    reasons[last_timeout_reason] += 1
+                buttons = []
+                if is_timed_out or is_recent_timeout:
+                    buttons.append(get_warn_btn('spam', "Warn: Spam", reasons[Reason.Spam], user_name,
+                                                is_disabled=is_recent(last_time, 'spam', now_utc)))
+                    buttons.append(get_warn_btn('insult', "Warn: Insult", reasons[Reason.Offensive], user_name,
+                                                is_disabled=is_recent(last_time, 'insult', now_utc)))
+                    buttons.append(get_warn_btn('trolling', "Warn: Trolling", reasons[Reason.Other], user_name,
+                                                is_disabled=is_recent(last_time, 'trolling', now_utc)))
+                    buttons.append(get_warn_btn('shaming', "Warn: Shaming", reasons[Reason.Shaming], user_name,
+                                                is_disabled=is_recent(last_time, 'shaming', now_utc)))
+                    buttons.append(get_warn_btn('ad', "Warn: Ads", False, user_name,
+                                                is_disabled=is_recent(last_time, 'ad', now_utc)))
+                    buttons.append(get_warn_btn('team_ad', "Warn: Team Ad", False, user_name,
+                                                is_disabled=is_recent(last_time, 'team_ad', now_utc)))
+                    buttons.append('<div class="dropdown-divider my-1"></div>')
+                    is_SBable = user_data.notes and (is_banable or self.selected_user_num_recent_comm_warnings
+                                                     or self.selected_user_num_recent_timeouts)
+                    buttons.append(get_warn_btn('SB', "Shadowban", True, user_name, txt_class="text-danger",
+                                                is_disabled=is_SBed or not is_SBable))
+                kid_sus = ChatAnalysis.kid_years.search(user_data.profile.bio)
+                buttons.append(get_warn_btn('kidMode', "Kid Mode", kid_sus, user_name, txt_class="text-warning",
+                                            is_disabled=is_kid))
+                btn_class = "btn-warning" if kid_sus or (len(buttons) > 1) else "btn-secondary"
+                button_warn = f'<button class="btn {btn_class} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" '\
+                    f'id="warn-ban" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"' \
+                    f'style="cursor:pointer;">Action</button><span class="dropdown-menu" style="">' \
+                    f'{"".join(buttons)}</span>'
+                add_info = f'<div class="d-flex justify-content-between">' \
+                           f'<span>{add_info}</span><span>{button_warn}</span></div>'
+            return add_info
+
+        def create_output(info, tournament, user_data, filtered_info=None, user_msgs=None):
+            data = {'selected-messages': info, 'filtered-messages': filtered_info or info,
+                    'selected-tournament': tournament}
+            if user_data:
+                user_info = user_data.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES)
+                add_info = add_comm_info(user_data, user_msgs)
                 if add_info:
                     user_info = f'{user_info}<div>{add_info}</div>'
                 data.update({'selected-user': user_data.name, 'user-profile': user_data.get_profile(),
@@ -476,6 +643,8 @@ class ChatAnalysis:
                 msgs_user = [(msg_f if msg_user.id == msg_id else msg_user.get_info(
                                 'F', base_time=msg_i.time, highlight_user=msg_i.username, add_selection=True))
                              for msg_user in self.tournaments[tourn_id].messages if msg_user.username == msg_i.username]
+                user_msgs = [(msg_i if msg_user.id == msg_id else msg_user)
+                             for msg_user in self.tournaments[tourn_id].messages if msg_user.username == msg_i.username]
                 list_start = '<hr class="text-primary my-1" style="border:1px solid;">' if i_start == 0 else ""
                 list_end = '<hr class="text-primary mt-1 mb-0" style="border:1px solid;">'\
                            if i_end == len(self.tournaments[tourn_id].messages) else ""
@@ -483,17 +652,33 @@ class ChatAnalysis:
             user = self.users.get(username)
             info_selected = f'{list_start}{"".join(msgs_before)} {msg} {"".join(msgs_after)}{list_end}'
             info_filtered = "".join(msgs_user)
-            return create_output(info_selected, tournament_name, user, filtered_info=info_filtered)
+            return create_output(info_selected, tournament_name, user, filtered_info=info_filtered, user_msgs=user_msgs)
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             return create_output(f'<p class="text-danger">Error: {exception}</p>', tournament_name, None)
         except:
             return create_output(f'<p class="text-danger">Error: get_messages_near()</p>', tournament_name, None)
 
+    def clear_errors(self, tourn_id):
+        try:
+            if tourn_id == "global":
+                self.errors.clear()
+                self.warnings.clear()
+            else:
+                tournament = self.tournaments.get(tourn_id)
+                if tournament:
+                    tournament.clear_errors()
+                else:
+                    self.add_error(f"Failed to clear tournament errors: \"{tourn_id}\"", False)
+            self.state_reports += 1
+        except Exception as exception:
+            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: clear_errors({tourn_id}): {exception}", False)
+
     def set_tournament(self, tourn_id, checked):
         tournament = self.tournaments.get(tourn_id)
         if not tournament:
-            self.errors.append(f"No tournament \"{tourn_id}\" to set {checked}")
+            self.add_error(f"No tournament \"{tourn_id}\" to set {checked}", False)
             return
         tournament.is_enabled = (not tournament.is_enabled) if checked is None else checked
 
@@ -595,9 +780,13 @@ class ChatAnalysis:
                     output.extend(tourn.multiline_reports)
             output.sort(key=lambda t: t[0], reverse=True)
             info_frequent = "".join([info for score, info in output])
-            if self.errors:
-                info = f'<div class="text-warning text-break">{"<b>Errors</b>: " if len(self.errors) > 1 else ""}<div>' \
-                       f'{"</div><div>".join(self.errors)}</div><div class="text-danger">ABORTED</div></div>{info}'
+            all_errors = self.errors.copy()
+            all_errors.extend(self.warnings)
+            if all_errors:
+                btn_clear = f'<div><button class="btn btn-info align-baseline flex-grow-1 py-0 px-1" ' \
+                            f'onclick="clear_errors(\'global\');">Clear errors</button></div>'
+                info = f'<div class="text-warning text-break">{"<b>Errors</b>: " if len(all_errors) > 1 else ""}<div>' \
+                       f'{"</div><div>".join(all_errors)}</div>{btn_clear}<div class="text-danger">ABORTED</div></div>{info}'
             messages_nearby = self.get_messages_nearby(self.selected_msg_id)
             str_time = f"{now:%H:%M}"
             self.cache_reports = {'reports': info, 'multiline-reports': info_frequent,
@@ -687,10 +876,11 @@ class ChatAnalysis:
                 is_ok = add_note(username, note)
                 if is_ok:
                     mod_notes = get_notes(username)
+                    self.state_reports += 1
                     return {'selected-user': username, 'mod-notes': mod_notes}
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.errors.append(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}")
+            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}", False)
         return {'selected-user': username, 'mod-notes': ""}
 
 

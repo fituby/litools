@@ -129,6 +129,11 @@ class Message:
         return self.is_removed or self.is_disabled or \
                self.is_reset or self.is_timed_out or self.is_official  # or self.is_deleted
 
+    def is_banable(self):
+        if self.best_ban_reason() != Reason.No:
+            return True
+        return self.best_score_reason() != Reason.No and self.score and self.score >= 50
+
     def get_info(self, tag, show_hidden=None, add_buttons=None, base_time=None, rename_dismiss=None, add_user=True,
                  add_mscore=False, add_reason=None, highlight_user=None, is_selected=False, is_centered=False,
                  add_selection=False):
@@ -169,7 +174,6 @@ class Message:
         best_reason = best_ban_reason if best_ban_reason != Reason.No else self.best_score_reason()
         if best_reason == Reason.No and add_reason is not None:
             best_reason = int(add_reason)
-        r = Reason.to_Tag(best_reason)
         class_ban = "btn-warning" if self.score and self.score >= 50 else "btn-secondary"
         button_ban = f'<button class="btn {class_ban} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" ' \
                      f'data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">' \
@@ -186,7 +190,7 @@ class Message:
         if add_buttons & AddButtons.Ban:
             if best_ban_reason != Reason.No or (best_reason != Reason.No and self.score and self.score >= 50):
                 button_ban = f'<button class="btn btn-danger align-baseline flex-grow-0 py-0 px-1" ' \
-                             f'onclick="timeout(\'{tag}{self.id}\');">{r}</button>{button_ban}'
+                             f'onclick="timeout(\'{tag}{self.id}\');">{Reason.to_Tag(best_reason)}</button>{button_ban}'
         class_name = "text-muted" if self.is_deleted or self.is_reset \
             else "text-secondary" if self.is_removed or self.is_disabled or self.is_timed_out or self.is_official else ""
         text = f'<s style="text-decoration-style:double;">{self.eval_text}</s>' if self.is_removed \
