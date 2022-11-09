@@ -307,6 +307,20 @@
     $(`#mmsg${msg_id}`).css("display","none");
     $.ajax({url: `/chat/set_multi_msg_ok/${msg_id}`, type: "post"});
   }
+  function warn(username, subject) {
+    if (!is_clickable()) return;
+    $('#warn-ban').css("display","none");
+    $.ajax({url: `/chat/warn/${username}/${subject}`, type: "post"})
+      .done(function(data_chats, textStatus, jqXHR) {
+        update_data(data_chats);
+      });
+  }
+  function clear_errors(tourn_id) {
+    $.ajax({url: `/chat/clear_errors/${tourn_id}`, type: "post"})
+      .done(function(data_chats, textStatus, jqXHR) {
+        update_data(data_chats);
+      });
+  }
   function update_mode(val, to_request=true) {
     if (val == 0)
       val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
@@ -532,11 +546,9 @@
       type: "post",
       data: {note: $('#notes').val(), user: notes_user}})
         .done(function(data, textStatus, jqXHR) {
-          if (data["mod-notes"]) {
-            if (notes_user && data["selected-user"] == notes_user)
-              update_mod_notes(data);
+          if (data["mod-notes"])
             clear_notes();
-          }
+          update_data(data);
         });
   }
   function custom_timeout(reason) {

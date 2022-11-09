@@ -686,43 +686,44 @@ def get_ndjson(url, Accept="application/x-ndjson"):
     return data
 
 
-def datetime_to_ago(t, now_utc=None):
+def datetime_to_ago(t, now_utc=None, short=False):
     if now_utc is None:
         now_utc = datetime.now(tz=tz.tzutc())
     years = relativedelta(now_utc, t).years
     if years >= 1:
-        return "1 year ago" if years == 1 else f"{years} years ago"
+        return f"{years}Y" if short else "1 year ago" if years == 1 else f"{years} years ago"
     months = relativedelta(now_utc, t).months
     if months >= 1:
-        return "1 month ago" if months == 1 else f"{months} months ago"
+        return f"{months}M" if short else "1 month ago" if months == 1 else f"{months} months ago"
     weeks = relativedelta(now_utc, t).weeks
     if weeks >= 1:
-        return "1 week ago" if weeks == 1 else f"{weeks} weeks ago"
+        return f"{weeks}W" if short else "1 week ago" if weeks == 1 else f"{weeks} weeks ago"
     days = relativedelta(now_utc, t).days
     if days >= 1:
-        return "1 day ago" if days == 1 else f"{days} days ago"
+        return f"{days}D" if short else "1 day ago" if days == 1 else f"{days} days ago"
     hours = relativedelta(now_utc, t).hours
     if hours >= 1:
-        return "1 hour ago" if hours == 1 else f"{hours} hours ago"
+        return f"{hours}h" if short else "1 hour ago" if hours == 1 else f"{hours} hours ago"
     minutes = relativedelta(now_utc, t).minutes
     if minutes >= 1:
-        return "1 minute ago" if minutes == 1 else f"{minutes} minutes ago"
+        return f"{minutes}m" if short else "1 minute ago" if minutes == 1 else f"{minutes} minutes ago"
     seconds = relativedelta(now_utc, t).seconds
     if seconds >= 1:
-        return "1 second ago" if seconds == 1 else f"{seconds} seconds ago"
+        return f"{seconds}s" if short else "1 second ago" if seconds == 1 else f"{seconds} seconds ago"
     if seconds == 0:
         return "now"
     return "right now"
 
 
-def timestamp_to_ago(ts_ms, now_utc=None):
+def timestamp_to_ago(ts_ms, now_utc=None, short=False):
     t = datetime.fromtimestamp(ts_ms // 1000, tz=tz.tzutc())
-    return datetime_to_ago(t, now_utc)
+    return datetime_to_ago(t, now_utc, short)
 
 
-def timestamp_to_abbr_ago(ts_ms, now_utc=None):
+def timestamp_to_abbr_ago(ts_ms, now_utc=None, short=False):
     t = datetime.fromtimestamp(ts_ms // 1000, tz=tz.tzutc())
-    return f'<abbr title="{t:%Y-%m-%d %H:%M:%S} UTC" style="text-decoration:none;">{timestamp_to_ago(ts_ms, now_utc)}</abbr>'
+    return f'<abbr title="{t:%Y-%m-%d %H:%M:%S} UTC" style="text-decoration:none;">' \
+           f'{timestamp_to_ago(ts_ms, now_utc, short)}</abbr>'
 
 
 def deltaseconds(dt2, dt1):
@@ -954,6 +955,22 @@ class ModActionType(IntEnum):
     Alt = 1
 
 
+def get_table_row_for_actions(actions, now_utc):
+    if not actions:
+        return ""
+    if len(actions) == 1:
+        return actions[0].get_table_row(now_utc)
+    date = f'{actions[0].get_date(now_utc).replace(" ago", "")}&hellip;<br>{actions[-1].get_date(now_utc)}'
+    action_class = {actions[0].get_class(now_utc)}
+    row = f'<tr>' \
+          f'<td class="text-left align-middle {actions[0].get_date_class(now_utc)}">{date}</td>' \
+          f'<td class="text-left align-middle">{actions[0].get_mod_name()}</td>' \
+          f'<td class="text-left align-middle {action_class}">{actions[0].get_full_action()}</td>' \
+          f'<td class="text-right align-middle text-danger {action_class}"><b>x{len(actions)}</b></td>' \
+          f'</tr>'
+    return row
+
+
 def get_mod_log(data, action_type=ModActionType.Standard):
     actions = []
     try:
@@ -969,7 +986,17 @@ def get_mod_log(data, action_type=ModActionType.Standard):
                     actions.append(ModAction(action_data))
         ModAction.update_names(actions)
         now_utc = datetime.now(tz=tz.tzutc())
-        info = [action.get_table_row(now_utc) for action in actions]
+        info = []
+        action_stack = []
+        for action in actions:
+            if action.is_combinable(action_stack, now_utc):
+                action_stack.append(action)
+            else:
+                if action_stack:
+                    info.append(get_table_row_for_actions(action_stack, now_utc))
+                action_stack = [action]
+        if action_stack:
+            info.append(get_table_row_for_actions(action_stack, now_utc))
         out_info = f'<table class="table table-sm table-striped table-hover border mb-0">' \
                    f'<tbody>{"".join(info)}</tbody></table>' if info else ""
         return out_info, actions
@@ -1149,9 +1176,20 @@ class ModAction:
         row = f'<tr>' \
               f'<td class="text-left align-middle {self.get_date_class(now_utc)}">{self.get_date(now_utc)}</td>' \
               f'<td class="text-left align-middle">{self.get_mod_name()}</td>' \
-              f'<td class="text-left align-middle {self.get_class(now_utc)}">{self.get_full_action()}</td>' \
+              f'<td colspan="2" class="text-left align-middle {self.get_class(now_utc)}">{self.get_full_action()}</td>' \
               f'</tr>'
         return row
+
+    def is_combinable(self, action_stack, now_utc):
+        if not action_stack:
+            return True
+        if self.action != action_stack[0].action:
+            return False
+        if self.details != action_stack[0].details:
+            return False
+        if self.mod_id != action_stack[0].mod_id:
+            return False
+        return action_stack[0].is_old(now_utc) == self.is_old(now_utc)
 
 
 class BoostModAction(ModAction):
@@ -1220,22 +1258,22 @@ class ChatModAction(ModAction):
         return self.action == 'chatTimeout'
 
     def is_shaming(self):
-        return self.details.startswith("Warning: Accusations")
+        return self.details == ModAction.warnings['shaming']
 
     def is_insult(self):
-        return self.details.startswith("Warning: Offensive")
+        return self.details == ModAction.warnings['insult']
 
     def is_spam(self):
-        return self.details.startswith("Warning: Spam")
+        return self.details == ModAction.warnings['spam']
 
     def is_trolling(self):
-        return self.details.startswith("Warning: Chat")
+        return self.details == ModAction.warnings['trolling']
 
     def is_ad(self):
-        return self.details.startswith("Warning: Advertisements")
+        return self.details == ModAction.warnings['ad']
 
     def is_team_ad(self):
-        return self.details.startswith("Warning: Team")
+        return self.details == ModAction.warnings['team_ad']
 
     def is_comm_warning(self):
         return self.action == 'modMessage' and (
@@ -1244,6 +1282,9 @@ class ChatModAction(ModAction):
 
     def is_SB(self):
         return self.action == 'troll'
+
+    def is_kidMode(self):
+        return self.action == 'setKidMode'
 
 
 def warn_user(username, subject):

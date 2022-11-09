@@ -33,7 +33,7 @@ swiss_tournament_page = "https://lichess.org/siwss/"
 
 class ChatAnalysis:
     kid_years = re.compile(r"(?:\b|\D)({})(?:\b|\D)".format("|".join(
-        [f"{y}\s*(?:г|л|y|j)|{datetime.now().year - y}" for y in range(6, 13)])), re.IGNORECASE)
+        [f"{y}\s*(?:г|л|y|j)|{datetime.now().year - y}" for y in range(6, 12)])), re.IGNORECASE)
 
     def __init__(self):
         self.tournaments = {}
@@ -233,6 +233,27 @@ class ChatAnalysis:
             now_utc = datetime.now(tz=tz.tzutc())
             self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
 
+    def is_user_up_to_date(self, name):
+        username = self.get_selected_username()
+        if not username:
+            return True
+        if name != username:
+            return True
+        user = self.users.get(name)
+        if not user:
+            return True
+        # Assuming that actions are sorted
+        last_action_time = user.actions[0].date if user.actions else None
+        self.update_selected_user()
+        updated_user = self.users.get(name)
+        if not updated_user:
+            return True
+        is_up_to_date = (not updated_user.actions) or (updated_user.actions[0].date <= last_action_time)
+        if not is_up_to_date:
+            self.add_error(f"Failed to apply your action to @{name}. As of {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC"
+                           f" there are new entries in the mod log. Please check them first.", False)
+        return is_up_to_date
+
     def api_timeout(self, msg, reason, is_timeout_manual):
         reason_tag = Reason.to_tag(reason)
         if reason_tag is None:
@@ -241,6 +262,8 @@ class ChatAnalysis:
         if msg.tournament.id not in self.tournaments:
             self.add_error(f"Error timeout: Tournament {msg.tournament.id} deleted "
                            f"as of {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC", False)
+            return
+        if not self.is_user_up_to_date(msg.username):
             return
         chan = "tournament" if msg.tournament.t_type == TournType.Arena \
             else "swiss" if msg.tournament.t_type == TournType.Swiss \
@@ -324,6 +347,8 @@ class ChatAnalysis:
         if subject not in ModAction.warnings.values():
             self.add_error(f"Warn error: @{username}: <u>Subject</u>: {subject}", False)
             return
+        if not self.is_user_up_to_date(username):
+            return
         headers = {'Authorization': f"Bearer {get_token()}"}
         url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
         r = requests.post(url, headers=headers)
@@ -335,6 +360,8 @@ class ChatAnalysis:
             self.add_error(f"Warn error (status: {r.status_code}):<br>@{username}: <u>Subject</u>: {subject}", False)
 
     def api_kidMode(self, username):
+        if not self.is_user_up_to_date(username):
+            return
         headers = {'Authorization': f"Bearer {get_token()}"}
         url = f"https://lichess.org/mod/{username}/kid"
         r = requests.post(url, headers=headers)
@@ -346,6 +373,8 @@ class ChatAnalysis:
             self.add_error(f"Action error (status: {r.status_code}):<br>@{username}: kidMode", False)
 
     def api_SB(self, username):
+        if not self.is_user_up_to_date(username):
+            return
         headers = {'Authorization': f"Bearer {get_token()}"}
         url = f"https://lichess.org/mod/{username}/troll/true"
         r = requests.post(url, headers=headers)
@@ -418,21 +447,27 @@ class ChatAnalysis:
         except:
             return
 
+    def get_selected_username(self):
+        if self.selected_msg_id is None:
+            return None
+        msg = self.all_messages.get(self.selected_msg_id)
+        if not msg:
+            return None
+        return msg.username
+
     def update_selected_user(self):
         try:
-            if self.selected_msg_id is None:
+            username = self.get_selected_username()
+            if not username:
                 return
-            msg = self.all_messages.get(self.selected_msg_id)
-            if not msg:
-                return
-            user = UserData(msg.username)
+            user = UserData(username)
             now_utc = datetime.now(tz=tz.tzutc())
             if self.to_read_mod_log and (self.last_mod_log_error is None
                                          or now_utc > self.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
                 with self.selected_user_lock:
                     self.selected_user_num_recent_timeouts = 0
                     self.selected_user_num_recent_comm_warnings = 0
-                    mod_log_data = load_mod_log(msg.username)
+                    mod_log_data = load_mod_log(username)
                     if mod_log_data is None:
                         self.last_mod_log_error = now_utc
                     else:
@@ -461,13 +496,13 @@ class ChatAnalysis:
                 mod_log_data = None
             if self.to_read_notes and (self.last_notes_error is None
                                        or now_utc > self.last_notes_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
-                user.notes = get_notes(msg.username, mod_log_data)
+                user.notes = get_notes(username, mod_log_data)
                 if user.notes is None:
                     self.last_notes_error = now_utc
                     user.notes = ""
                 else:
                     self.last_notes_error = None
-            self.users[msg.username] = user
+            self.users[username] = user
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
 
@@ -544,7 +579,8 @@ class ChatAnalysis:
                     elif action.is_timeout() and (last_time['timeout'] is None or dt > last_time['timeout']):
                         last_time['timeout'] = dt
                         last_timeout_reason = action.get_timeout_reason()
-                    elif action.action == 'setKidMode' and dt >= user_msgs[-1].time:
+                    elif action.is_kidMode() and (user_msgs[-1].delay is None or dt >= user_msgs[-1].time
+                                                  - timedelta(seconds=user_msgs[-1].delay)):
                         is_kid = True
                     elif action.action == 'modMessage':
                         if action.is_spam() and (last_time['spam'] is None or dt > last_time['spam']):
@@ -583,15 +619,17 @@ class ChatAnalysis:
                     buttons.append(get_warn_btn('SB', "Shadowban", True, user_name, txt_class="text-danger",
                                                 is_disabled=is_SBed or not is_SBable))
                 kid_sus = ChatAnalysis.kid_years.search(user_data.profile.bio)
-                buttons.append(get_warn_btn('kidMode', "Kid Mode", kid_sus, user_name, txt_class="text-warning",
-                                            is_disabled=is_kid))
-                btn_class = "btn-warning" if kid_sus or (len(buttons) > 1) else "btn-secondary"
-                button_warn = f'<button class="btn {btn_class} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" '\
-                    f'id="warn-ban" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"' \
-                    f'style="cursor:pointer;">Action</button><span class="dropdown-menu" style="">' \
-                    f'{"".join(buttons)}</span>'
-                add_info = f'<div class="d-flex justify-content-between">' \
-                           f'<span>{add_info}</span><span>{button_warn}</span></div>'
+                if buttons or (not is_kid and not is_SBed):
+                    buttons.append(get_warn_btn('kidMode', "Kid Mode", kid_sus, user_name, txt_class="text-warning",
+                                                is_disabled=is_kid))
+                if buttons:
+                    btn_class = "btn-warning" if (kid_sus and not is_kid) or (len(buttons) > 1) else "btn-secondary"
+                    button_warn = f'<button class="btn {btn_class} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" '\
+                        f'id="warn-ban" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"' \
+                        f'style="cursor:pointer;">Action</button><span class="dropdown-menu" style="">' \
+                        f'{"".join(buttons)}</span>'
+                    add_info = f'<div class="d-flex justify-content-between">' \
+                               f'<span>{add_info}</span><span>{button_warn}</span></div>'
             return add_info
 
         def create_output(info, tournament, user_data, filtered_info=None, user_msgs=None):
@@ -876,6 +914,7 @@ class ChatAnalysis:
                 is_ok = add_note(username, note)
                 if is_ok:
                     mod_notes = get_notes(username)
+                    # TODO: update actions: {'user-profile': user_data.get_profile(), 'user-info': user_info}
                     self.state_reports += 1
                     return {'selected-user': username, 'mod-notes': mod_notes}
         except Exception as exception:

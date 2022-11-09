@@ -261,7 +261,10 @@ def chat_send_note():
     note = request.form.get("note", None)
     user = request.form.get("user", None)
     data = chat.send_note(note, user)
-    resp = make_response(data)
+    #resp = make_response(data)  # needs 'user-info', see chat.send_note() --> workaround:
+    all_data = chat.get_all()
+    all_data.update(data)
+    resp = make_response(all_data)
     return resp
 
 

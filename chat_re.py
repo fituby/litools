@@ -181,7 +181,9 @@ class ReUser(Re):
         super().__init__(str_re, score, max_score, ban, reason, info, class_name, is_separate_word, is_capturing_groups)
 
     def format_element(self, element, info):
-        return f'<a class="{self.class_name}" href="https://lichess.org/@/{element.lower()}" target="_blank">{element}</a>'
+        i = max(element[:-1].rfind('/'), element[:-1].rfind('@'))
+        name = element[i + 1:] if i >= 0 else element
+        return f'<a class="{self.class_name}" href="https://lichess.org/@/{name.lower()}" target="_blank">{element}</a>'
 
 
 list_res_variety = [
