@@ -7,6 +7,7 @@ from chat import ChatAnalysis
 from alt import Alts
 from elements import get_port, get_embed_lichess
 from enum import IntEnum
+import threading
 
 
 class Mode(IntEnum):
@@ -156,14 +157,12 @@ def create_chat():
 
 @app.route('/chat/update/', methods=['POST'])
 def get_chat_update():
-    chat.update_tournaments()
     resp = make_response(chat.get_tournaments())
     return resp
 
 
 @app.route('/chat/process/', methods=['POST'])
 def get_chat_process():
-    chat.run()
     data = chat.get_all()
     return make_response(data)
 
@@ -290,5 +289,14 @@ def set_mode(mode):
     return resp
 
 
+def chat_loop():
+    global chat
+    while True:
+        chat.update_tournaments()
+        chat.run()
+
+
 if __name__ == "__main__":
+    thread = threading.Thread(name="chat_loop", target=chat_loop)
+    thread.start()
     serve(app.run(), host="127.0.0.1", port=get_port(), threads=2)

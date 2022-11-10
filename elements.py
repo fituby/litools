@@ -961,12 +961,13 @@ def get_table_row_for_actions(actions, now_utc):
     if len(actions) == 1:
         return actions[0].get_table_row(now_utc)
     date = f'{actions[0].get_date(now_utc).replace(" ago", "")}&hellip;<br>{actions[-1].get_date(now_utc)}'
-    action_class = {actions[0].get_class(now_utc)}
+    action_class = actions[0].get_class(now_utc)
     row = f'<tr>' \
           f'<td class="text-left align-middle {actions[0].get_date_class(now_utc)}">{date}</td>' \
           f'<td class="text-left align-middle">{actions[0].get_mod_name()}</td>' \
           f'<td class="text-left align-middle {action_class}">{actions[0].get_full_action()}</td>' \
-          f'<td class="text-right align-middle text-danger {action_class}"><b>x{len(actions)}</b></td>' \
+          f'<td class="text-right align-middle {action_class}" style="font-size:23px">' \
+          f'<b>&times;{len(actions)}</b></td>' \
           f'</tr>'
     return row
 
