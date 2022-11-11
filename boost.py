@@ -6,7 +6,7 @@ import time
 import traceback
 from collections import defaultdict
 import math
-from elements import get_token, get_user, get_ndjson, shorten, deltaseconds
+from elements import get_user, get_ndjson, shorten, deltaseconds
 from elements import get_notes, add_note, load_mod_log, get_mod_log, add_variant_rating
 from elements import ModActionType, WarningStats, User, Games, Variants
 from elements import warn_sandbagging, warn_boosting, mark_booster, decode_string
@@ -264,8 +264,8 @@ class UserTournament:
         self.score: int = None
         self.performance: int = None
 
-    def download(self):
-        headers = {'Authorization': f"Bearer {get_token()}"}
+    def download(self, mod):
+        headers = {'Authorization': f"Bearer {mod.token}"}
         if self.is_arena:
             url = f"https://lichess.org/api/tournament/{self.tournament_id}"
             r = requests.get(url, headers=headers)
@@ -488,7 +488,7 @@ class Boost:
     def is_mod():
         return not not Boost.ring_tool
 
-    def __init__(self, username, num_games, before):
+    def __init__(self, username, num_games, before, mod):
         self.user = User(username)
         self.before = before
         self.errors = []
@@ -504,7 +504,7 @@ class Boost:
         self.mod_log: ModLogData = None
         self.mod_log_out = ""
         if Boost.ring_tool is None:
-            Boost.ring_tool = decode_string(BOOST_RING_TOOL)  # returns "" (not None) if not available
+            Boost.ring_tool = decode_string(BOOST_RING_TOOL, mod)  # returns "" (not None) if not available
         self.info_games_played = ""
 
     def get_errors(self):
@@ -542,8 +542,8 @@ class Boost:
             profile = f'<div class="my-3">{profile}</div>'
         return f"{variants}{profile}"
 
-    def get_mod_notes(self, mod_log_data):
-        mod_notes = get_notes(self.user.name, mod_log_data) if Boost.is_mod() else ""
+    def get_mod_notes(self, mod_log_data, mod):
+        mod_notes = get_notes(self.user.name, mod, mod_log_data) if Boost.is_mod() else ""
         header_notes = "Notes:" if mod_notes else "No notes"
         return {'mod-notes': mod_notes, 'notes-header': header_notes}
 
@@ -553,14 +553,14 @@ class Boost:
                 'enable-marking': 1 if self.prefer_marking and (self.enable_sandbagging or self.enable_boosting)
                                        else -1 if self.user.is_titled() else 0}
 
-    def set(self, user):
+    def set(self, user, mod):
         self.user.set(user)
         if self.user.disabled:
             self.errors.append('Account closed')
         else:
             perfs = user.get('perfs', {})
             self.variants.set(perfs)
-        self.update_mod_log()
+        self.update_mod_log(mod)
         self.analyse_games()
 
     def analyse_games(self):
@@ -586,12 +586,12 @@ class Boost:
         if exc:
             raise exc
 
-    def update_mod_log(self):
-        mod_log_data = load_mod_log(self.user.name) if Boost.is_mod() else None
+    def update_mod_log(self, mod):
+        mod_log_data = load_mod_log(self.user.name, mod) if Boost.is_mod() else None
         self.mod_log = ModLogData(mod_log_data)
-        self.mod_log_out = self.mod_log.prepare()
+        self.mod_log_out = self.mod_log.prepare(mod)
 
-    def analyse_tournaments(self):
+    def analyse_tournaments(self, mod):
         try:
             now = datetime.now()
             if self.last_update_tournaments:
@@ -624,7 +624,7 @@ class Boost:
                     if delay > 0:
                         time.sleep(delay)
                 tourney = UserTournament(self.user.id, self.games.median_rating, tourn, is_arena, tourney_info)
-                tourney.download()
+                tourney.download(mod)
                 self.tournaments.append(tourney)
                 t1 = time.time()
             # Output
@@ -757,7 +757,7 @@ class Boost:
         until = self.games.until or datetime.now(tz=tz.tzutc())
         return f"{until:%Y-%m-%dT%H:%M}"
 
-    def get_output(self):
+    def get_output(self, mod):
         before = self.get_datetime_before()
         if not self.before:
             self.before = before
@@ -765,10 +765,10 @@ class Boost:
         if not self.user.is_error:
             try:
                 if not self.mod_log:
-                    self.update_mod_log()
+                    self.update_mod_log(mod)
                 self.enable_buttons(self.mod_log)
                 output['mod-log'] = self.mod_log_out
-                output.update(self.get_mod_notes(self.mod_log.data))
+                output.update(self.get_mod_notes(self.mod_log.data, mod))
                 output.update(self.get_enabled_buttons())
             except Exception as exception:
                 traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -778,7 +778,7 @@ class Boost:
         return output
 
 
-def get_boost_data(username, num_games=None, before=None):
+def get_boost_data(username, mod, num_games=None, before=None):
     global boosts
     now = datetime.now()
     user_id = username.lower()
@@ -791,13 +791,13 @@ def get_boost_data(username, num_games=None, before=None):
             return boost
     if not num_games:
         num_games = BOOST_NUM_GAMES[0]
-    boost = Boost(username, num_games, before)
-    user, api_error = get_user(username)
+    boost = Boost(username, num_games, before, mod)
+    user, api_error = get_user(username, mod)
     if api_error:
         boost.user.is_error = True
         boost.errors.append(api_error)
     else:
-        boost.set(user)
+        boost.set(user, mod)
         boosts[user_id] = boost, now
     for user_id in list(boosts.keys()):
         if deltaseconds(now, boosts[user_id][1]) >= BOOST_UPDATE_PERIOD:
@@ -805,16 +805,16 @@ def get_boost_data(username, num_games=None, before=None):
     return boost
 
 
-def send_boost_note(note, username):
+def send_boost_note(note, username, mod):
     global boosts
     user_id = username.lower()
     boost, last_update = boosts.get(user_id, (None, None))
     try:
         if not boost or not note or not username:
             raise Exception(f"Wrong note: [{username}]: {note}")
-        is_ok = add_note(username, note)
+        is_ok = add_note(username, note, mod)
         if is_ok:
-            mod_notes = get_notes(username)
+            mod_notes = get_notes(username, mod)
             header_notes = "Notes:" if mod_notes else "No notes"
             return {'mod-notes': mod_notes, 'notes-header': header_notes, 'user': username}
     except Exception as exception:
@@ -840,10 +840,10 @@ class ModLogData:
         self.is_boost = False
         self.is_engine = False
 
-    def process(self):
+    def process(self, mod):
         self.num_other_actions = 0
         self.time_last_manual_warning = None
-        self.mod_log_table, actions = get_mod_log(self.data, ModActionType.Boost)
+        self.mod_log_table, actions = get_mod_log(self.data, mod, ModActionType.Boost)
         now_utc = datetime.now(tz=tz.tzutc())
         for action in actions:
             if action.is_warning():
@@ -883,10 +883,10 @@ class ModLogData:
             if dt > self.time_last_manual_warning:
                 self.time_last_manual_warning = dt
 
-    def prepare(self):
+    def prepare(self, mod):
         if self.data is None:
             return "Mod Log is not available"
-        self.process()
+        self.process(mod)
         class_sandbag_manual_active = "text-danger" if self.sandbag_manual.active else ""
         class_boost_manual_active = "text-danger" if self.boost_manual.active else ""
         class_sandbag_manual_total = "text-warning" if self.sandbag_manual.total else "text-muted"
@@ -952,7 +952,7 @@ class ModLogData:
         return f'{mod_log_summary}{mod_log_table}'
 
 
-def send_mod_action(action, username):
+def send_mod_action(action, username, mod):
     global boosts
     output = {'user': username, 'mod-log': "", 'enable-sandbagging': -1, 'enable-boosting': -1, 'enable-marking': -1}
     user_id = username.lower()
@@ -961,16 +961,16 @@ def send_mod_action(action, username):
         try:
             output.update(boost.get_enabled_buttons())
             if action == "warn_sandbagging":
-                is_ok = warn_sandbagging(username)
+                is_ok = warn_sandbagging(username, mod)
             elif action == "warn_boosting":
-                is_ok = warn_boosting(username)
+                is_ok = warn_boosting(username, mod)
             elif action == "mark_booster":
-                is_ok = mark_booster(username)
+                is_ok = mark_booster(username, mod)
             else:
                 raise Exception(f"Wrong mod action: [{username}]: {action}")
             print(f"{username}: {action} -> {'DONE' if is_ok else 'skipped'}")
             if is_ok:
-                boost.update_mod_log()
+                boost.update_mod_log(mod)
                 return {'user': username, 'mod-log': boost.mod_log_out,
                         'enable-sandbagging': -1, 'enable-boosting': -1, 'enable-marking': -1}
         except Exception as exception:

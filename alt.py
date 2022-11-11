@@ -8,7 +8,7 @@ import requests
 import time
 from enum import Enum
 from elements import UserData, Games, Variants, ModActionType
-from elements import get_tc, deltaseconds, deltainterval, datetime_to_ago, get_user_ids, get_token
+from elements import get_tc, deltaseconds, deltainterval, datetime_to_ago, get_user_ids
 from elements import load_mod_log, get_mod_log, get_notes
 from consts import *
 
@@ -69,18 +69,18 @@ class OpeningStage(Enum):
     openingVariation = "Opening Variations"
 
 
-def download_openings(user_id, color, opening_stage, to_refresh=False):
+def download_openings(user_id, color, opening_stage, mod, to_refresh=False):
     try:
         if to_refresh:
             wait_api('insights/refresh', 60, 4)
             url_refresh = f'https://lichess.org/insights/refresh/{user_id}'
-            r = requests.post(url_refresh, headers={'Authorization': f"Bearer {get_token()}"})
+            r = requests.post(url_refresh, headers={'Authorization': f"Bearer {mod.token}"})
             if r.status_code != 200:
                 print(f"Failed to refresh insights for @{user_id}: Status {r.status_code}")
         wait_api('insights/data')
         url = f'https://lichess.org/insights/data/{user_id}'
         headers = {'Content-Type': "application/json",
-                   'Authorization': f"Bearer {get_token()}"}
+                   'Authorization': f"Bearer {mod.token}"}
         data = {"metric": "opponentRating", "dimension": opening_stage.name, "filters": {"color": [color.name]}}
         # ... "filters":{"variant": ["rapid"], "period": ["60"]}}'
         r = requests.post(url, json=data, headers=headers)
@@ -107,7 +107,7 @@ class Alt:
     team_dict = {}  # TODO: clear to prevent memory leak
     refresh_openings_times = {}  # TODO: clear to prevent memory leak
 
-    def __init__(self, username, num_games):
+    def __init__(self, username, num_games, mod):
         if not num_games:
             num_games = MAX_NUM_GAMES_TO_DOWNLOAD
         else:
@@ -115,7 +115,7 @@ class Alt:
                 num_games = int(num_games)
             except:
                 num_games = MAX_NUM_GAMES_TO_DOWNLOAD
-        self.user = UserData(username)
+        self.user = UserData(username, mod)
         self.games = Games(self.user.id, min(MAX_NUM_GAMES_TO_DOWNLOAD, num_games), ALT_MAX_PERIOD_FOR_GAMES,
                            STATUSES_TO_DISCARD, download_moves=False, only_rated=False, use_correspondence_games=False)
         self.mutual_games = defaultdict(list)
@@ -182,7 +182,7 @@ class Alt:
         return self.user.id not in Alt.refresh_openings_times \
                or deltaseconds(now, Alt.refresh_openings_times[self.user.id]) > ALT_REFRESH_OPENINGS_PERIOD
 
-    def download_openings(self, refresh_openings):
+    def download_openings(self, refresh_openings, mod):
         if self.user.is_error:
             return
         now = datetime.now()
@@ -195,12 +195,13 @@ class Alt:
                 if to_refresh and not refresh_openings:
                     wait_s = get_waiting_api_time('insights/refresh', 60, 4)
                     to_refresh = (wait_s <= 0)
-                self.hist_openings[color][opening_stage] = download_openings(self.user.id, color, opening_stage, to_refresh)
+                self.hist_openings[color][opening_stage] = download_openings(self.user.id, color, opening_stage, mod,
+                                                                             to_refresh)
                 if to_refresh:
                     Alt.refresh_openings_times[self.user.id] = now
         self.time_step1 = now
 
-    def download_teams(self):
+    def download_teams(self, mod):
         if self.user.is_error:
             return
         now = datetime.now()
@@ -209,7 +210,7 @@ class Alt:
         wait_api('api/team/of')
         url = f'https://lichess.org/api/team/of/{self.user.id}'
         headers = {'Content-Type': "application/json",
-                   'Authorization': f"Bearer {get_token()}"}
+                   'Authorization': f"Bearer {mod.token}"}
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
             return None
@@ -217,17 +218,17 @@ class Alt:
         self.teams.update([team['id'] for team in teams])
         Alt.team_dict.update({team['id']: team['name'] for team in teams})
 
-    def download_mod_log(self):
+    def download_mod_log(self, mod):
         wait_api('api/user/mod-log')
-        mod_log_data = load_mod_log(self.user.name)
+        mod_log_data = load_mod_log(self.user.name, mod)
         if mod_log_data:
-            self.user.mod_log, actions = get_mod_log(mod_log_data, ModActionType.Alt)
+            self.user.mod_log, actions = get_mod_log(mod_log_data, mod, ModActionType.Alt)
             #                  ^ if necessary, actions can be replaced with self.user.actions
             self.num_mod_log_items = len(actions)
-            self.mod_notes = get_notes(self.user.name, mod_log_data)
+            self.mod_notes = get_notes(self.user.name, mod, mod_log_data)
         return bool(mod_log_data)
 
-    # def download_following(self):
+    # def download_following(self, mod):
     #     if self.user.is_error:
     #         return
     #     now = datetime.now()
@@ -236,7 +237,7 @@ class Alt:
     #     wait_api('@/username/following')
     #     url = f'https://lichess.org/@/{self.user.id}/following'
     #     headers = {'Content-Type': "application/json",
-    #                'Authorization': f"Bearer {get_token()}"}
+    #                'Authorization': f"Bearer {mod.token}"}
     #     r = requests.get(url, headers=headers)
     #     if r.status_code != 200:
     #         return None
@@ -330,7 +331,7 @@ class OverlappingGames:
         self.interval_s = max(0, (t2 - t1) / 1000)
 
 
-def get_alt(user_id, num_games):
+def get_alt(user_id, num_games, mod):
     global alts_cache
     now = datetime.now()
     alt, last_update = alts_cache.get(user_id, (None, None))
@@ -339,7 +340,7 @@ def get_alt(user_id, num_games):
     if alt and (alt.games.max_num_games == num_games):
         if deltaseconds(now, last_update) < ALT_UPDATE_PERIOD:
             return alt
-    alt = Alt(user_id, num_games)
+    alt = Alt(user_id, num_games, mod)
     alts_cache[user_id] = alt, now
     for user_i in list(alts_cache.keys()):
         if deltaseconds(now, alts_cache[user_i][1]) >= ALT_UPDATE_PERIOD:
@@ -360,8 +361,8 @@ class Alts:
                 unique_ids.add(user_id)
         return unique_usernames
 
-    def __init__(self, names, num_games, theme_color):
-        self.players = [get_alt(username, num_games) for username in names]
+    def __init__(self, names, num_games, theme_color, mod):
+        self.players = [get_alt(username, num_games, mod) for username in names]
         self.alt_names = {alt.user.id: alt.user.name for alt in self.players}
         self.theme_color = theme_color
         self.is_dark_mode = not theme_color.upper().startswith("#FFF")
@@ -371,13 +372,13 @@ class Alts:
         self.is_step2 = False
         self.is_mod_log = True
 
-    def process_step1(self, force_refresh_openings):
+    def process_step1(self, force_refresh_openings, mod):
         for alt in self.players:
-            alt.download_teams()
+            alt.download_teams(mod)
             #alt.download_following()
-            alt.download_openings(force_refresh_openings)
+            alt.download_openings(force_refresh_openings, mod)
             if self.is_mod_log:
-                self.is_mod_log = alt.download_mod_log()
+                self.is_mod_log = alt.download_mod_log(mod)
         self.is_step1 = True
 
     def process_step2(self):

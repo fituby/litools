@@ -327,9 +327,9 @@ class User:
 
 
 class UserData(User):
-    def __init__(self, username):
+    def __init__(self, username, mod):
         super().__init__(username)
-        self.data, api_error = get_user(username)
+        self.data, api_error = get_user(username, mod)
         if self.data and not api_error:
             self.set(self.data)
         self.mod_log = ""
@@ -339,9 +339,9 @@ class UserData(User):
         self.is_error = not not api_error
 
 
-def get_user(username):
+def get_user(username, mod):
     try:
-        headers = {'Authorization': f"Bearer {get_token()}"}
+        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/api/user/{username}"
         r = requests.get(url, headers=headers)
         if r.status_code == 200:
@@ -869,8 +869,8 @@ def get_user_link(username, no_name="Unknown User", class_a="text-info", max_len
     return f'<i>{no_name}</i>'
 
 
-def read_notes(username):
-    headers = {'Authorization': f"Bearer {get_token()}"}
+def read_notes(username, mod):
+    headers = {'Authorization': f"Bearer {mod.token}"}
     url = f"https://lichess.org/api/user/{username}/note"
     r = requests.get(url, headers=headers)
     if r.status_code != 200:
@@ -878,12 +878,12 @@ def read_notes(username):
     return r.json()
 
 
-def get_notes(username, mod_log_data=None):
+def get_notes(username, mod, mod_log_data=None):
     info = []
     try:
         data = mod_log_data.get('notes') if mod_log_data else None
         if not data:
-            data = read_notes(username)
+            data = read_notes(username, mod)
         now_utc = datetime.now(tz=tz.tzutc())
         for d in data:
             for note in d:
@@ -920,9 +920,9 @@ def get_notes(username, mod_log_data=None):
            f'<tbody>{"".join(info)}</tbody></table>' if info else ""
 
 
-def add_note(username, note):
+def add_note(username, note, mod):
     try:
-        headers = {'Authorization': f"Bearer {get_token()}"}
+        headers = {'Authorization': f"Bearer {mod.token}"}
         data = {'text': note,
                 'mod': True}
         url = f"https://lichess.org/api/user/{username}/note"
@@ -935,9 +935,9 @@ def add_note(username, note):
     return False
 
 
-def load_mod_log(username):
+def load_mod_log(username, mod):
     try:
-        headers = {'Authorization': f"Bearer {get_token()}"}
+        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/api/user/{username}/mod-log"
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
@@ -972,7 +972,7 @@ def get_table_row_for_actions(actions, now_utc):
     return row
 
 
-def get_mod_log(data, action_type=ModActionType.Standard):
+def get_mod_log(data, mod, action_type=ModActionType.Standard):
     actions = []
     try:
         for d in data['logs']:
@@ -985,7 +985,7 @@ def get_mod_log(data, action_type=ModActionType.Standard):
                     actions.append(ModAction(action_data))
                 else:
                     actions.append(ModAction(action_data))
-        ModAction.update_names(actions)
+        ModAction.update_names(actions, mod)
         now_utc = datetime.now(tz=tz.tzutc())
         info = []
         action_stack = []
@@ -1078,14 +1078,14 @@ class ModAction:
     }
 
     @staticmethod
-    def update_names(actions):
+    def update_names(actions, mod):
         ids = set()
         for action in actions:
             if action.mod_id and action.mod_id not in ModAction.names:
                 ids.add(action.mod_id)
         ids = list(ids)
         if ids:
-            headers = {'Authorization': f"Bearer {get_token()}"}
+            headers = {'Authorization': f"Bearer {mod.token}"}
             url = f"https://lichess.org/api/users/status?ids={','.join(ids)}"
             r = requests.get(url, headers=headers)
             if r.status_code != 200:
@@ -1288,9 +1288,9 @@ class ChatModAction(ModAction):
         return self.action == 'setKidMode'
 
 
-def warn_user(username, subject):
+def warn_user(username, subject, mod):
     try:
-        headers = {'Authorization': f"Bearer {get_token()}"}
+        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
         r = requests.post(url, headers=headers)
         if r.status_code == 200:
@@ -1301,17 +1301,17 @@ def warn_user(username, subject):
     return False
 
 
-def warn_sandbagging(username):
-    return warn_user(username, "Warning: Sandbagging")
+def warn_sandbagging(username, mod):
+    return warn_user(username, "Warning: Sandbagging", mod)
 
 
-def warn_boosting(username):
-    return warn_user(username, "Warning: Boosting")
+def warn_boosting(username, mod):
+    return warn_user(username, "Warning: Boosting", mod)
 
 
-def mark_booster(username):
+def mark_booster(username, mod):
     try:
-        headers = {'Authorization': f"Bearer {get_token()}"}
+        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/booster/true"
         r = requests.post(url, headers=headers)
         if r.status_code == 200:
@@ -1339,9 +1339,9 @@ class WarningStats:
         return self.total if self.total else "&mdash;"
 
 
-def get_boost_reports():
+def get_boost_reports(mod):
     try:
-        headers = {'Authorization': f"Bearer {get_token()}"}
+        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/report/list/boost"
         r = requests.get(url, headers=headers)
         if r.status_code != 200:
@@ -1377,10 +1377,10 @@ class Notes:
         return '\n'.join(content).replace('"', '&quot;')
 
 
-def decode_string(text):
+def decode_string(text, mod):
     try:
         text = base64.b64decode(text)
-        data = read_notes("lol")
+        data = read_notes("lol", mod)
         note = data[0][0]['text'].encode("ascii")
         key = hashlib.sha512(note).digest()
         key = (key * int(math.ceil(len(text) / len(key))))[:len(text)]

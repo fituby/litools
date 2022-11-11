@@ -151,7 +151,7 @@ class Tournament:
             ua = UserAgent()
             headers = {'User-Agent': str(ua.chrome)}
             #if not self.is_arena:
-            #   headers['Authorization'] = f"Bearer {get_token()}"  # otherwise it doesn't load messages
+            #   headers['Authorization'] = f"Bearer {mod.token}"  # otherwise it doesn't load messages
             url = self.link if self.link else f"https://lichess.org/{self.get_type()}/{self.id}"
             r = requests.get(url, headers=headers)
             if r.status_code != 200:

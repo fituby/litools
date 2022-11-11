@@ -2,12 +2,13 @@ from flask import Flask, Response, render_template, request, make_response
 from waitress import serve
 import logging
 import traceback
+from enum import IntEnum
+import threading
 from boost import get_boost_data, send_boost_note, send_mod_action
 from chat import ChatAnalysis
 from alt import Alts
+from mod import Mod
 from elements import get_port, get_embed_lichess
-from enum import IntEnum
-import threading
 
 
 class Mode(IntEnum):
@@ -52,6 +53,7 @@ view_boost = View("B/")
 view_chat = View("C/")
 view_alt = View("A/")
 chat = ChatAnalysis()
+mod = Mod()
 
 
 def update_boost_theme():
@@ -86,15 +88,15 @@ def create_boost():
 def get_boost_user(user):
     before = request.form.get("before", None)
     num_games = request.form.get("num_games", None)
-    boost = get_boost_data(user.lower(), num_games, before)
-    resp = make_response(boost.get_output())
+    boost = get_boost_data(user.lower(), mod, num_games, before)
+    resp = make_response(boost.get_output(mod))
     return resp
 
 
 @app.route('/boost/<user>/tournaments/', methods=['GET'])
 def create_tournaments(user):
-    boost = get_boost_data(user.lower())
-    boost.analyse_tournaments()
+    boost = get_boost_data(user.lower(), mod)
+    boost.analyse_tournaments(mod)
     resp = make_response(boost.get_tournaments())
     return resp
 
@@ -103,7 +105,7 @@ def create_tournaments(user):
 def boost_send_note():
     user = request.form.get("user", None)
     note = request.form.get("note", None)
-    data = send_boost_note(note, user)
+    data = send_boost_note(note, user, mod)
     resp = make_response(data)
     return resp
 
@@ -112,7 +114,7 @@ def boost_send_note():
 def boost_mod_action():
     user = request.form.get("user", None)
     action = request.form.get("action", None)
-    data = send_mod_action(action, user)
+    data = send_mod_action(action, user, mod)
     resp = make_response(data)
     return resp
 
@@ -133,14 +135,14 @@ def get_alts(step):
     alt_names = request.form.get("alts", None)
     num_games = request.form.get("num_games", None)
     usernames = Alts.get_usernames(alt_names)
-    alts = Alts(usernames, num_games, view_alt.theme_color)
+    alts = Alts(usernames, num_games, view_alt.theme_color, mod)
     try:
         step = int(step)
     except:
         step = 0
     if step >= 1:
         force_refresh_openings = False if step < 2 else bool(request.form.get("force_refresh_openings", False))
-        alts.process_step1(force_refresh_openings)
+        alts.process_step1(force_refresh_openings, mod)
         if step >= 2:
             alts.process_step2()
     resp = make_response(alts.get_output())
@@ -176,14 +178,14 @@ def chat_set_msg_ok(msg_id):
 
 @app.route('/chat/timeout/<msg_id>/<reason>', methods=['POST'])
 def chat_timeout(msg_id, reason):
-    chat.timeout(msg_id, reason)
+    chat.timeout(msg_id, reason, mod)
     resp = make_response(chat.get_all())
     return resp
 
 
 @app.route('/chat/timeout_multi/<msg_id>/<reason>', methods=['POST'])
 def chat_timeout_multi(msg_id, reason):
-    chat.timeout_multi(msg_id, reason)
+    chat.timeout_multi(msg_id, reason, mod)
     resp = make_response(chat.get_all())
     return resp
 
@@ -196,7 +198,7 @@ def chat_set_multi_msg_ok(msg_id):
 
 @app.route('/chat/warn/<username>/<subject>', methods=['POST'])
 def chat_warn(username, subject):
-    chat.warn(username, subject)
+    chat.warn(username, subject, mod)
     resp = make_response(chat.get_all())
     return resp
 
@@ -209,7 +211,7 @@ def chat_set_update(update_frequency):
 
 @app.route('/chat/select_message/<msg_id>', methods=['POST'])
 def chat_select_message(msg_id):
-    resp = make_response(chat.select_message(msg_id))
+    resp = make_response(chat.select_message(msg_id, mod))
     return resp
 
 
@@ -259,7 +261,7 @@ def chat_add_tournament():
 def chat_send_note():
     note = request.form.get("note", None)
     user = request.form.get("user", None)
-    data = chat.send_note(note, user)
+    data = chat.send_note(note, user, mod)
     #resp = make_response(data)  # needs 'user-info', see chat.send_note() --> workaround:
     all_data = chat.get_all()
     all_data.update(data)
@@ -274,7 +276,7 @@ def custom_timeout():
     reason = data.get("reason", 0)
     if isinstance(reason, list):
         reason = reason[0]
-    chat.custom_timeout(msg_ids, reason)
+    chat.custom_timeout(msg_ids, reason, mod)
     resp = make_response(chat.get_all())
     return resp
 
@@ -293,7 +295,7 @@ def chat_loop():
     global chat
     while True:
         chat.update_tournaments()
-        chat.run()
+        chat.run(mod)
 
 
 if __name__ == "__main__":

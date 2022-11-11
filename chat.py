@@ -6,7 +6,7 @@ import traceback
 from threading import Lock
 import yaml
 import re
-from elements import Reason, TournType, get_token, get_ndjson, deltaseconds, log, config_file
+from elements import Reason, TournType, get_ndjson, deltaseconds, log, config_file
 from elements import get_notes, add_note, load_mod_log, get_mod_log, get_highlight_style, add_timeout_msg
 from elements import ModActionType, ModAction, UserData
 from chat_message import Message
@@ -141,7 +141,7 @@ class ChatAnalysis:
             except:
                 self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in update_tournaments")
 
-    def run(self):
+    def run(self, mod=None):
         if self.processing_lock.locked() or self.errors or self.i_update_frequency == IDX_NO_PAGE_UPDATE:
             return
         with self.processing_lock:
@@ -186,9 +186,10 @@ class ChatAnalysis:
                         self.multi_messages.update(multi_msgs)
                         for m in to_timeout_i.values():
                             add_timeout_msg(self.to_timeout, m)
-                        for msg in self.to_timeout.values():
-                            self.api_timeout(msg, msg.best_ban_reason(), False)
-                        self.to_timeout.clear()
+                        if mod:
+                            for msg in self.to_timeout.values():
+                                self.api_timeout(msg, msg.best_ban_reason(), False, mod)
+                            self.to_timeout.clear()
             except Exception as exception:
                 traceback.print_exception(type(exception), exception, exception.__traceback__)
                 self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
@@ -233,7 +234,7 @@ class ChatAnalysis:
             now_utc = datetime.now(tz=tz.tzutc())
             self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
 
-    def is_user_up_to_date(self, name):
+    def is_user_up_to_date(self, name, mod):
         username = self.get_selected_username()
         if not username:
             return True
@@ -244,7 +245,7 @@ class ChatAnalysis:
             return True
         # Assuming that actions are sorted
         last_action_time = user.actions[0].date if user.actions else None
-        self.update_selected_user()
+        self.update_selected_user(mod)
         updated_user = self.users.get(name)
         if not updated_user:
             return True
@@ -254,7 +255,7 @@ class ChatAnalysis:
                            f" there are new entries in the mod log. Please check them first.", False)
         return is_up_to_date
 
-    def api_timeout(self, msg, reason, is_timeout_manual):
+    def api_timeout(self, msg, reason, is_timeout_manual, mod):
         reason_tag = Reason.to_tag(reason)
         if reason_tag is None:
             self.add_error(f"Error timeout: Unknown reason at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC", False)
@@ -263,13 +264,13 @@ class ChatAnalysis:
             self.add_error(f"Error timeout: Tournament {msg.tournament.id} deleted "
                            f"as of {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC", False)
             return
-        if not self.is_user_up_to_date(msg.username):
+        if not self.is_user_up_to_date(msg.username, mod):
             return
         chan = "tournament" if msg.tournament.t_type == TournType.Arena \
             else "swiss" if msg.tournament.t_type == TournType.Swiss \
             else "study" if msg.tournament.t_type == TournType.Study \
             else None
-        headers = {'Authorization': f"Bearer {get_token()}"}
+        headers = {'Authorization': f"Bearer {mod.token}"}
         url = "https://lichess.org/mod/public-chat/timeout"
         text = f'{msg.text[:MAX_LEN_TEXT-1]}…' if len(msg.text) > MAX_LEN_TEXT else msg.text
         data = {'reason': reason_tag,
@@ -295,7 +296,7 @@ class ChatAnalysis:
                     if m.username == msg.username:
                         m.is_timed_out = True
                         m.is_reset = False
-                self.update_selected_user()
+                self.update_selected_user(mod)
             else:
                 status_info = "invalid token?" if r.status_code == 200 else f"status: {r.status_code}"
                 self.add_error(f"Timeout error ({status_info}):<br>{timeout_tag}{reason_tag.upper()} "
@@ -306,7 +307,7 @@ class ChatAnalysis:
                 print(f"Recommended to time out: {data}")
                 self.recommended_timeouts.add(msg.id)
 
-    def timeout(self, msg_id, reason):
+    def timeout(self, msg_id, reason, mod):
         try:
             with self.msg_lock:
                 msg = self.all_messages.get(int(msg_id[1:]))
@@ -314,7 +315,7 @@ class ChatAnalysis:
                     reason = int(reason)
                     if reason == 0:
                         reason = msg.best_reason()
-                    self.api_timeout(msg, reason, True)
+                    self.api_timeout(msg, reason, True, mod)
                     now_utc = datetime.now(tz=tz.tzutc())
                     msg.tournament.update_reports(now_utc, self.reset_multi_messages)
                     self.state_reports += 1
@@ -322,7 +323,7 @@ class ChatAnalysis:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}", False)
 
-    def timeout_multi(self, mmsg_id, reason):
+    def timeout_multi(self, mmsg_id, reason, mod):
         try:
             with self.msg_lock:
                 msg_id = int(mmsg_id[1:])
@@ -334,7 +335,7 @@ class ChatAnalysis:
                     combined_text = f'[multiline] {" | ".join([m.text for m in msgs if not m.is_reset])}'
                     combined_msg = Message({'u': msgs[0].username, 't': combined_text}, msgs[0].tournament, msgs[0].time)
                     combined_msg.evaluate(self.tournaments[self.tournament_messages[msg_id]].re_usernames)
-                    self.api_timeout(combined_msg, reason, True)
+                    self.api_timeout(combined_msg, reason, True, mod)
                     now_utc = datetime.now(tz=tz.tzutc())
                     tournament = self.tournaments[self.tournament_messages[msg_id]]
                     tournament.update_reports(now_utc, self.reset_multi_messages)
@@ -343,61 +344,61 @@ class ChatAnalysis:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}", False)
 
-    def api_warn(self, username, subject):
+    def api_warn(self, username, subject, mod):
         if subject not in ModAction.warnings.values():
             self.add_error(f"Warn error: @{username}: <u>Subject</u>: {subject}", False)
             return
-        if not self.is_user_up_to_date(username):
+        if not self.is_user_up_to_date(username, mod):
             return
-        headers = {'Authorization': f"Bearer {get_token()}"}
+        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
         r = requests.post(url, headers=headers)
         if r.status_code == 200:
             log(f"WARNING @{username}: {subject}", True)
-            self.update_selected_user()
+            self.update_selected_user(mod)
             self.state_reports += 1
         else:
             self.add_error(f"Warn error (status: {r.status_code}):<br>@{username}: <u>Subject</u>: {subject}", False)
 
-    def api_kidMode(self, username):
-        if not self.is_user_up_to_date(username):
+    def api_kidMode(self, username, mod):
+        if not self.is_user_up_to_date(username, mod):
             return
-        headers = {'Authorization': f"Bearer {get_token()}"}
+        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/kid"
         r = requests.post(url, headers=headers)
         if r.status_code == 200:
             log(f"ACTION @{username}: kidMode", True)
-            self.update_selected_user()
+            self.update_selected_user(mod)
             self.state_reports += 1
         else:
             self.add_error(f"Action error (status: {r.status_code}):<br>@{username}: kidMode", False)
 
-    def api_SB(self, username):
-        if not self.is_user_up_to_date(username):
+    def api_SB(self, username, mod):
+        if not self.is_user_up_to_date(username, mod):
             return
-        headers = {'Authorization': f"Bearer {get_token()}"}
+        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/troll/true"
         r = requests.post(url, headers=headers)
         if r.status_code == 200:
             log(f"SB @{username}", True)
-            self.update_selected_user()
+            self.update_selected_user(mod)
             self.state_reports += 1
         else:
             self.add_error(f"SB error (status: {r.status_code}):<br>@{username}", False)
 
-    def warn(self, username, subject_tag):
+    def warn(self, username, subject_tag, mod):
         try:
             if subject_tag == "SB":
-                self.api_SB(username)
+                self.api_SB(username, mod)
             else:
                 warning = ModAction.warnings.get(subject_tag)
                 if warning:
                     if subject_tag == "kidMode":
                         # TODO: check if kidMode is set already (after?)
-                        self.api_kidMode(username)
-                        self.api_warn(username, warning)
+                        self.api_kidMode(username, mod)
+                        self.api_warn(username, warning, mod)
                     elif subject_tag in ModAction.warnings:
-                        self.api_warn(username, warning)
+                        self.api_warn(username, warning, mod)
                     else:
                         print(f"WRONG WARNING @{username}: {warning}")
                 else:
@@ -407,7 +408,7 @@ class ChatAnalysis:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: @{username}: {exception}", False)
 
-    def custom_timeout(self, msg_ids, reason):
+    def custom_timeout(self, msg_ids, reason, mod):
         try:
             with self.msg_lock:
                 if msg_ids:
@@ -430,9 +431,9 @@ class ChatAnalysis:
                         combined_msg = Message({'u': msgs[0].username, 't': combined_text}, msgs[0].tournament, msgs[0].time)
                         first_msg_id = int(msg_ids[0][1:])
                         combined_msg.evaluate(self.tournaments[self.tournament_messages[first_msg_id]].re_usernames)
-                        self.api_timeout(combined_msg, reason, True)
+                        self.api_timeout(combined_msg, reason, True, mod)
                     else:
-                        self.api_timeout(msgs[0], reason, True)
+                        self.api_timeout(msgs[0], reason, True, mod)
                     msgs[0].tournament.update_reports(now_utc, self.reset_multi_messages)
                     self.state_reports += 1
         except Exception as exception:
@@ -455,23 +456,23 @@ class ChatAnalysis:
             return None
         return msg.username
 
-    def update_selected_user(self):
+    def update_selected_user(self, mod):
         try:
             username = self.get_selected_username()
             if not username:
                 return
-            user = UserData(username)
+            user = UserData(username, mod)
             now_utc = datetime.now(tz=tz.tzutc())
             if self.to_read_mod_log and (self.last_mod_log_error is None
                                          or now_utc > self.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
                 with self.selected_user_lock:
                     self.selected_user_num_recent_timeouts = 0
                     self.selected_user_num_recent_comm_warnings = 0
-                    mod_log_data = load_mod_log(username)
+                    mod_log_data = load_mod_log(username, mod)
                     if mod_log_data is None:
                         self.last_mod_log_error = now_utc
                     else:
-                        user.mod_log, user.actions = get_mod_log(mod_log_data, ModActionType.Chat)
+                        user.mod_log, user.actions = get_mod_log(mod_log_data, mod, ModActionType.Chat)
                         time_last_SB = None
                         for action in user.actions:
                             dt = action.get_datetime()
@@ -496,7 +497,7 @@ class ChatAnalysis:
                 mod_log_data = None
             if self.to_read_notes and (self.last_notes_error is None
                                        or now_utc > self.last_notes_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
-                user.notes = get_notes(username, mod_log_data)
+                user.notes = get_notes(username, mod, mod_log_data)
                 if user.notes is None:
                     self.last_notes_error = now_utc
                     user.notes = ""
@@ -506,7 +507,7 @@ class ChatAnalysis:
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
 
-    def select_message(self, msg_id):
+    def select_message(self, msg_id, mod):
         def create_info(info):
             return {'selected-messages': info, 'filtered-messages': info, 'selected-tournament': "",
                     'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': ""}
@@ -516,7 +517,7 @@ class ChatAnalysis:
                 self.selected_msg_id = None
                 return create_info("")
             self.selected_msg_id = int(msg_id[1:])
-            self.update_selected_user()
+            self.update_selected_user(mod)
             return self.get_messages_nearby(self.selected_msg_id)
         except Exception as exception:
             self.selected_msg_id = None
@@ -761,7 +762,7 @@ class ChatAnalysis:
                 if tourn_id in self.tournaments:
                     self.tournaments[tourn_id].is_monitored = True
                 else:
-                    headers = {}  # {'Authorization': f"Bearer {get_token()}"}
+                    headers = {}  # {'Authorization': f"Bearer {mod.token}"}
                     if page.startswith(arena_tournament_page) and i == len(arena_tournament_page) - 1:
                         r = requests.get(f"https://lichess.org/api/tournament/{tourn_id}", headers=headers)
                         if r.status_code != 200:
@@ -905,20 +906,20 @@ class ChatAnalysis:
             self.cache_tournaments['state_tournaments'] = self.state_tournaments
             return self.cache_tournaments
 
-    def send_note(self, note, username):
+    def send_note(self, note, username, mod):
         try:
             if not note or not username:
                 raise Exception(f"Wrong note: [{username}]: {note}")
             if note and username:
                 print(f"Note [{username}]:\n{note}")
-                is_ok = add_note(username, note)
+                is_ok = add_note(username, note, mod)
                 if is_ok:
                     if username in self.users:
-                        mod_notes = get_notes(username)
+                        mod_notes = get_notes(username, mod)
                         self.users[username].notes = mod_notes
                         data = {'selected-user': username, 'mod-notes': mod_notes}
                     else:
-                        self.update_selected_user()
+                        self.update_selected_user(mod)
                         data = {}
                     add_data = self.get_messages_nearby(self.selected_msg_id)
                     data.update(add_data)
@@ -931,7 +932,7 @@ class ChatAnalysis:
 
 
 def get_current_tournaments():
-    headers = {}  # {'Authorization': f"Bearer {get_token()}"}
+    headers = {}  # {'Authorization': f"Bearer {mod.token}"}
     # Arenas of official teams
     arenas = []
     for teamId in official_teams:
