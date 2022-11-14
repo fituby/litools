@@ -18,7 +18,6 @@ from consts import *
 
 
 config_file = "config.yml"
-token: str = None
 log_file: str = None
 port: int = 5000
 embed_lichess = False
@@ -103,23 +102,27 @@ def add_timeout_msg(timeouts, msg):
 
 
 def load_config():
-    global token, log_file, port, embed_lichess
-    if token is None:
+    global log_file, port, embed_lichess
+    if log_file is None:
         try:
             with open(os.path.abspath(f"./{config_file}")) as stream:
                 config = yaml.safe_load(stream)
-                token = config.get('token', "")
                 log_file = config.get('log', "")
                 port = config.get('port', port)
                 embed_lichess = config.get('embed_lichess', False)
         except Exception as e:
-            print(f"There appears to be a syntax problem with your {config_file}: {e}")
-            token = ""
+            print(f"There appears to be a syntax problem with {config_file}: {e}")
             log_file = ""
 
 
 def get_token():
-    load_config()
+    try:
+        with open(os.path.abspath(f"./{config_file}")) as stream:
+            config = yaml.safe_load(stream)
+            token = config.get('token', "")
+    except Exception as e:
+        print(f"There appears to be a syntax problem with {config_file}: {e}")
+        token = ""
     return token
 
 
@@ -337,10 +340,15 @@ class UserData(User):
         self.notes = ""
         self.errors = [api_error] if api_error else []
         self.is_error = not not api_error
+        self.time_update = datetime.now(tz=tz.tzutc())
+
+    def is_up_to_date(self):
+        return delta_s(datetime.now(tz=tz.tzutc()), self.time_update) <= LIFETIME_USER_CACHE
 
 
 def get_user(username, mod):
     try:
+        mod.wait_api('api/user')
         headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/api/user/{username}"
         r = requests.get(url, headers=headers)
@@ -572,7 +580,7 @@ class Games:
         self.statuses_to_discard = statuses_to_discard
         self.all_user_ratings = {}
 
-    def download(self, since=None, before=None):
+    def download(self, mod, since=None, before=None):
         now_utc = datetime.now(tz=tz.tzutc())
         self.until = None
         if before:
@@ -599,7 +607,7 @@ class Games:
         url = f"https://lichess.org/api/games/user/{self.user_id}?{rated}{perfType}finished=true&max={max_num_games}" \
               f"{moves}&since={since}{str_until}"
         self.since = None if since == ts_Xmonths_ago else since
-        games = get_ndjson(url)
+        games = get_ndjson(url, mod, "api/games/user")
         if len(games) > self.max_num_games:
             num_to_delete = len(games) - self.max_num_games
             self.games = []
@@ -667,10 +675,10 @@ class Games:
         return f'<div class="mb-3">{str_num}</div>'
 
 
-def get_ndjson(url, Accept="application/x-ndjson"):
+def get_ndjson(url, mod, api_type, Accept="application/x-ndjson"):
+    mod.wait_api(api_type)
     headers = {'Accept': Accept,
-               'Authorization': f"Bearer {token}"
-    }
+               'Authorization': f"Bearer {mod.token}"}
     r = requests.get(url, allow_redirects=True, headers=headers)
     if r.status_code != 200:
         try:
@@ -726,9 +734,13 @@ def timestamp_to_abbr_ago(ts_ms, now_utc=None, short=False):
            f'{timestamp_to_ago(ts_ms, now_utc, short)}</abbr>'
 
 
-def deltaseconds(dt2, dt1):
+def delta_s(dt2, dt1):
     diff = dt2 - dt1
-    return diff.days*24*60*60 + diff.seconds
+    return diff.total_seconds()
+
+
+def deltaseconds(dt2, dt1):
+    return int(delta_s(dt2, dt1))
 
 
 def deltaperiod(dt2, dt1, short=False, show_seconds=False):
@@ -870,6 +882,7 @@ def get_user_link(username, no_name="Unknown User", class_a="text-info", max_len
 
 
 def read_notes(username, mod):
+    mod.wait_api('api/user/note')
     headers = {'Authorization': f"Bearer {mod.token}"}
     url = f"https://lichess.org/api/user/{username}/note"
     r = requests.get(url, headers=headers)
@@ -922,6 +935,7 @@ def get_notes(username, mod, mod_log_data=None):
 
 def add_note(username, note, mod):
     try:
+        mod.wait_api('api/user/note:post')
         headers = {'Authorization': f"Bearer {mod.token}"}
         data = {'text': note,
                 'mod': True}
@@ -937,6 +951,7 @@ def add_note(username, note, mod):
 
 def load_mod_log(username, mod):
     try:
+        mod.wait_api('api/user/mod-log')
         headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/api/user/{username}/mod-log"
         r = requests.get(url, headers=headers)
@@ -1085,6 +1100,7 @@ class ModAction:
                 ids.add(action.mod_id)
         ids = list(ids)
         if ids:
+            mod.wait_api('api/users/status')
             headers = {'Authorization': f"Bearer {mod.token}"}
             url = f"https://lichess.org/api/users/status?ids={','.join(ids)}"
             r = requests.get(url, headers=headers)
@@ -1290,11 +1306,12 @@ class ChatModAction(ModAction):
 
 def warn_user(username, subject, mod):
     try:
+        mod.wait_api('api/warn')
         headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
         r = requests.post(url, headers=headers)
         if r.status_code == 200:
-            log(f'WARN @{username} with "{subject}"', True)
+            log(f"WARNING @{username}: {subject}", True)
             return True
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
@@ -1311,6 +1328,7 @@ def warn_boosting(username, mod):
 
 def mark_booster(username, mod):
     try:
+        mod.wait_api('api/booster')
         headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/booster/true"
         r = requests.post(url, headers=headers)
@@ -1341,6 +1359,7 @@ class WarningStats:
 
 def get_boost_reports(mod):
     try:
+        mod.wait_api('report/list/boost')
         headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/report/list/boost"
         r = requests.get(url, headers=headers)

@@ -4,9 +4,10 @@ from dateutil import tz
 import time
 import traceback
 from threading import Lock
-import yaml
 import re
-from elements import Reason, TournType, get_ndjson, deltaseconds, log, config_file
+from collections import defaultdict
+from typing import DefaultDict, Dict
+from elements import Reason, TournType, get_ndjson, delta_s, log
 from elements import get_notes, add_note, load_mod_log, get_mod_log, get_highlight_style, add_timeout_msg
 from elements import ModActionType, ModAction, UserData
 from chat_message import Message
@@ -37,10 +38,9 @@ class ChatAnalysis:
 
     def __init__(self):
         self.tournaments = {}
-        self.users = {}
-        #self.user_messages = {}
         self.tournament_messages = {}
         self.all_messages = {}
+        #self.user_messages = defaultdict(dict)
         self.processing_lock = Lock()
         self.last_api_time: datetime = None
         self.last_refresh: datetime = None
@@ -54,28 +54,22 @@ class ChatAnalysis:
         self.msg_lock = Lock()
         self.tournaments_lock = Lock()
         self.reports_lock = Lock()
-        self.selected_msg_id = None
         self.multi_messages = {}
         self.to_timeout = {}
-        self.recommended_timeouts = set()
+        self.recommended_timeouts = {}
         self.state_tournaments = 1
         self.state_reports = 1
+        self.state_users = 1
         self.cache_tournaments = {'state_tournaments': 0}
         self.cache_reports = {'state_reports': 0}
-        try:
-            with open(config_file) as stream:
-                config = yaml.safe_load(stream)
-                self.to_read_mod_log = config.get('chat_mod_log', False)
-                self.to_read_notes = config.get('chat_notes', True)
-        except Exception as e:
-            print(f"There appears to be a syntax problem with your {config_file}: {e}")
-            self.to_read_mod_log = False
-            self.to_read_notes = True
-        self.last_mod_log_error = None
-        self.last_notes_error = None
-        self.selected_user_num_recent_timeouts = 0
-        self.selected_user_num_recent_comm_warnings = 0
-        self.selected_user_lock = Lock()
+        # Mod data
+        self.users: DefaultDict[str, Dict[UserData]] = defaultdict(dict)
+        self.selected_msg_id: DefaultDict[str, int] = defaultdict(int)
+        self.state_selected_msg: DefaultDict[str, int] = defaultdict(int)
+        self.cache_selected_data: DefaultDict[str, dict] = defaultdict(lambda: {'state_reports': 0})
+        self.selected_user_num_recent_timeouts: DefaultDict[str, int] = defaultdict(int)
+        self.selected_user_num_recent_comm_warnings: DefaultDict[str, int] = defaultdict(int)
+        self.selected_user_lock: DefaultDict[str, Lock] = defaultdict(Lock)  # = Lock()
 
     def add_error(self, text, is_critical=True):
         if is_critical:
@@ -87,7 +81,7 @@ class ChatAnalysis:
     def wait_api(self):
         now = datetime.now()
         if self.last_api_time:
-            wait_s = API_TOURNEY_PAGE_DELAY - deltaseconds(now, self.last_api_time)
+            wait_s = API_TOURNEY_PAGE_DELAY - delta_s(now, self.last_api_time)
             if wait_s > 0:
                 time.sleep(wait_s)
         self.last_api_time = now
@@ -95,26 +89,26 @@ class ChatAnalysis:
     def wait_refresh(self):
         now = datetime.now()
         if self.last_refresh:
-            wait_s = API_CHAT_REFRESH_PERIOD[self.i_update_frequency] - deltaseconds(now, self.last_refresh)
+            wait_s = API_CHAT_REFRESH_PERIOD[self.i_update_frequency] - delta_s(now, self.last_refresh)
             if wait_s > 0:
                 time.sleep(wait_s)
         self.last_refresh = now
 
-    def update_tournaments(self):
+    def update_tournaments(self, non_mod):
         if self.processing_lock.locked() or self.errors:
             return
         if self.i_update_frequency == IDX_NO_PAGE_UPDATE:
             time.sleep(1)
             return
         now_utc = datetime.now(tz=tz.tzutc())
-        if self.last_tournaments_update and deltaseconds(now_utc, self.last_tournaments_update) < PERIOD_UPDATE_TOURNAMENTS:
+        if self.last_tournaments_update and delta_s(now_utc, self.last_tournaments_update) < PERIOD_UPDATE_TOURNAMENTS:
             return
         with self.processing_lock:
             self.last_tournaments_update = now_utc
             try:
                 if self.tournament_groups["monitored"] or self.tournament_groups["started"] \
                         or self.tournament_groups["created"]:
-                    active_tournaments = {t.id: t for t in get_current_tournaments()}
+                    active_tournaments = {t.id: t for t in get_current_tournaments(non_mod)}
                     keys = list(self.tournaments.keys())
                     for tourn_id in keys:
                         if tourn_id in active_tournaments:
@@ -137,11 +131,11 @@ class ChatAnalysis:
             except Exception as exception:
                 traceback.print_exception(type(exception), exception, exception.__traceback__)
                 if not self.tournaments:
-                    self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")  # only if it doesn't work from the very beginning
+                    self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}")  # only if it doesn't work from the very beginning
             except:
                 self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in update_tournaments")
 
-    def run(self, mod=None):
+    def run(self, non_mod, auto_mod=None):
         if self.processing_lock.locked() or self.errors or self.i_update_frequency == IDX_NO_PAGE_UPDATE:
             return
         with self.processing_lock:
@@ -167,7 +161,7 @@ class ChatAnalysis:
                             if self.update_count % update_period != hash_num % update_period:
                                 continue
                     self.wait_api()
-                    new_messages, deleted_messages = tourn.download(self.msg_lock, now_utc)
+                    new_messages, deleted_messages = tourn.download(self.msg_lock, now_utc, non_mod)
                     with self.msg_lock:
                         if not new_messages and tourn.is_error_404_too_long(now_utc) \
                                 and not [msg for msg in tourn.messages if msg.score and not msg.is_hidden()]:
@@ -186,13 +180,12 @@ class ChatAnalysis:
                         self.multi_messages.update(multi_msgs)
                         for m in to_timeout_i.values():
                             add_timeout_msg(self.to_timeout, m)
-                        if mod:
-                            for msg in self.to_timeout.values():
-                                self.api_timeout(msg, msg.best_ban_reason(), False, mod)
-                            self.to_timeout.clear()
+                        for msg in self.to_timeout.values():
+                            self.api_timeout(msg, msg.best_ban_reason(), False, auto_mod, is_auto=DO_AUTO_TIMEOUTS)
+                        self.to_timeout.clear()
             except Exception as exception:
                 traceback.print_exception(type(exception), exception, exception.__traceback__)
-                self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
+                self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
             except:
                 self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in chat.run")
             self.update_count += 1
@@ -218,7 +211,8 @@ class ChatAnalysis:
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             now_utc = datetime.now(tz=tz.tzutc())
-            self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
+            self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
+            self.state_reports += 1
 
     def set_multi_msg_ok(self, msg_id):
         try:
@@ -232,37 +226,39 @@ class ChatAnalysis:
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             now_utc = datetime.now(tz=tz.tzutc())
-            self.add_error(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
+            self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
+            self.state_reports += 1
 
     def is_user_up_to_date(self, name, mod):
-        username = self.get_selected_username()
+        username = self.get_selected_username(mod)
         if not username:
             return True
         if name != username:
             return True
-        user = self.users.get(name)
+        user = self.users[mod.id].get(name)
         if not user:
             return True
         # Assuming that actions are sorted
         last_action_time = user.actions[0].date if user.actions else None
         self.update_selected_user(mod)
-        updated_user = self.users.get(name)
+        updated_user = self.users[mod.id].get(name)
         if not updated_user:
             return True
         is_up_to_date = (not updated_user.actions) or (updated_user.actions[0].date <= last_action_time)
         if not is_up_to_date:
-            self.add_error(f"Failed to apply your action to @{name}. As of {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC"
-                           f" there are new entries in the mod log. Please check them first.", False)
+            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: Failed to apply your action "
+                           f"to @{name}. There are new entries in the mod log. Please check them first.", False)
+            self.state_reports += 1
         return is_up_to_date
 
-    def api_timeout(self, msg, reason, is_timeout_manual, mod):
+    def api_timeout(self, msg, reason, is_timeout_manual, mod, is_auto=False):
         reason_tag = Reason.to_tag(reason)
         if reason_tag is None:
-            self.add_error(f"Error timeout: Unknown reason at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC", False)
+            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: Unknown reason", False)
             return
         if msg.tournament.id not in self.tournaments:
-            self.add_error(f"Error timeout: Tournament {msg.tournament.id} deleted "
-                           f"as of {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC", False)
+            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
+                           f"Tournament {msg.tournament.id} deleted", False)
             return
         if not self.is_user_up_to_date(msg.username, mod):
             return
@@ -270,17 +266,18 @@ class ChatAnalysis:
             else "swiss" if msg.tournament.t_type == TournType.Swiss \
             else "study" if msg.tournament.t_type == TournType.Study \
             else None
-        headers = {'Authorization': f"Bearer {mod.token}"}
-        url = "https://lichess.org/mod/public-chat/timeout"
+        headers = {'Authorization': f"Bearer {mod.token if mod else ''}"}
         text = f'{msg.text[:MAX_LEN_TEXT-1]}…' if len(msg.text) > MAX_LEN_TEXT else msg.text
         data = {'reason': reason_tag,
                 'userId': msg.username.lower(),
                 'roomId': msg.tournament.id,
                 'chan': chan,
                 'text': text}
-        if is_timeout_manual or DO_AUTO_TIMEOUTS:
+        if is_timeout_manual or (is_auto and mod and mod.is_mod()):
+            mod.wait_api('mod/public-chat/timeout')
+            url = "https://lichess.org/mod/public-chat/timeout"
             r = requests.post(url, headers=headers, json=data)
-            timeout_tag = ('' if is_timeout_manual else '[AUTO] ') if DO_AUTO_TIMEOUTS else ""
+            timeout_tag = ('' if is_timeout_manual else '[AUTO] ') if is_auto else ""
             if len(msg.text) > MAX_LEN_TEXT:
                 text = f'{text}{msg.text[MAX_LEN_TEXT-1:]}'
             if r.status_code == 200 and r.text == "ok":
@@ -297,15 +294,21 @@ class ChatAnalysis:
                         m.is_timed_out = True
                         m.is_reset = False
                 self.update_selected_user(mod)
+                self.recommended_timeouts.pop(msg.id, None)
             else:
                 status_info = "invalid token?" if r.status_code == 200 else f"status: {r.status_code}"
-                self.add_error(f"Timeout error ({status_info}):<br>{timeout_tag}{reason_tag.upper()} "
+                self.add_error(f"ERROR: Timeout ({status_info}):<br>{timeout_tag}{reason_tag.upper()} "
                                f"<u>Score</u>: {msg.score} <u>User</u>: {msg.username} "
                                f"<u>RoomId</u>: {msg.tournament.id} <u>Channel</u>: {chan} <u>Text</u>: {text}", False)
         else:
             if msg.id not in self.recommended_timeouts:
                 print(f"Recommended to time out: {data}")
-                self.recommended_timeouts.add(msg.id)
+                now = datetime.now()
+                max_time = timedelta(minutes=int(1.5 * CHAT_TOURNAMENT_FINISHED_AGO))
+                self.recommended_timeouts[msg.id] = now
+                for msg_id in list(self.recommended_timeouts.keys()):
+                    if (msg_id not in self.all_messages.keys()) or (now - max_time > self.recommended_timeouts[msg_id]):
+                        self.recommended_timeouts.pop(msg_id, None)
 
     def timeout(self, msg_id, reason, mod):
         try:
@@ -321,7 +324,8 @@ class ChatAnalysis:
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}", False)
+            self.add_error(f"ERROR at{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: {exception}", False)
+            self.state_reports += 1
 
     def timeout_multi(self, mmsg_id, reason, mod):
         try:
@@ -342,49 +346,58 @@ class ChatAnalysis:
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}", False)
+            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout_multi: {exception}", False)
+            self.state_reports += 1
 
-    def api_warn(self, username, subject, mod):
+    def api_warn(self, username, subject, mod, check_updates=True):
         if subject not in ModAction.warnings.values():
-            self.add_error(f"Warn error: @{username}: <u>Subject</u>: {subject}", False)
+            self.add_error(f"ERROR: Warn: @{username}: <u>Subject</u>: {subject}", False)
+            self.state_reports += 1
             return
-        if not self.is_user_up_to_date(username, mod):
+        if check_updates and not self.is_user_up_to_date(username, mod):
             return
+        mod.wait_api('mod/warn')
         headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
         r = requests.post(url, headers=headers)
         if r.status_code == 200:
             log(f"WARNING @{username}: {subject}", True)
             self.update_selected_user(mod)
-            self.state_reports += 1
         else:
-            self.add_error(f"Warn error (status: {r.status_code}):<br>@{username}: <u>Subject</u>: {subject}", False)
+            self.add_error(f"ERROR: Warn (status: {r.status_code}):<br>@{username}: <u>Subject</u>: {subject}", False)
+        self.state_reports += 1
 
-    def api_kidMode(self, username, mod):
+    def api_kidMode(self, username, mod, to_update):
         if not self.is_user_up_to_date(username, mod):
-            return
+            return False
+        mod.wait_api('mod/kid')
         headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/kid"
         r = requests.post(url, headers=headers)
         if r.status_code == 200:
             log(f"ACTION @{username}: kidMode", True)
-            self.update_selected_user(mod)
-            self.state_reports += 1
+            if to_update:
+                self.update_selected_user(mod)
+                self.state_reports += 1
+            return True
         else:
-            self.add_error(f"Action error (status: {r.status_code}):<br>@{username}: kidMode", False)
+            self.add_error(f"ERROR: action (status: {r.status_code}):<br>@{username}: kidMode", False)
+            self.state_reports += 1
+        return False
 
     def api_SB(self, username, mod):
         if not self.is_user_up_to_date(username, mod):
             return
+        mod.wait_api('mod/troll')
         headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/troll/true"
         r = requests.post(url, headers=headers)
         if r.status_code == 200:
             log(f"SB @{username}", True)
             self.update_selected_user(mod)
-            self.state_reports += 1
         else:
-            self.add_error(f"SB error (status: {r.status_code}):<br>@{username}", False)
+            self.add_error(f"ERROR: SB (status: {r.status_code}):<br>@{username}", False)
+        self.state_reports += 1
 
     def warn(self, username, subject_tag, mod):
         try:
@@ -395,18 +408,22 @@ class ChatAnalysis:
                 if warning:
                     if subject_tag == "kidMode":
                         # TODO: check if kidMode is set already (after?)
-                        self.api_kidMode(username, mod)
-                        self.api_warn(username, warning, mod)
+                        is_set = self.api_kidMode(username, mod, False)
+                        if is_set:
+                            self.api_warn(username, warning, mod, check_updates=False)
                     elif subject_tag in ModAction.warnings:
                         self.api_warn(username, warning, mod)
                     else:
                         print(f"WRONG WARNING @{username}: {warning}")
                 else:
-                    self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: @{username}: "
+                    self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: warn @{username}: "
                                    f"INCORRECT WARNING: {subject_tag}", False)
+                    self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: @{username}: {exception}", False)
+            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: warn @{username}: "
+                           f"{exception}", False)
+            self.state_reports += 1
 
     def custom_timeout(self, msg_ids, reason, mod):
         try:
@@ -438,7 +455,8 @@ class ChatAnalysis:
                     self.state_reports += 1
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}", False)
+            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: custom_timeout: {exception}", False)
+            self.state_reports += 1
 
     def set_update(self, i_update_frequency):
         if i_update_frequency is None:
@@ -448,29 +466,29 @@ class ChatAnalysis:
         except:
             return
 
-    def get_selected_username(self):
-        if self.selected_msg_id is None:
+    def get_selected_username(self, mod):
+        if not self.selected_msg_id[mod.id]:
             return None
-        msg = self.all_messages.get(self.selected_msg_id)
+        msg = self.all_messages.get(self.selected_msg_id[mod.id])
         if not msg:
             return None
         return msg.username
 
     def update_selected_user(self, mod):
         try:
-            username = self.get_selected_username()
+            username = self.get_selected_username(mod)
             if not username:
                 return
             user = UserData(username, mod)
             now_utc = datetime.now(tz=tz.tzutc())
-            if self.to_read_mod_log and (self.last_mod_log_error is None
-                                         or now_utc > self.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
-                with self.selected_user_lock:
-                    self.selected_user_num_recent_timeouts = 0
-                    self.selected_user_num_recent_comm_warnings = 0
+            if mod.to_read_mod_log and (mod.last_mod_log_error is None
+                                        or now_utc > mod.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
+                with self.selected_user_lock[mod.id]:
+                    self.selected_user_num_recent_timeouts[mod.id] = 0
+                    self.selected_user_num_recent_comm_warnings[mod.id] = 0
                     mod_log_data = load_mod_log(username, mod)
                     if mod_log_data is None:
-                        self.last_mod_log_error = now_utc
+                        mod.last_mod_log_error = now_utc
                     else:
                         user.mod_log, user.actions = get_mod_log(mod_log_data, mod, ModActionType.Chat)
                         time_last_SB = None
@@ -483,7 +501,7 @@ class ChatAnalysis:
                             if action.is_comm_warning() and not action.is_old(now_utc):
                                 dt = action.get_datetime()
                                 if time_last_SB is None or dt > time_last_SB:
-                                    self.selected_user_num_recent_comm_warnings += 1
+                                    self.selected_user_num_recent_comm_warnings[mod.id] += 1
                                     if time_last_comm_warning is None or dt > time_last_comm_warning:
                                         time_last_comm_warning = dt
                         for action in user.actions:
@@ -491,43 +509,48 @@ class ChatAnalysis:
                                 dt = action.get_datetime()
                                 if (time_last_comm_warning is None or dt > time_last_comm_warning) and \
                                    (time_last_SB is None or dt > time_last_SB):
-                                    self.selected_user_num_recent_timeouts += 1
-                        self.last_mod_log_error = None
+                                    self.selected_user_num_recent_timeouts[mod.id] += 1
+                        mod.last_mod_log_error = None
             else:
                 mod_log_data = None
-            if self.to_read_notes and (self.last_notes_error is None
-                                       or now_utc > self.last_notes_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
+            if mod.to_read_notes and (mod.last_notes_error is None
+                                      or now_utc > mod.last_notes_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
                 user.notes = get_notes(username, mod, mod_log_data)
                 if user.notes is None:
-                    self.last_notes_error = now_utc
+                    mod.last_notes_error = now_utc
                     user.notes = ""
                 else:
-                    self.last_notes_error = None
-            self.users[username] = user
+                    mod.last_notes_error = None
+            for un in list(self.users[mod.id].keys()):
+                if delta_s(now_utc, self.users[mod.id][un].time_update) > LIFETIME_USER_CACHE:
+                    del self.users[mod.id][un]
+            self.users[mod.id][username] = user
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
 
     def select_message(self, msg_id, mod):
         def create_info(info):
-            return {'selected-messages': info, 'filtered-messages': info, 'selected-tournament': "",
-                    'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': ""}
+            state_all = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
+            return {'selected-messages': info, 'filtered-messages': info, 'selected-tournament': "", 'selected-user': "",
+                    'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': "", 'state_reports': state_all}
 
         try:
+            self.state_selected_msg[mod.id] += 1
             if msg_id == "--":
-                self.selected_msg_id = None
+                self.selected_msg_id[mod.id] = 0
                 return create_info("")
-            self.selected_msg_id = int(msg_id[1:])
+            self.selected_msg_id[mod.id] = int(msg_id[1:])
             self.update_selected_user(mod)
-            return self.get_messages_nearby(self.selected_msg_id)
+            return self.get_messages_nearby(self.selected_msg_id[mod.id], mod)
         except Exception as exception:
-            self.selected_msg_id = None
+            self.selected_msg_id[mod.id] = 0
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             return create_info(f'<p class="text-danger">Error: {exception}</p>')
         except:
-            self.selected_msg_id = None
+            self.selected_msg_id[mod.id] = 0
             return create_info(f'<p class="text-danger">Error: get_messages_near()</p>')
 
-    def get_messages_nearby(self, msg_id):
+    def get_messages_nearby(self, msg_id, mod):
         def get_warn_btn(subject_tag, btn_title, is_highlighted, user_name, is_disabled=False, txt_class=""):
             if is_highlighted:
                 btn_title = f'<b class="{txt_class}">{btn_title}</b>' if txt_class and not is_disabled \
@@ -539,22 +562,22 @@ class ChatAnalysis:
                    f'{btn_title}</button>'
 
         def is_recent(times, key, time_now):
-            return (times[key] is not None) and (deltaseconds(time_now, times[key]) <= RECENT_WARNING)
+            return (times[key] is not None) and (delta_s(time_now, times[key]) <= RECENT_WARNING)
 
         def add_comm_info(user_data, user_msgs):
             add_info = ""
-            with self.selected_user_lock:
-                if self.selected_user_num_recent_comm_warnings > 0:
-                    text_theme = "text-danger" if self.selected_user_num_recent_comm_warnings > 1 else "text-warning"
-                    add_info = f'<span class="{text_theme}"><b>{self.selected_user_num_recent_comm_warnings}</b> ' \
-                               f'comm warning{"" if self.selected_user_num_recent_comm_warnings == 1 else "s"}</span>'
-                if self.selected_user_num_recent_timeouts > 0:
-                    text_theme = "text-danger" if self.selected_user_num_recent_timeouts >= 5 else "text-warning"
+            with self.selected_user_lock[mod.id]:
+                if self.selected_user_num_recent_comm_warnings[mod.id] > 0:
+                    text_theme = "text-danger" if self.selected_user_num_recent_comm_warnings[mod.id] > 1 else "text-warning"
+                    add_info = f'<span class="{text_theme}"><b>{self.selected_user_num_recent_comm_warnings[mod.id]}</b> ' \
+                               f'comm warning{"" if self.selected_user_num_recent_comm_warnings[mod.id] == 1 else "s"}' \
+                               f'</span>'
+                if self.selected_user_num_recent_timeouts[mod.id] > 0:
+                    text_theme = "text-danger" if self.selected_user_num_recent_timeouts[mod.id] >= 5 else "text-warning"
                     add_info = f'{add_info}{" + " if add_info else ""}<span class="{text_theme}">' \
-                               f'<b>{self.selected_user_num_recent_timeouts}</b> ' \
-                               f'timeout{"" if self.selected_user_num_recent_timeouts == 1 else "s"}</span>'
-            is_mod = self.last_mod_log_error is None  # TODO: get rid of this workaround
-            if is_mod and user_msgs:
+                               f'<b>{self.selected_user_num_recent_timeouts[mod.id]}</b> ' \
+                               f'timeout{"" if self.selected_user_num_recent_timeouts[mod.id] == 1 else "s"}</span>'
+            if mod.is_mod() and user_msgs:
                 user_name = user_data.name
                 is_timed_out = False
                 is_banable = False
@@ -597,7 +620,7 @@ class ChatAnalysis:
                         elif action.is_team_ad() and (last_time['team_ad'] is None or dt > last_time['team_ad']):
                             last_time['team_ad'] = dt
                 now_utc = datetime.now(tz=tz.tzutc())
-                is_recent_timeout = last_time['timeout'] and deltaseconds(now_utc, last_time['timeout']) <= RECENT_TIMEOUT
+                is_recent_timeout = last_time['timeout'] and delta_s(now_utc, last_time['timeout']) <= RECENT_TIMEOUT
                 if last_timeout_reason != Reason.No and is_recent_timeout:
                     reasons[last_timeout_reason] += 1
                 buttons = []
@@ -615,8 +638,8 @@ class ChatAnalysis:
                     buttons.append(get_warn_btn('team_ad', "Warn: Team Ad", False, user_name,
                                                 is_disabled=is_recent(last_time, 'team_ad', now_utc)))
                     buttons.append('<div class="dropdown-divider my-1"></div>')
-                    is_SBable = user_data.notes and (is_banable or self.selected_user_num_recent_comm_warnings
-                                                     or self.selected_user_num_recent_timeouts)
+                    is_SBable = user_data.notes and (is_banable or self.selected_user_num_recent_comm_warnings[mod.id]
+                                                     or self.selected_user_num_recent_timeouts[mod.id])
                     buttons.append(get_warn_btn('SB', "Shadowban", True, user_name, txt_class="text-danger",
                                                 is_disabled=is_SBed or not is_SBable))
                 kid_sus = ChatAnalysis.kid_years.search(user_data.profile.bio)
@@ -645,6 +668,8 @@ class ChatAnalysis:
                              'user-info': user_info, 'mod-notes': user_data.notes, 'mod-log': user_data.mod_log})
             else:
                 data.update({'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': ""})
+            data['state_reports'] = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
+            self.cache_selected_data[mod.id] = data
             return data
 
         def make_selected(msg_selected):
@@ -654,7 +679,7 @@ class ChatAnalysis:
         try:
             tourn_id = self.tournament_messages.get(msg_id)
             tournament_name = self.tournaments[tourn_id].get_link(short=False) if tourn_id in self.tournaments else ""
-            if msg_id is None:
+            if not msg_id:
                 return create_output("", tournament_name, None)
             with self.msg_lock:
                 i: int = None
@@ -688,7 +713,10 @@ class ChatAnalysis:
                 list_end = '<hr class="text-primary mt-1 mb-0" style="border:1px solid;">'\
                            if i_end == len(self.tournaments[tourn_id].messages) else ""
                 username = msg_i.username
-            user = self.users.get(username)
+            u = self.users[mod.id].get(username)
+            if not u or not u.is_up_to_date():
+                self.update_selected_user(mod)
+            user = self.users[mod.id].get(username)
             info_selected = f'{list_start}{"".join(msgs_before)} {msg} {"".join(msgs_after)}{list_end}'
             info_filtered = "".join(msgs_user)
             return create_output(info_selected, tournament_name, user, filtered_info=info_filtered, user_msgs=user_msgs)
@@ -697,6 +725,11 @@ class ChatAnalysis:
             return create_output(f'<p class="text-danger">Error: {exception}</p>', tournament_name, None)
         except:
             return create_output(f'<p class="text-danger">Error: get_messages_near()</p>', tournament_name, None)
+
+    def update_selected_data(self, mod):
+        state_all = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
+        if state_all != self.cache_selected_data[mod.id]['state_reports']:
+            self.get_messages_nearby(self.selected_msg_id[mod.id], mod)
 
     def clear_errors(self, tourn_id):
         try:
@@ -707,17 +740,21 @@ class ChatAnalysis:
                 tournament = self.tournaments.get(tourn_id)
                 if tournament:
                     tournament.clear_errors()
+                    now_utc = datetime.now(tz=tz.tzutc())
+                    tournament.update_reports(now_utc, self.reset_multi_messages)
                 else:
-                    self.add_error(f"Failed to clear tournament errors: \"{tourn_id}\"", False)
-            self.state_reports += 1
+                    self.add_error(f"ERROR: Failed to clear tournament errors: \"{tourn_id}\"", False)
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: clear_errors({tourn_id}): {exception}", False)
+            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: clear_errors({tourn_id}): "
+                           f"{exception}", False)
+        self.state_reports += 1
 
     def set_tournament(self, tourn_id, checked):
         tournament = self.tournaments.get(tourn_id)
         if not tournament:
-            self.add_error(f"No tournament \"{tourn_id}\" to set {checked}", False)
+            self.add_error(f"ERROR: No tournament \"{tourn_id}\" to set {checked}", False)
+            self.state_reports += 1
             return
         tournament.is_enabled = (not tournament.is_enabled) if checked is None else checked
 
@@ -749,7 +786,7 @@ class ChatAnalysis:
         self.state_tournaments += 1
         return self.get_tournaments(active_tournaments)
 
-    def add_tournament(self, page):
+    def add_tournament(self, page, mod):
         # while self.processing_lock.locked():
         #     time.sleep(0.1)
         str_lichess = "https://lichess.org/"
@@ -764,6 +801,7 @@ class ChatAnalysis:
                 else:
                     headers = {}  # {'Authorization': f"Bearer {mod.token}"}
                     if page.startswith(arena_tournament_page) and i == len(arena_tournament_page) - 1:
+                        mod.wait_api('api/tournament/id')
                         r = requests.get(f"https://lichess.org/api/tournament/{tourn_id}", headers=headers)
                         if r.status_code != 200:
                             raise Exception(f"ERROR /api/tournament/{tourn_id}: Status Code {r.status_code}")
@@ -772,6 +810,7 @@ class ChatAnalysis:
                             raise Exception(f"ERROR {page}: Wrong ID {tourn_id} != {arena['id']}")
                         self.tournaments[tourn_id] = Tournament(arena, TournType.Arena, is_monitored=True)
                     elif page.startswith(swiss_tournament_page) and i == len(swiss_tournament_page) - 1:
+                        mod.wait_api('api/swiss')
                         r = requests.get(f"https://lichess.org/api/swiss/{tourn_id}", headers=headers)
                         if r.status_code != 200:
                             raise Exception(f"ERROR /api/swiss/{tourn_id}: Status Code {r.status_code}")
@@ -804,34 +843,35 @@ class ChatAnalysis:
         active_tournaments.sort(key=lambda tourn: tourn.priority_time(now_utc), reverse=True)
         return active_tournaments
 
-    def get_all(self):
+    def get_all(self, mod):
         with self.reports_lock:
-            if self.state_reports == self.cache_reports['state_reports']:
-                return self.cache_reports
-            # Main content
-            now_utc = datetime.now(tz=tz.tzutc())
-            now = datetime.now()
-            active_tournaments = self.get_score_sorted_tournaments(now_utc)
-            info = "".join([tourn.reports for tourn in active_tournaments])  # TODO: update time status in the header
-            output = []
-            for tourn in active_tournaments:
-                if tourn.multiline_reports:
-                    output.extend(tourn.multiline_reports)
-            output.sort(key=lambda t: t[0], reverse=True)
-            info_frequent = "".join([info for score, info in output])
-            all_errors = self.errors.copy()
-            all_errors.extend(self.warnings)
-            if all_errors:
-                btn_clear = f'<div><button class="btn btn-info align-baseline flex-grow-1 py-0 px-1" ' \
-                            f'onclick="clear_errors(\'global\');">Clear errors</button></div>'
-                info = f'<div class="text-warning text-break">{"<b>Errors</b>: " if len(all_errors) > 1 else ""}<div>' \
-                       f'{"</div><div>".join(all_errors)}</div>{btn_clear}<div class="text-danger">ABORTED</div></div>{info}'
-            messages_nearby = self.get_messages_nearby(self.selected_msg_id)
-            str_time = f"{now:%H:%M}"
-            self.cache_reports = {'reports': info, 'multiline-reports': info_frequent,
-                                  'time': str_time, 'state_reports': self.state_reports}
-            self.cache_reports.update(messages_nearby)
-            return self.cache_reports
+            if self.state_reports != self.cache_reports['state_reports']:
+                # Main content
+                now_utc = datetime.now(tz=tz.tzutc())
+                now = datetime.now()
+                active_tournaments = self.get_score_sorted_tournaments(now_utc)
+                info = "".join([tourn.reports for tourn in active_tournaments])  # TODO: update time status in the header
+                output = []
+                for tourn in active_tournaments:
+                    if tourn.multiline_reports:
+                        output.extend(tourn.multiline_reports)
+                output.sort(key=lambda t: t[0], reverse=True)
+                info_frequent = "".join([info for score, info in output])
+                all_errors = self.errors.copy()
+                all_errors.extend(self.warnings)
+                if all_errors:
+                    btn_clear = f'<div><button class="btn btn-info align-baseline flex-grow-1 py-0 px-1" ' \
+                                f'onclick="clear_errors(\'global\');">Clear errors</button></div>'
+                    info = f'<div class="text-warning text-break">{"<b>Errors</b>: " if len(all_errors) > 1 else ""}' \
+                           f'<div>{"</div><div>".join(all_errors)}</div>{btn_clear}' \
+                           f'<div class="text-danger">ABORTED</div></div>{info}'
+                str_time = f"{now:%H:%M}"
+                self.cache_reports = {'reports': info, 'multiline-reports': info_frequent,
+                                      'time': str_time, 'state_reports': self.state_reports}
+            self.update_selected_data(mod)
+            ret_data = self.cache_reports.copy()
+            ret_data.update(self.cache_selected_data[mod.id])
+            return ret_data
 
     def get_tournaments(self, active_tournaments=None):
         with self.tournaments_lock:
@@ -911,35 +951,37 @@ class ChatAnalysis:
             if not note or not username:
                 raise Exception(f"Wrong note: [{username}]: {note}")
             if note and username:
-                print(f"Note [{username}]:\n{note}")
                 is_ok = add_note(username, note, mod)
                 if is_ok:
-                    if username in self.users:
+                    user = self.users[mod.id].get(username)
+                    if user and user.is_up_to_date():
                         mod_notes = get_notes(username, mod)
-                        self.users[username].notes = mod_notes
+                        user.notes = mod_notes
                         data = {'selected-user': username, 'mod-notes': mod_notes}
                     else:
                         self.update_selected_user(mod)
                         data = {}
-                    add_data = self.get_messages_nearby(self.selected_msg_id)
+                    self.state_users += 1
+                    add_data = self.get_messages_nearby(self.selected_msg_id[mod.id], mod)
                     data.update(add_data)
-                    self.state_reports += 1
                     return data
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
-            self.add_error(f"{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: {exception}", False)
+            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: send_note: {exception}", False)
+            self.state_reports += 1
         return {'selected-user': username, 'mod-notes': "", 'user-profile': "", 'user-info': ""}
 
 
-def get_current_tournaments():
+def get_current_tournaments(non_mod):
     headers = {}  # {'Authorization': f"Bearer {mod.token}"}
     # Arenas of official teams
     arenas = []
     for teamId in official_teams:
         url = f"https://lichess.org/api/team/{teamId}/arena"
-        data = get_ndjson(url, Accept="application/nd-json")
+        data = get_ndjson(url, non_mod, "api/team/arena", Accept="application/nd-json")
         arenas.extend(data)
     # Arena
+    non_mod.wait_api('api/tournament')
     url = "https://lichess.org/api/tournament"
     r = requests.get(url, headers=headers)
     if r.status_code != 200:
@@ -955,7 +997,7 @@ def get_current_tournaments():
     # Swiss
     for teamId in official_teams:
         url = f"https://lichess.org/api/team/{teamId}/swiss"
-        swiss_data = get_ndjson(url, Accept="application/nd-json")
+        swiss_data = get_ndjson(url, non_mod, "api/team/swiss", Accept="application/nd-json")
         for swiss in swiss_data:
             try:
                 tourn = Tournament(swiss, TournType.Swiss)
@@ -965,7 +1007,7 @@ def get_current_tournaments():
                 traceback.print_exception(type(exception), exception, exception.__traceback__)
     # Broadcast
     url = f"https://lichess.org/api/broadcast?nb={NUM_RECENT_BROADCASTS_TO_FETCH}"
-    broadcast_data = get_ndjson(url, Accept="application/nd-json")
+    broadcast_data = get_ndjson(url, non_mod, "api/broadcast", Accept="application/nd-json")
     for broadcast in broadcast_data:
         try:
             broadcast_name = broadcast['tour']['name']

@@ -21,6 +21,7 @@ DELAY_ERROR_CHAT_404 = 10 * 60   # [s]
 TIME_CHAT_REMOVED_404 = 30 * 60   # [s]
 RECENT_TIMEOUT = 12 * 60 * 60  # [s]
 RECENT_WARNING = 7 * 24 * 60 * 60  # [s]
+LIFETIME_USER_CACHE = 1 * 60 * 60  # [s]
 
 CHAT_NUM_VISIBLE_MSGS = 450
 CHAT_MAX_NUM_MSGS = 500
@@ -70,3 +71,18 @@ API_TOURNEY_DELAY = 0.5  # [s]
 BOOST_RING_TOOL = b'iSfVR3ICd3lHqSQf2ucEkLvyvCf0'
 STATUSES_TO_DISCARD_BOOST = ["created", "started", "aborted", "unknownFinish", "draw", "cheat"]
 PERCENT_EXTRA_GAMES_TO_DOWNLOAD = 10
+
+# Alt
+MAX_NUM_GAMES_TO_DOWNLOAD = 99999
+STATUSES_TO_DISCARD_ALT = ["created", "started", "aborted", "unknownFinish"]
+NUM_EXAMPLE_GAMES = 5
+ALT_SWITCH_INTERVAL_MINS = [0, 5, 20, 60, 3*60, 12*60, 24*60, 7*24*60]
+ALT_SWITCH_INTERVAL_NAMES = ["In parallel", "<5 min", "<20 min", "<1 h", "<3 h", "<12 h", "<1 day", "<1 week", "1+ weeks"]
+ALT_MAX_NUM_TCS_TO_SHOW = 8
+ALT_MAX_NUM_OPENINGS_TO_SHOW = 8
+ALT_MAX_LEN_NAME = 8
+CHART_WIDTH = 1000
+BAR_DANGER = 'rgba(231, 76, 60, 1)'
+ALT_UPDATE_PERIOD = 30 * 60  # seconds
+ALT_REFRESH_OPENINGS_PERIOD = 24 * 60 * 60  # seconds
+ALT_MAX_PERIOD_FOR_GAMES = 2*365  # days

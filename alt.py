@@ -5,51 +5,11 @@ from collections import defaultdict
 import pygal
 from pygal.style import DefaultStyle, DarkStyle, BlueStyle, DarkGreenBlueStyle
 import requests
-import time
 from enum import Enum
 from elements import UserData, Games, Variants, ModActionType
-from elements import get_tc, deltaseconds, deltainterval, datetime_to_ago, get_user_ids
+from elements import get_tc, delta_s, deltainterval, datetime_to_ago, get_user_ids
 from elements import load_mod_log, get_mod_log, get_notes
 from consts import *
-
-
-MAX_NUM_GAMES_TO_DOWNLOAD = 99999
-STATUSES_TO_DISCARD = ["created", "started", "aborted", "unknownFinish"]
-NUM_EXAMPLE_GAMES = 5
-ALT_SWITCH_INTERVAL_MINS = [0, 5, 20, 60, 3*60, 12*60, 24*60, 7*24*60]
-ALT_SWITCH_INTERVAL_NAMES = ["In parallel", "<5 min", "<20 min", "<1 h", "<3 h", "<12 h", "<1 day", "<1 week", "1+ weeks"]
-ALT_MAX_NUM_TCS_TO_SHOW = 8
-ALT_MAX_NUM_OPENINGS_TO_SHOW = 8
-ALT_MAX_LEN_NAME = 8
-CHART_WIDTH = 1000
-BAR_DANGER = 'rgba(231, 76, 60, 1)'
-ALT_UPDATE_PERIOD = 30 * 60  # seconds
-ALT_REFRESH_OPENINGS_PERIOD = 24 * 60 * 60  # seconds
-ALT_MAX_PERIOD_FOR_GAMES = 2*365  # days
-
-
-alts_cache = {}
-api_times = defaultdict(list)
-
-
-def wait_api(api_type, delay=1.0, num_requests=1):
-    global api_times
-    now = datetime.now()
-    if len(api_times[api_type]) >= num_requests:
-        wait_s = delay - deltaseconds(now, api_times[api_type][-num_requests])
-        if wait_s > 0:
-            #print(f'Waiting for "{api_type}" for {wait_s:0.1f}s')
-            time.sleep(wait_s)
-    api_times[api_type].append(now)
-    if len(api_times[api_type]) > num_requests:
-        api_times[api_type] = api_times[api_type][-num_requests:]
-
-
-def get_waiting_api_time(api_type, delay, num_requests):
-    now = datetime.now()
-    if len(api_times[api_type]) >= num_requests:
-        return delay - deltaseconds(now, api_times[api_type][-num_requests])
-    return 0
 
 
 def render(chart, style=DarkStyle, theme_color="#222222"):
@@ -72,12 +32,12 @@ class OpeningStage(Enum):
 def download_openings(user_id, color, opening_stage, mod, to_refresh=False):
     try:
         if to_refresh:
-            wait_api('insights/refresh', 60, 4)
+            mod.wait_api('insights/refresh', 60, 4)
             url_refresh = f'https://lichess.org/insights/refresh/{user_id}'
             r = requests.post(url_refresh, headers={'Authorization': f"Bearer {mod.token}"})
             if r.status_code != 200:
                 print(f"Failed to refresh insights for @{user_id}: Status {r.status_code}")
-        wait_api('insights/data')
+        mod.wait_api('insights/data')
         url = f'https://lichess.org/insights/data/{user_id}'
         headers = {'Content-Type': "application/json",
                    'Authorization': f"Bearer {mod.token}"}
@@ -104,8 +64,7 @@ def download_openings(user_id, color, opening_stage, mod, to_refresh=False):
 
 
 class Alt:
-    team_dict = {}  # TODO: clear to prevent memory leak
-    refresh_openings_times = {}  # TODO: clear to prevent memory leak
+    team_cache = {}  # TODO: based on `alt_cache`s, clear to prevent memory leak?
 
     def __init__(self, username, num_games, mod):
         if not num_games:
@@ -117,7 +76,7 @@ class Alt:
                 num_games = MAX_NUM_GAMES_TO_DOWNLOAD
         self.user = UserData(username, mod)
         self.games = Games(self.user.id, min(MAX_NUM_GAMES_TO_DOWNLOAD, num_games), ALT_MAX_PERIOD_FOR_GAMES,
-                           STATUSES_TO_DISCARD, download_moves=False, only_rated=False, use_correspondence_games=False)
+                           STATUSES_TO_DISCARD_ALT, download_moves=False, only_rated=False, use_correspondence_games=False)
         self.mutual_games = defaultdict(list)
         self.datetime_first_game: datetime = None
         self.datetime_last_move: datetime = None
@@ -139,12 +98,12 @@ class Alt:
         self.time_step1: datetime = None
         self.time_step2: datetime = None
 
-    def download(self, alt_ids):
+    def download(self, alt_ids, mod):
         if self.user.is_error:
             return
         now = datetime.now()
-        if not self.time_step2 or deltaseconds(now, self.time_step2) >= ALT_UPDATE_PERIOD:
-            self.games.download()
+        if not self.time_step2 or delta_s(now, self.time_step2) >= ALT_UPDATE_PERIOD:
+            self.games.download(mod)
             self.time_step2 = now
         self.mutual_games.clear()
         self.hist_hours = [0.0] * 12
@@ -178,36 +137,40 @@ class Alt:
             for tc in self.hist_tcs.keys():
                 self.hist_tcs[tc] = self.hist_tcs[tc] * 100 / num_games
 
-    def needs_to_refresh_openings(self, now):
-        return self.user.id not in Alt.refresh_openings_times \
-               or deltaseconds(now, Alt.refresh_openings_times[self.user.id]) > ALT_REFRESH_OPENINGS_PERIOD
+    def needs_to_refresh_openings(self, now, mod):
+        return self.user.id not in mod.refresh_openings_times \
+               or delta_s(now, mod.refresh_openings_times[self.user.id]) > ALT_REFRESH_OPENINGS_PERIOD
 
     def download_openings(self, refresh_openings, mod):
         if self.user.is_error:
             return
         now = datetime.now()
-        if self.time_step1 and deltaseconds(now, self.time_step1) < ALT_UPDATE_PERIOD\
-                and (not refresh_openings or not self.needs_to_refresh_openings(now)):
+        if self.time_step1 and delta_s(now, self.time_step1) < ALT_UPDATE_PERIOD\
+                and (not refresh_openings or not self.needs_to_refresh_openings(now, mod)):
             return
         for color in Color:
             for opening_stage in OpeningStage:
-                to_refresh = self.needs_to_refresh_openings(now)
+                to_refresh = self.needs_to_refresh_openings(now, mod)
                 if to_refresh and not refresh_openings:
-                    wait_s = get_waiting_api_time('insights/refresh', 60, 4)
+                    wait_s = mod.get_waiting_api_time('insights/refresh', 60, 4)
                     to_refresh = (wait_s <= 0)
                 self.hist_openings[color][opening_stage] = download_openings(self.user.id, color, opening_stage, mod,
                                                                              to_refresh)
                 if to_refresh:
-                    Alt.refresh_openings_times[self.user.id] = now
+                    user_ids = mod.refresh_openings_times.keys()
+                    for user_id in user_ids:
+                        if delta_s(now, mod.refresh_openings_times[user_id]) >= ALT_REFRESH_OPENINGS_PERIOD:
+                            del mod.refresh_openings_times[user_id]
+                    mod.refresh_openings_times[self.user.id] = now
         self.time_step1 = now
 
     def download_teams(self, mod):
         if self.user.is_error:
             return
         now = datetime.now()
-        if self.time_step1 and deltaseconds(now, self.time_step1) < ALT_UPDATE_PERIOD:
+        if self.time_step1 and delta_s(now, self.time_step1) < ALT_UPDATE_PERIOD:
             return
-        wait_api('api/team/of')
+        mod.wait_api('api/team/of')
         url = f'https://lichess.org/api/team/of/{self.user.id}'
         headers = {'Content-Type': "application/json",
                    'Authorization': f"Bearer {mod.token}"}
@@ -216,10 +179,9 @@ class Alt:
             return None
         teams = r.json()
         self.teams.update([team['id'] for team in teams])
-        Alt.team_dict.update({team['id']: team['name'] for team in teams})
+        Alt.team_cache.update({team['id']: team['name'] for team in teams})
 
     def download_mod_log(self, mod):
-        wait_api('api/user/mod-log')
         mod_log_data = load_mod_log(self.user.name, mod)
         if mod_log_data:
             self.user.mod_log, actions = get_mod_log(mod_log_data, mod, ModActionType.Alt)
@@ -232,9 +194,9 @@ class Alt:
     #     if self.user.is_error:
     #         return
     #     now = datetime.now()
-    #     if self.time_step1 and deltaseconds(now, self.time_step1) < ALT_UPDATE_PERIOD:
+    #     if self.time_step1 and delta_s(now, self.time_step1) < ALT_UPDATE_PERIOD:
     #         return
-    #     wait_api('@/username/following')
+    #     mod.wait_api('@/username/following')
     #     url = f'https://lichess.org/@/{self.user.id}/following'
     #     headers = {'Content-Type': "application/json",
     #                'Authorization': f"Bearer {mod.token}"}
@@ -245,7 +207,7 @@ class Alt:
     #     print(following)
 
     def get_mutual_teams_row(self, alts):
-        team_names = sorted([Alt.team_dict[team] for team in self.teams])
+        team_names = sorted([Alt.team_cache[team] for team in self.teams])
         cells = [f'<td class="text-left">{self.user.get_name("?mod")}</td>'
                  f'<td class="text-center"><abbr title="{", ".join(team_names)}"'
                  f' style="text-decoration:none;">{len(self.teams)}</abbr></td>']
@@ -256,7 +218,7 @@ class Alt:
             else:
                 mutual_teams = self.teams.intersection(alt.teams)
                 if mutual_teams:
-                    team_names = sorted([Alt.team_dict[team] for team in mutual_teams])
+                    team_names = sorted([Alt.team_cache[team] for team in mutual_teams])
                     cells.append(f'<td class="text-center"><abbr title="{", ".join(team_names)}"'
                                  f' style="text-decoration:none;">{len(mutual_teams)}</abbr></td>')
                 else:
@@ -332,19 +294,18 @@ class OverlappingGames:
 
 
 def get_alt(user_id, num_games, mod):
-    global alts_cache
     now = datetime.now()
-    alt, last_update = alts_cache.get(user_id, (None, None))
+    alt, last_update = mod.alt_cache.get(user_id, (None, None))
     if num_games:
         num_games = int(num_games)
     if alt and (alt.games.max_num_games == num_games):
-        if deltaseconds(now, last_update) < ALT_UPDATE_PERIOD:
+        if delta_s(now, last_update) < ALT_UPDATE_PERIOD:
             return alt
+    for user_i in list(mod.alt_cache.keys()):
+        if delta_s(now, mod.alt_cache[user_i][1]) >= ALT_UPDATE_PERIOD:
+            del mod.alt_cache[user_i]
     alt = Alt(user_id, num_games, mod)
-    alts_cache[user_id] = alt, now
-    for user_i in list(alts_cache.keys()):
-        if deltaseconds(now, alts_cache[user_i][1]) >= ALT_UPDATE_PERIOD:
-            del alts_cache[user_i]
+    mod.alt_cache[user_id] = alt, now
     return alt
 
 
@@ -381,11 +342,11 @@ class Alts:
                 self.is_mod_log = alt.download_mod_log(mod)
         self.is_step1 = True
 
-    def process_step2(self):
+    def process_step2(self, mod):
         self.hist_switch_intervals = [0.0] * len(ALT_SWITCH_INTERVAL_NAMES)
         all_games = {}  # dict to not double mutual games
         for alt in self.players:
-            alt.download(self.alt_names.keys())
+            alt.download(self.alt_names.keys(), mod)
             all_games.update({game['id']: (alt.user.id, game) for game in alt.games})
         games = list(all_games.values())
         games.sort(key=lambda p: p[1]['createdAt'])
@@ -598,7 +559,7 @@ class Alts:
                     </div>'''
         return f'{table}{"".join(info)}'
 
-    def get_info_1(self):
+    def get_info_1(self, mod):
         # User table
         rows = []
         now_utc = datetime.now(tz=tz.tzutc())
@@ -653,7 +614,7 @@ class Alts:
         # Refresh openings button
         if self.is_step2:
             now = datetime.now()
-            refresh_players = [player.user.name for player in self.players if player.needs_to_refresh_openings(now)]
+            refresh_players = [player.user.name for player in self.players if player.needs_to_refresh_openings(now, mod)]
             if refresh_players:
                 if len(refresh_players) == 2:
                     player_list = " and ".join(refresh_players)
@@ -697,7 +658,7 @@ class Alts:
                 openings.append(f'<div class="mt-3">{openings_ij}</div>' if openings_ij else "")
         return f'{overlapping_games}{header}{self.get_mutual_games()}{mutual_teams}{"".join(openings)}'
 
-    def get_output(self):
+    def get_output(self, mod):
         output = {}
-        output.update({'part-1': self.get_info_1(), 'part-2': self.get_info_2(), 'part-3': self.get_info_3()})
+        output.update({'part-1': self.get_info_1(mod), 'part-2': self.get_info_2(), 'part-3': self.get_info_3()})
         return output

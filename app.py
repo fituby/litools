@@ -8,7 +8,7 @@ from boost import get_boost_data, send_boost_note, send_mod_action
 from chat import ChatAnalysis
 from alt import Alts
 from mod import Mod
-from elements import get_port, get_embed_lichess
+from elements import get_port, get_embed_lichess, get_token
 
 
 class Mode(IntEnum):
@@ -53,7 +53,10 @@ view_boost = View("B/")
 view_chat = View("C/")
 view_alt = View("A/")
 chat = ChatAnalysis()
-mod = Mod()
+auto_mod_token = get_token()
+auto_mod = Mod(auto_mod_token) if auto_mod_token else None
+mod = Mod(auto_mod_token)
+non_mod = Mod("")
 
 
 def update_boost_theme():
@@ -144,8 +147,8 @@ def get_alts(step):
         force_refresh_openings = False if step < 2 else bool(request.form.get("force_refresh_openings", False))
         alts.process_step1(force_refresh_openings, mod)
         if step >= 2:
-            alts.process_step2()
-    resp = make_response(alts.get_output())
+            alts.process_step2(mod)
+    resp = make_response(alts.get_output(mod))
     return resp
 
 
@@ -165,28 +168,28 @@ def get_chat_update():
 
 @app.route('/chat/process/', methods=['POST'])
 def get_chat_process():
-    data = chat.get_all()
+    data = chat.get_all(mod)
     return make_response(data)
 
 
 @app.route('/chat/set_msg_ok/<msg_id>', methods=['POST'])
 def chat_set_msg_ok(msg_id):
     chat.set_msg_ok(msg_id)
-    resp = make_response(chat.get_all())
+    resp = make_response(chat.get_all(mod))
     return resp
 
 
 @app.route('/chat/timeout/<msg_id>/<reason>', methods=['POST'])
 def chat_timeout(msg_id, reason):
     chat.timeout(msg_id, reason, mod)
-    resp = make_response(chat.get_all())
+    resp = make_response(chat.get_all(mod))
     return resp
 
 
 @app.route('/chat/timeout_multi/<msg_id>/<reason>', methods=['POST'])
 def chat_timeout_multi(msg_id, reason):
     chat.timeout_multi(msg_id, reason, mod)
-    resp = make_response(chat.get_all())
+    resp = make_response(chat.get_all(mod))
     return resp
 
 
@@ -199,7 +202,7 @@ def chat_set_multi_msg_ok(msg_id):
 @app.route('/chat/warn/<username>/<subject>', methods=['POST'])
 def chat_warn(username, subject):
     chat.warn(username, subject, mod)
-    resp = make_response(chat.get_all())
+    resp = make_response(chat.get_all(mod))
     return resp
 
 
@@ -218,7 +221,7 @@ def chat_select_message(msg_id):
 @app.route('/chat/clear_errors/<tourn_id>', methods=['POST'])
 def chat_clear_errors(tourn_id):
     chat.clear_errors(tourn_id)
-    resp = make_response(chat.get_all())
+    resp = make_response(chat.get_all(mod))
     return resp
 
 
@@ -251,8 +254,8 @@ def chat_flip_tournament_group(group):
 @app.route('/chat/add_tournament', methods=['POST'])
 def chat_add_tournament():
     page = request.form.get("page", "")
-    data = chat.add_tournament(page)
-    data.update(chat.get_all())
+    data = chat.add_tournament(page, mod)
+    data.update(chat.get_all(mod))
     resp = make_response(data)
     return resp
 
@@ -263,7 +266,7 @@ def chat_send_note():
     user = request.form.get("user", None)
     data = chat.send_note(note, user, mod)
     #resp = make_response(data)  # needs 'user-info', see chat.send_note() --> workaround:
-    all_data = chat.get_all()
+    all_data = chat.get_all(mod)
     all_data.update(data)
     resp = make_response(all_data)
     return resp
@@ -277,7 +280,7 @@ def custom_timeout():
     if isinstance(reason, list):
         reason = reason[0]
     chat.custom_timeout(msg_ids, reason, mod)
-    resp = make_response(chat.get_all())
+    resp = make_response(chat.get_all(mod))
     return resp
 
 
@@ -294,8 +297,8 @@ def set_mode(mode):
 def chat_loop():
     global chat
     while True:
-        chat.update_tournaments()
-        chat.run(mod)
+        chat.update_tournaments(non_mod)
+        chat.run(non_mod, auto_mod)
 
 
 if __name__ == "__main__":

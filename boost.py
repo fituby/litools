@@ -6,14 +6,11 @@ import time
 import traceback
 from collections import defaultdict
 import math
-from elements import get_user, get_ndjson, shorten, deltaseconds
+from elements import get_user, get_ndjson, shorten, delta_s
 from elements import get_notes, add_note, load_mod_log, get_mod_log, add_variant_rating
 from elements import ModActionType, WarningStats, User, Games, Variants
-from elements import warn_sandbagging, warn_boosting, mark_booster, decode_string
+from elements import warn_sandbagging, warn_boosting, mark_booster
 from consts import *
-
-
-boosts = {}
 
 
 class StatsData:
@@ -267,6 +264,7 @@ class UserTournament:
     def download(self, mod):
         headers = {'Authorization': f"Bearer {mod.token}"}
         if self.is_arena:
+            mod.wait_api('api/tournament')
             url = f"https://lichess.org/api/tournament/{self.tournament_id}"
             r = requests.get(url, headers=headers)
             if r.status_code != 200:
@@ -288,7 +286,7 @@ class UserTournament:
                     self.score = player['score']
                     break
             url = f"https://lichess.org/api/tournament/{self.tournament_id}/results?nb={MAX_NUM_TOURNEY_PLAYERS}"
-            arena_res = get_ndjson(url)
+            arena_res = get_ndjson(url, mod, "api/tournament/results")
             for player in arena_res:
                 if player['username'].lower() == self.user_id:
                     self.place = player['rank']
@@ -297,7 +295,7 @@ class UserTournament:
                     break
         else:
             url = f"https://lichess.org/api/swiss/{self.tournament_id}/results?nb={MAX_NUM_TOURNEY_PLAYERS}"
-            swiss_res = get_ndjson(url)
+            swiss_res = get_ndjson(url, mod, "api/swiss/results")
             self.num_players = len(swiss_res)
             self.name = f"Swiss/{self.tournament_id}"
             for player in swiss_res:
@@ -449,8 +447,7 @@ class BoostGames(Games):
                             analysis.opponents[opp_name] += 1
                             createdAt = datetime.fromtimestamp(game['createdAt'] // 1000, tz=tz.tzutc())
                             delta = (createdAt - last_game_end) if last_game_end else None
-                            if is_last_game_bad and last_game_end \
-                                    and delta.days*24*60*60 + delta.seconds <= BOOST_STREAK_TIME:
+                            if is_last_game_bad and last_game_end and delta.total_seconds() <= BOOST_STREAK_TIME:
                                 add_variant_rating(streak, variant, opp_rating)
                             else:
                                 streak = {variant: [opp_rating]}
@@ -482,13 +479,7 @@ class BoostGames(Games):
 
 
 class Boost:
-    ring_tool: str = None
-
-    @staticmethod
-    def is_mod():
-        return not not Boost.ring_tool
-
-    def __init__(self, username, num_games, before, mod):
+    def __init__(self, username, num_games, before):
         self.user = User(username)
         self.before = before
         self.errors = []
@@ -503,8 +494,6 @@ class Boost:
         self.prefer_marking = False
         self.mod_log: ModLogData = None
         self.mod_log_out = ""
-        if Boost.ring_tool is None:
-            Boost.ring_tool = decode_string(BOOST_RING_TOOL, mod)  # returns "" (not None) if not available
         self.info_games_played = ""
 
     def get_errors(self):
@@ -512,7 +501,7 @@ class Boost:
             return ""
         return f'<div class="text-warning"><div>{"</div><div>".join(self.errors)}</div></div>'
 
-    def get_info_1(self):
+    def get_info_1(self, mod):
         main = self.user.get_user_info(BOOST_CREATED_DAYS_AGO, BOOST_NUM_PLAYED_GAMES)
         num_games = self.games.get_num()
         analysis = self.get_analysis()
@@ -522,10 +511,10 @@ class Boost:
                            f'class="btn btn-secondary flex-grow-1 py-0 mr-1" role="button">Best tournaments&hellip;</a>'
         games = f'<a href="https://lichess.org/mod/{self.user.name}/games" target="_blank" ' \
                 f'class="btn btn-secondary flex-grow-1 py-0" role="button">Games&hellip;</a>'
-        if Boost.ring_tool:
+        if mod.boost_ring_tool:
             class_boost_ring = "btn-warning" if self.enable_sandbagging and self.enable_boosting else "btn-secondary"
             additional_tools = f'<div class="d-flex justify-content-between mb-2 px-1">' \
-                               f'<a href="https://{Boost.ring_tool}/?user={self.user.name}" target="_blank" ' \
+                               f'<a href="https://{mod.boost_ring_tool}/?user={self.user.name}" target="_blank" ' \
                                f'class="btn {class_boost_ring} flex-grow-1 py-0 mr-1" ' \
                                f'role="button">Boost ring tool&hellip;</a>{best_tournaments}{games}</div>'
         else:
@@ -543,7 +532,7 @@ class Boost:
         return f"{variants}{profile}"
 
     def get_mod_notes(self, mod_log_data, mod):
-        mod_notes = get_notes(self.user.name, mod, mod_log_data) if Boost.is_mod() else ""
+        mod_notes = get_notes(self.user.name, mod, mod_log_data) if mod.is_mod() else ""
         header_notes = "Notes:" if mod_notes else "No notes"
         return {'mod-notes': mod_notes, 'notes-header': header_notes}
 
@@ -561,13 +550,13 @@ class Boost:
             perfs = user.get('perfs', {})
             self.variants.set(perfs)
         self.update_mod_log(mod)
-        self.analyse_games()
+        self.analyse_games(mod)
 
-    def analyse_games(self):
+    def analyse_games(self, mod):
         exc: Exception = None
         try:
-            self.games.download(self.mod_log.time_last_manual_warning, self.before)
-            if self.games.until and deltaseconds(datetime.now(tz=tz.tzutc()), self.games.until) > 30*60:
+            self.games.download(mod, self.mod_log.time_last_manual_warning, self.before)
+            if self.games.until and delta_s(datetime.now(tz=tz.tzutc()), self.games.until) > 30*60:
                 self.info_games_played = f' played before {self.games.until:%Y-%m-%d %H:%M} UTC'
             else:
                 self.info_games_played = ""
@@ -587,7 +576,7 @@ class Boost:
             raise exc
 
     def update_mod_log(self, mod):
-        mod_log_data = load_mod_log(self.user.name, mod) if Boost.is_mod() else None
+        mod_log_data = load_mod_log(self.user.name, mod) if mod.is_mod() else None
         self.mod_log = ModLogData(mod_log_data)
         self.mod_log_out = self.mod_log.prepare(mod)
 
@@ -596,7 +585,7 @@ class Boost:
             now = datetime.now()
             if self.last_update_tournaments:
                 delta = now - self.last_update_tournaments
-                if delta.days*24*60*60 + delta.seconds < BOOST_UPDATE_PERIOD:
+                if delta.total_seconds() < BOOST_UPDATE_PERIOD:
                     return
             # Select tournaments
             selected_tournaments = [(arena, tourney_info, True)
@@ -773,42 +762,40 @@ class Boost:
             except Exception as exception:
                 traceback.print_exception(type(exception), exception, exception.__traceback__)
         # After self.enable_buttons():
-        output.update({'part-1': self.get_info_1(), 'part-2': self.get_info_2(),
+        output.update({'part-1': self.get_info_1(mod), 'part-2': self.get_info_2(),
                        'num-games': self.games.max_num_games, 'datetime-before': before})
         return output
 
 
 def get_boost_data(username, mod, num_games=None, before=None):
-    global boosts
     now = datetime.now()
     user_id = username.lower()
-    boost, last_update = boosts.get(user_id, (None, None))
+    boost, last_update = mod.boost_cache.get(user_id, (None, None))
     if num_games:
         num_games = int(num_games)
     if boost and (boost.before == before or before is None) \
             and (boost.games.max_num_games == num_games or num_games is None):
-        if deltaseconds(now, last_update) < BOOST_UPDATE_PERIOD:
+        if delta_s(now, last_update) < BOOST_UPDATE_PERIOD:
             return boost
     if not num_games:
         num_games = BOOST_NUM_GAMES[0]
-    boost = Boost(username, num_games, before, mod)
+    boost = Boost(username, num_games, before)
     user, api_error = get_user(username, mod)
     if api_error:
         boost.user.is_error = True
         boost.errors.append(api_error)
     else:
         boost.set(user, mod)
-        boosts[user_id] = boost, now
-    for user_id in list(boosts.keys()):
-        if deltaseconds(now, boosts[user_id][1]) >= BOOST_UPDATE_PERIOD:
-            del boosts[user_id]
+        mod.boost_cache[user_id] = boost, now
+    for user_id in list(mod.boost_cache.keys()):
+        if delta_s(now, mod.boost_cache[user_id][1]) >= BOOST_UPDATE_PERIOD:
+            del mod.boost_cache[user_id]
     return boost
 
 
 def send_boost_note(note, username, mod):
-    global boosts
     user_id = username.lower()
-    boost, last_update = boosts.get(user_id, (None, None))
+    boost, last_update = mod.boost_cache.get(user_id, (None, None))
     try:
         if not boost or not note or not username:
             raise Exception(f"Wrong note: [{username}]: {note}")
@@ -953,10 +940,9 @@ class ModLogData:
 
 
 def send_mod_action(action, username, mod):
-    global boosts
     output = {'user': username, 'mod-log': "", 'enable-sandbagging': -1, 'enable-boosting': -1, 'enable-marking': -1}
     user_id = username.lower()
-    boost, last_update = boosts.get(user_id, (None, None))
+    boost, last_update = mod.boost_cache.get(user_id, (None, None))
     if boost:
         try:
             output.update(boost.get_enabled_buttons())

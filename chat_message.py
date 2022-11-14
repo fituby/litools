@@ -34,7 +34,7 @@ def load_res():
 
 
 class Message:
-    global_id = 0
+    global_id = 1  # starting from 1
     list_res, list_res_variety = load_res()
 
     def __init__(self, data, tournament, now=None, delay=None):

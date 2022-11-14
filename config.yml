@@ -2,6 +2,4 @@ token: ""         # <-- put your web:mod-enabled API token here, like:    token:
 port: 5000                                # <-- port, which is used here: http://127.0.0.1:5000/chat
 log: "./log/log.txt"                      # <-- put the path to your log file, or use "./log/log.txt" if you run it from source code, or leave "" if you don't want to log anything
 timeouts: "Spam En Ru De Es It Hi Fr Tr"  # <-- remove languages you don't want to monitor. Available items: Spam, En, Ru, De, Es, It, Hi, Fr, Tr
-chat_notes: true
-chat_mod_log: true
 embed_lichess: false

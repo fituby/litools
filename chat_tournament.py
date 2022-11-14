@@ -4,7 +4,7 @@ from dateutil import tz
 import json
 import traceback
 from fake_useragent import UserAgent
-from elements import Reason, TournType, deltaseconds, deltaperiod, shorten, add_timeout_msg, Error500
+from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, shorten, add_timeout_msg, Error500
 from chat_re import ReUser
 from chat_message import Message
 from consts import *
@@ -74,14 +74,14 @@ class Tournament:
     def is_active(self, now_utc):
         if not self.is_enabled:
             return False
-        if deltaseconds(self.startsAt, now_utc) >= CHAT_TOURNAMENT_STARTS_IN * 60:
+        if delta_s(self.startsAt, now_utc) >= CHAT_TOURNAMENT_STARTS_IN * 60:
             return False
         finishes_at = self.finish_time_estimated()
         if finishes_at is not None:
-            return deltaseconds(now_utc, finishes_at) < CHAT_TOURNAMENT_FINISHED_AGO * 60
+            return delta_s(now_utc, finishes_at) < CHAT_TOURNAMENT_FINISHED_AGO * 60
         if not self.finishesAt:
             return True
-        return deltaseconds(now_utc, self.startsAt) < CHAT_SWISS_STARTED_AGO * 60
+        return delta_s(now_utc, self.startsAt) < CHAT_SWISS_STARTED_AGO * 60
 
     def get_state(self, now_utc):
         if self.is_created(now_utc):
@@ -101,10 +101,10 @@ class Tournament:
                or (self.t_type != TournType.Arena and self.finishesAt)
 
     def is_error_404_recently(self, now_utc):
-        return self.last_error_404 is not None and deltaseconds(now_utc, self.last_error_404) < DELAY_ERROR_CHAT_404
+        return self.last_error_404 is not None and delta_s(now_utc, self.last_error_404) < DELAY_ERROR_CHAT_404
 
     def is_error_404_too_long(self, now_utc):
-        return self.last_error_404 is not None and deltaseconds(now_utc, self.last_error_404) >= TIME_CHAT_REMOVED_404
+        return self.last_error_404 is not None and delta_s(now_utc, self.last_error_404) >= TIME_CHAT_REMOVED_404
 
     def priority_score(self):
         return self.max_score * 9999 + self.total_score
@@ -142,12 +142,13 @@ class Tournament:
         return "tournament" if self.t_type == TournType.Arena else \
             "swiss" if self.t_type == TournType.Swiss else None
 
-    def download(self, msg_lock, now_utc):
+    def download(self, msg_lock, now_utc, non_mod):
         new_messages = []
         deleted_messages = []
         if self.errors or self.is_error_404_recently(now_utc):
             return new_messages, deleted_messages
         try:
+            non_mod.wait_api(self.get_type())
             ua = UserAgent()
             headers = {'User-Agent': str(ua.chrome)}
             #if not self.is_arena:
@@ -324,7 +325,7 @@ class Tournament:
             num_first_messages = 0
             for um in msgs:
                 if um is not None:
-                    if deltaseconds(um.time, first_msg_time) >= max(1.0, API_TOURNEY_PAGE_DELAY):
+                    if delta_s(um.time, first_msg_time) >= max(1.0, API_TOURNEY_PAGE_DELAY):
                         break
                     num_first_messages += 1
                 i += 1
@@ -342,7 +343,7 @@ class Tournament:
             if not real_msgs:
                 return
             num_msgs = len(real_msgs)
-            if num_msgs < NUM_FREQUENT_MESSAGES and deltaseconds(now_utc, self.last_update) > MAX_TIME_FREQUENT_MESSAGES:
+            if num_msgs < NUM_FREQUENT_MESSAGES and delta_s(now_utc, self.last_update) > MAX_TIME_FREQUENT_MESSAGES:
                 return
             # Process messages
             msgs_id = real_msgs[-1].id
@@ -459,12 +460,12 @@ class Tournament:
             if msg.is_removed or msg.is_official:
                 continue
             is_to_be_processed = not msg.is_disabled and not msg.is_timed_out  # and not msg.is_deleted
-            is_among_first_messages = deltaseconds(msg.time, first_msg_time) < max(1.0, API_TOURNEY_PAGE_DELAY)
+            is_among_first_messages = delta_s(msg.time, first_msg_time) < max(1.0, API_TOURNEY_PAGE_DELAY)
             keys = list(user_msgs.keys())
             for username in keys:
                 if not is_to_be_processed or username != last_user:
                     if not is_among_first_messages \
-                            and deltaseconds(msg.time, get_last_time(username)) < TIME_FREQUENT_MESSAGES:
+                            and delta_s(msg.time, get_last_time(username)) < TIME_FREQUENT_MESSAGES:
                         if user_msgs[username][-1] is not None:
                             user_msgs[username].append(None)
                     else:
