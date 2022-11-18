@@ -4,7 +4,7 @@ from datetime import datetime
 import traceback
 from enum import IntFlag
 from elements import STYLE_WORD_BREAK
-from chat_re import list_res, list_res_variety, re_spaces, LANGUAGES
+from chat_re import list_res, list_res_variety, re_spaces, Lang
 from elements import Reason, deltaseconds, get_highlight_style, config_file
 
 
@@ -16,20 +16,21 @@ class AddButtons(IntFlag):
 
 
 def load_res():
-    try:
-        with open(config_file) as stream:
-            config = yaml.safe_load(stream)
-            timeouts = config.get('timeouts', "En, Spam").lower()
-            list_re = []
-            for group in LANGUAGES.keys():
-                if group.lower() in timeouts:
-                    list_re.extend(list_res[group])
-            list_re_variety = list_res_variety if 'spam' in timeouts else []
-    except Exception as e:
-        print(f"There appears to be a syntax problem with your config.yml: {e}")
-        list_re = [list_res['En']]
-        list_re.extend(list_res['Spam'])
-        list_re_variety = list_res_variety
+    with open(config_file) as stream:
+        config = yaml.safe_load(stream)
+        timeouts = config.get('timeouts', "En Spam").lower()
+        list_re = []
+        list_re_variety = []
+        for lang in Lang:
+            if lang.name.lower() in timeouts:
+                for re in list_res[lang]:
+                    re.lang = lang
+                list_re.extend(list_res[lang])
+        for lang in Lang:
+            if (lang.name.lower() in timeouts) and (lang in list_res_variety):
+                for re in list_res_variety[lang]:
+                    re.lang = lang
+                list_re_variety.extend(list_res_variety[lang])
     return list_re, list_re_variety
 
 
@@ -54,6 +55,7 @@ class Message:
         self.score: int = None
         self.reasons = [0] * Reason.Size
         self.scores = [0] * Reason.Size
+        self.languages = Lang.No
 
     def best_ban_reason(self):
         ban_sum = sum(self.reasons)
@@ -115,6 +117,7 @@ class Message:
             self.scores = result.scores
             self.score = result.total_score()
             self.reasons = result.ban_points
+            self.languages = result.languages
             if self.score >= 50:
                 self.eval_text.replace('<span class="text-warning"', '<span class="text-danger"')
                 if self.score > 60:
@@ -203,21 +206,22 @@ class Message:
             else self.eval_text
         text = f'<span class="{class_name}" style="{STYLE_WORD_BREAK}">{text}</span>'
         mscore = f' data-mscore={self.score}' if add_mscore else ""
+        langs = f' data-langs={self.languages}' if add_mscore else ""
         selection = html.escape(self.text).replace("'", "&apos;")
         selection = f' data-selection=\'{self.username}: "{selection}"\'' if add_selection else ""
         onclick = "" if is_selected else f' onclick="select_message(event,\'{tag}{self.id}\')"'
         selectee_class = "selectee selectee-center" if is_centered else "selectee"
         if add_buttons == AddButtons.No:
-            div = f'<div id="msg{tag}{self.id}"{mscore}{selection} class="align-items-baseline {selectee_class} px-1" ' \
-                  f'style="{STYLE_WORD_BREAK}"{onclick}>' \
+            div = f'<div id="msg{tag}{self.id}"{mscore}{langs}{selection} ' \
+                  f'class="align-items-baseline {selectee_class} px-1" style="{STYLE_WORD_BREAK}"{onclick}>' \
                   f'{str_time}{user} <b>{score}</b> {text}</div>'
         elif add_buttons & AddButtons.Ban:
-            div = f'<div id="msg{tag}{self.id}"{mscore}{selection} class="align-items-baseline {selectee_class} px-1" ' \
-                  f'style="{STYLE_WORD_BREAK}"{onclick}>' \
+            div = f'<div id="msg{tag}{self.id}"{mscore}{langs}{selection} ' \
+                  f'class="align-items-baseline {selectee_class} px-1" style="{STYLE_WORD_BREAK}"{onclick}>' \
                   f'<div class="d-flex justify-content-between"><span>{button_ban}{str_time}{user} {text}</span> ' \
                   f'<span class="text-nowrap"><b class="pl-2">{score}</b>{button_dismiss}</span></div></div>'
         else:
-            div = f'<div id="msg{tag}{self.id}"{mscore}{selection} class="align-items-baseline {selectee_class} ' \
+            div = f'<div id="msg{tag}{self.id}"{mscore}{langs}{selection} class="align-items-baseline {selectee_class} ' \
                   f'px-1" {onclick}>' \
                   f'<div class="d-flex justify-content-between">' \
                   f'<span class="d-flex flex-row">{button_ban}{str_time}{user}</span>' \

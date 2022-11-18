@@ -260,7 +260,7 @@ class ChatAnalysis:
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
                            f"Tournament {msg.tournament.id} deleted", False)
             return
-        if not self.is_user_up_to_date(msg.username, mod):
+        if mod and not self.is_user_up_to_date(msg.username, mod):
             return
         chan = "tournament" if msg.tournament.t_type == TournType.Arena \
             else "swiss" if msg.tournament.t_type == TournType.Swiss \
@@ -643,6 +643,9 @@ class ChatAnalysis:
                     buttons.append(get_warn_btn('SB', "Shadowban", True, user_name, txt_class="text-danger",
                                                 is_disabled=is_SBed or not is_SBable))
                 kid_sus = ChatAnalysis.kid_years.search(user_data.profile.bio)
+                if kid_sus:
+                    add_info = f'{add_info}{" + " if add_info else ""}<span class="text-warning">' \
+                               f'kid?</span>'
                 if buttons or (not is_kid and not is_SBed):
                     buttons.append(get_warn_btn('kidMode', "Kid Mode", kid_sus, user_name, txt_class="text-warning",
                                                 is_disabled=is_kid))

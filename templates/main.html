@@ -1,0 +1,43 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+<div class="container-fluid m-0 px-2 pb-3" style="max-width:96vw;min-height:97vh;">
+  {% if error_title or error_text %}
+  <div class="col my-2">
+    <h2 class="text-danger text-center">{{error_title|safe}}</h2>
+    <h4>{{error_text|safe}}</h4>
+  </div>
+  {% endif %}
+  {% if mod %}
+  <div class="col my-3">
+    {{mod.status_info()|safe}}
+  </div>
+  {% else %}
+  <div class="row justify-content-center my-2">
+    <a href="/login" class="btn btn-lg btn-primary mt-5">Log in</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+  <script>
+  $(document).ready(function() {
+    $("#loadOverlay").css("display","none");
+    $("#mainOverlay").css("display","block");
+  });
+
+  function revoke_token(obj) {
+    var token_hash = $(obj).closest('tr').attr('id');
+    if (token_hash)
+      $.ajax({
+        url: `/revoke_token/${token_hash}`,
+        type: "delete",
+        success: function(result) {
+          $(obj).closest('tr').remove();
+        }
+      });
+  }
+  </script>
+{% endblock %}

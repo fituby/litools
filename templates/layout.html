@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <title>{{title|safe}}</title>
   <meta name="referrer" content="origin-when-cross-origin" />
-  <link rel="shortcut icon" href="{{url_for('static', filename=view.icon_folder+'favicon.ico')}}" />
-  <link rel="apple-touch-icon" href="{{url_for('static', filename=view.icon_folder+'apple-touch-icon.png')}}" />
-  <link rel="apple-touch-icon-precomposed" href="{{url_for('static', filename=view.icon_folder+'apple-touch-icon-precomposed.png')}}" />
+  <link rel="shortcut icon" href="{{url_for('static', filename=icon+'favicon.ico')}}" />
+  <link rel="apple-touch-icon" href="{{url_for('static', filename=icon+'apple-touch-icon.png')}}" />
+  <link rel="apple-touch-icon-precomposed" href="{{url_for('static', filename=icon+'apple-touch-icon-precomposed.png')}}" />
   <meta name="theme-color" content="{{view.theme_color|safe}}" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no" />
   <link rel="stylesheet" href="https://bootswatch.com/4/{{view.theme|safe}}/bootstrap.min.css" crossorigin="anonymous" />
@@ -24,6 +24,15 @@ function setCookie(name, value, days=3650) {
       expires = "; expires=" + date.toUTCString();
   }
   document.cookie = name + "=" + (value || "")  + expires + "; path=/";
+}
+function getCookie(name) {
+  var cookies = document.cookie.split(';');
+  for (var i = 0; i < cookies.length; i++) {
+    var c = cookies[i].trimStart();
+    if (c.indexOf(name + "=") == 0)
+      return c.substring(name.length + 1, c.length);
+  }
+  return null;
 }
 function copyTextToClipboard(text) {
   var textArea = document.createElement("textarea");

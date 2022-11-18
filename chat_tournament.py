@@ -5,7 +5,7 @@ import json
 import traceback
 from fake_useragent import UserAgent
 from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, shorten, add_timeout_msg, Error500
-from chat_re import ReUser
+from chat_re import ReUser, Lang
 from chat_message import Message
 from consts import *
 
@@ -377,6 +377,7 @@ class Tournament:
                 if score_int > MULTI_MSG_MIN_TIMEOUT_SCORE:
                     combined_msg.reasons[Reason.Spam] = score_int / MULTI_MSG_MIN_TIMEOUT_SCORE
                     combined_msg.score = score_int
+                    combined_msg.languages |= Lang.Spam
                 else:
                     sum_len = sum([len(m.text) for m in real_msgs]) + len(real_msgs) - 1
                     if sum_len > MAX_LEN_TEXT:
@@ -444,8 +445,9 @@ class Tournament:
                      f'{header_1}{header_2}</div>'
             msgs_info = [HR if m is None else m.get_info(tag, show_hidden=True, add_user=False, rename_dismiss="Exclude",
                                                          add_reason=Reason.Spam) for m in msgs]
-            info = f'<div id="mmsg{tag}{msgs_id}" data-mscore={score_int} class="col rounded m-1 px-0 pb-1" ' \
-                   f'style="background-color:rgba(128,128,128,0.2);min-width:350px;">{header}{"".join(msgs_info)}</div>'
+            info = f'<div id="mmsg{tag}{msgs_id}" data-mscore={score_int} data-langs={combined_msg.languages} ' \
+                   f'class="col rounded m-1 px-0 pb-1" style="background-color:rgba(128,128,128,0.2);min-width:350px;">' \
+                   f'{header}{"".join(msgs_info)}</div>'
             output.append((score_int, info))
             multi_messages[msgs_id] = [m for m in real_msgs]
 

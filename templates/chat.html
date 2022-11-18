@@ -29,14 +29,28 @@
                 </div>
               </div>
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
-        <span class="pr-2 m-0">Filter scores</span>
-        <div class="btn-group btn-group-toggle">
-          <button id="filter_score_0" class="btn btn-secondary py-1" type="button" onclick="filter_score(0);">All</button>
-          <button id="filter_score_20" class="btn btn-secondary py-1" type="button" onclick="filter_score(20);">20+</button>
-          <button id="filter_score_40" class="btn btn-warning py-1" type="button" onclick="filter_score(40);">40+</button>
-          <button id="filter_score_60" class="btn btn-danger py-1" type="button" onclick="filter_score(60);">60+</button>
-        </div>
-      </div>
+                <span class="pr-2 m-0">Filter scores</span>
+                <div class="btn-group btn-group-toggle">
+                  <button id="filter_score_0" class="btn btn-secondary py-1" type="button" onclick="filter_score(0);">All</button>
+                  <button id="filter_score_20" class="btn btn-secondary py-1" type="button" onclick="filter_score(20);">20+</button>
+                  <button id="filter_score_40" class="btn btn-warning py-1" type="button" onclick="filter_score(40);">40+</button>
+                  <button id="filter_score_60" class="btn btn-danger py-1" type="button" onclick="filter_score(60);">60+</button>
+                </div>
+              </div>
+              <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
+                <span class="pr-2 m-0">Languages</span>
+                <div class="btn-group btn-group-toggle">
+                  <button id="filter_lang_1" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(1);">En</button>
+                  <button id="filter_lang_2" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(2);">Ru</button>
+                  <button id="filter_lang_3" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(3);">De</button>
+                  <button id="filter_lang_4" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(4);">Es</button>
+                  <button id="filter_lang_5" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(5);">It</button>
+                  <button id="filter_lang_6" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(6);">Hi</button>
+                  <button id="filter_lang_7" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(7);">Fr</button>
+                  <button id="filter_lang_8" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(8);">Tr</button>
+                  <button id="filter_lang_0" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(0);">Spam</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -166,6 +180,7 @@
       });
     update_frequency({{update_frequency}}, false);
     filter_score(0, false);
+    reset_langs();
     $("#tournament_settings").css("display","none");
     $("#dubious_messages").css("display","none");
     $("#multiline_messages").css("display","none");
@@ -188,20 +203,18 @@
   }
   const sleeping = ms => new Promise(res => setTimeout(res, ms));
   async function refresh(to_wait=1000) {
-    if (to_wait > 0) {
+    if (to_wait != 1000)
+      console.log(`refresh ${to_wait}ms`);
+    if (to_wait > 0)
       await sleeping(to_wait);
-    }
     if ($('#update_frequency_0').is('.active')) {
-      console.log('chat:refresh wait');
       refresh();
     }
     else {
       await $.ajax({url: `/chat/update/`, type: "post"})
         .done(function(data, textStatus, jqXHR) {
-          console.log('update:done');
           $.ajax({url: `/chat/process/`, type: "post"})
             .done(function(data_chats, textStatus, jqXHR) {
-              console.log('refresh:done');
               if ($('#update_frequency_0').is('.active')) {
                 refresh();
               }
@@ -249,13 +262,13 @@
           filter_score(i);
       }
     }
+    filter_langs();
     set_selection(data_chats);
     filter_messages();
     for (var msg_id of hidden_msgs) {
       $(`#msgA${msg_id}`).css("display","none");
       $(`#msgB${msg_id}`).css("display","none");
     }
-    console.log(hidden_msgs);
     return true;
   }
   function update_tournament_list(data) {
@@ -469,7 +482,7 @@
       else
         $(`#filter_score_${i}`).removeClass("active");
     }
-    if (to_filter){
+    if (to_filter) {
       $("div").filter(function() {
         return parseInt($(this).attr("data-mscore")) < val;
       }).css("display","none");
@@ -477,6 +490,35 @@
         return parseInt($(this).attr("data-mscore")) >= val;
       }).css("display","block");
     }
+  }
+  function filter_langs(val=-1) {
+    if (val >= 0) {
+      if ($(`#filter_lang_${val}`).is('.btn-success'))
+        $(`#filter_lang_${val}`).removeClass("btn-success").addClass("btn-secondary");
+      else
+        $(`#filter_lang_${val}`).removeClass("btn-secondary").addClass("btn-success");
+    }
+    var flags = 0;
+    for (var i = 0; i < 9; i++)
+      if ($(`#filter_lang_${i}`).is('.btn-success'))
+        flags |= 2 ** i;
+    if (val >= 0)
+      setCookie('chat_langs', flags);
+    $("div").filter(function() {
+      return $(this).is("[data-langs]") && (parseInt($(this).attr("data-langs")) & flags) == 0;
+    }).css("display","none");
+    $("div").filter(function() {
+      return $(this).is("[data-langs]") && (parseInt($(this).attr("data-langs")) & flags);
+    }).css("display","block");
+  }
+  function reset_langs() {
+    var flags = getCookie("chat_langs");
+    console.log(`flags := ${flags}`);
+    if (flags == null)
+      return;
+    for (var i = 0; i < 9; i++)
+      if ((flags & (2 ** i)) == 0)
+        $(`#filter_lang_${i}`).removeClass("btn-success").addClass("btn-secondary");
   }
   function filter_messages(to_reset=false) {
     if (to_reset)

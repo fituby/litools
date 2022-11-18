@@ -19,7 +19,11 @@ from consts import *
 
 config_file = "config.yml"
 log_file: str = None
-port: int = 5000
+db_file = ""
+host = "127.0.0.1"
+port = 5000
+num_threads = 2
+uri = ""
 embed_lichess = False
 
 STYLE_WORD_BREAK = "word-break:break-word;"  # "word-break:break-all;"
@@ -102,13 +106,17 @@ def add_timeout_msg(timeouts, msg):
 
 
 def load_config():
-    global log_file, port, embed_lichess
+    global log_file, db_file, host, port, num_threads, uri, embed_lichess
     if log_file is None:
         try:
             with open(os.path.abspath(f"./{config_file}")) as stream:
                 config = yaml.safe_load(stream)
                 log_file = config.get('log', "")
+                db_file = config.get('db', "")
+                host = config.get('host', host)
                 port = config.get('port', port)
+                num_threads = config.get('num_threads', num_threads)
+                uri = config.get('url', "")
                 embed_lichess = config.get('embed_lichess', False)
         except Exception as e:
             print(f"There appears to be a syntax problem with {config_file}: {e}")
@@ -126,9 +134,29 @@ def get_token():
     return token
 
 
+def get_db():
+    load_config()
+    return db_file
+
+
+def get_host():
+    load_config()
+    return host
+
+
 def get_port():
     load_config()
     return port
+
+
+def get_num_threads():
+    load_config()
+    return num_threads
+
+
+def get_uri():
+    load_config()
+    return uri
 
 
 def get_embed_lichess():
@@ -728,10 +756,14 @@ def timestamp_to_ago(ts_ms, now_utc=None, short=False):
     return datetime_to_ago(t, now_utc, short)
 
 
+def datetime_to_abbr_ago(dt, now_utc=None, short=False):
+    return f'<abbr title="{dt:%Y-%m-%d %H:%M:%S} UTC" style="text-decoration:none;">' \
+           f'{datetime_to_ago(dt, now_utc, short)}</abbr>'
+
+
 def timestamp_to_abbr_ago(ts_ms, now_utc=None, short=False):
     t = datetime.fromtimestamp(ts_ms // 1000, tz=tz.tzutc())
-    return f'<abbr title="{t:%Y-%m-%d %H:%M:%S} UTC" style="text-decoration:none;">' \
-           f'{timestamp_to_ago(ts_ms, now_utc, short)}</abbr>'
+    return datetime_to_abbr_ago(t, now_utc, short)
 
 
 def delta_s(dt2, dt1):
@@ -1088,7 +1120,7 @@ class ModAction:
         'trolling': "Warning: Chat/Forum trolling",
         'ad': "Warning: Advertisements",
         'team_ad': "Warning: Team advertisements",
-        'stalling': "Warning: leaving games / stalling on time",
+        'stalling': "Warning: Leaving games / stalling on time",
         'kidMode': "Account set to kid mode",
     }
 
@@ -1135,7 +1167,7 @@ class ModAction:
             if self.details == ModAction.warnings['spam']:
                 action = "Warning: Spam"
             elif self.details == ModAction.warnings['stalling']:
-                action = "Warning: time burner"
+                action = "Warning: Time burner"
             else:
                 action = self.details  # "warning"
         elif self.action == 'chatTimeout':
