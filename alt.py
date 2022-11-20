@@ -6,6 +6,7 @@ import pygal
 from pygal.style import DefaultStyle, DarkStyle, BlueStyle, DarkGreenBlueStyle
 import requests
 from enum import Enum
+from threading import Thread
 from elements import UserData, Games, Variants, ModActionType
 from elements import get_tc, delta_s, deltainterval, datetime_to_ago, get_user_ids
 from elements import load_mod_log, get_mod_log, get_notes
@@ -145,7 +146,7 @@ class Alt:
         if self.user.is_error:
             return
         now = datetime.now()
-        if self.time_step1 and delta_s(now, self.time_step1) < ALT_UPDATE_PERIOD\
+        if self.time_step1 and delta_s(now, self.time_step1) < ALT_UPDATE_PERIOD \
                 and (not refresh_openings or not self.needs_to_refresh_openings(now, mod)):
             return
         for color in Color:
@@ -322,16 +323,70 @@ class Alts:
                 unique_ids.add(user_id)
         return unique_usernames
 
-    def __init__(self, names, num_games, theme_color, mod):
-        self.players = [get_alt(username, num_games, mod) for username in names]
-        self.alt_names = {alt.user.id: alt.user.name for alt in self.players}
+    @staticmethod
+    def get_response(step, alt_names, num_games, force_refresh_openings, mod):
+        now = datetime.now()
+        usernames = Alts.get_usernames(alt_names)
+        alts_key = (",".join(usernames), num_games)
+        alts, last_update = mod.alt_group_cache.get(alts_key, (None, None))
+        if not alts or delta_s(now, last_update) >= ALT_UPDATE_PERIOD:
+            alts = Alts(mod.view.theme_color)
+            mod.alt_group_cache[alts_key] = alts, now
+            for key_i in list(mod.alt_group_cache.keys()):
+                if delta_s(now, mod.alt_group_cache[key_i][1]) >= ALT_UPDATE_PERIOD:
+                    del mod.alt_group_cache[key_i]
+        if alts.errors:
+            return {'part-1': alts.get_errors(), 'part-2': "", 'part-3': ""}
+        if not alts.is_step0:
+            if alts.is_step0 is None:
+                alts.is_step0 = False
+                Thread(name="alts_set", target=alts.set, args=(usernames, num_games, mod)).start()
+            return NOT_READY
+        try:
+            step = int(step)
+        except:
+            step = 0
+        if step >= 1:
+            if step == 1 and not alts.is_step1:
+                if alts.is_step1 is None:
+                    alts.is_step1 = False
+                    Thread(name="alts_process", target=alts.process, args=(step, force_refresh_openings, mod)).start()
+                return NOT_READY
+            if step == 2 and not alts.is_step2:
+                if alts.is_step2 is None:
+                    alts.is_step2 = False
+                    Thread(name="alts_process", target=alts.process, args=(step, force_refresh_openings, mod)).start()
+                return NOT_READY
+        return alts.get_output(mod)
+
+    def __init__(self, theme_color):
+        self.players = []
+        self.alt_names = {}
         self.theme_color = theme_color
         self.is_dark_mode = not theme_color.upper().startswith("#FFF")
         self.hist_switch_intervals = [0.0] * len(ALT_SWITCH_INTERVAL_NAMES)
-        self.overlapping_games = {alt.user.id: defaultdict(list) for alt in self.players}
-        self.is_step1 = False
-        self.is_step2 = False
+        self.overlapping_games = {}
+        self.is_step0 = None
+        self.is_step1 = None
+        self.is_step2 = None
         self.is_mod_log = True
+        self.errors = []
+
+    def set(self, names, num_games, mod):
+        self.players = [get_alt(username, num_games, mod) for username in names]
+        self.alt_names = {alt.user.id: alt.user.name for alt in self.players}
+        self.overlapping_games = {alt.user.id: defaultdict(list) for alt in self.players}
+        self.is_step0 = True
+
+    def process(self, step, force_refresh_openings, mod):
+        try:
+            force_refresh_openings = False if step < 2 else force_refresh_openings
+            self.process_step1(force_refresh_openings, mod)
+            if step >= 2:
+                self.process_step2(mod)
+        except Exception as exception:
+            self.errors.append(str(exception))
+            raise exception
 
     def process_step1(self, force_refresh_openings, mod):
         for alt in self.players:
@@ -637,7 +692,7 @@ class Alts:
         return f'{table}{refresh_openings}{mod_data_error}{info}'
 
     def get_info_2(self):
-        hist_tcs = f'<div class="mt-3">{self.get_hist_tcs()}</div>' if self.is_step2 else""
+        hist_tcs = f'<div class="mt-3">{self.get_hist_tcs()}</div>' if self.is_step2 else ""
         return f"{self.get_hist_switch_intervals()}{hist_tcs}{self.get_hist_hours()}{self.get_hist_days()}"
 
     def get_info_3(self):
@@ -659,6 +714,12 @@ class Alts:
         return f'{overlapping_games}{header}{self.get_mutual_games()}{mutual_teams}{"".join(openings)}'
 
     def get_output(self, mod):
-        output = {}
-        output.update({'part-1': self.get_info_1(mod), 'part-2': self.get_info_2(), 'part-3': self.get_info_3()})
-        return output
+        if not self.is_step0:
+            return {'part-1': "", 'part-2': "", 'part-3': ""}
+        return {'part-1': self.get_info_1(mod), 'part-2': self.get_info_2(), 'part-3': self.get_info_3()}
+
+    def get_errors(self):
+        if not self.errors:
+            return ""
+        errors = '</p><p>'.join(self.errors)
+        return f'<h4 class="text-danger">Error{"" if len(self.errors) == 1 else "s"}:</h4><p>{errors}</p>'

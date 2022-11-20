@@ -594,18 +594,21 @@ class ChatAnalysis:
                 last_timeout_reason = Reason.No
                 is_SBed = False  # workaround as I have no idea how to get this flag any other way
                 is_kid = False  # same here
+                was_kid = False
                 for action in user_data.actions:
                     dt = action.get_datetime()
                     if (action.action == 'troll' or action.action == 'untroll') \
                             and (last_time['SB'] is None or dt > last_time['SB']):
                         last_time['SB'] = dt
                         is_SBed = action.is_SB()
-                    elif action.is_timeout() and (last_time['timeout'] is None or dt > last_time['timeout']):
-                        last_time['timeout'] = dt
-                        last_timeout_reason = action.get_timeout_reason()
-                    elif action.is_kidMode() and (user_msgs[-1].delay is None or dt >= user_msgs[-1].time
-                                                  - timedelta(seconds=user_msgs[-1].delay)):
-                        is_kid = True
+                    elif action.is_timeout():
+                        if last_time['timeout'] is None or dt > last_time['timeout']:
+                            last_time['timeout'] = dt
+                            last_timeout_reason = action.get_timeout_reason()
+                    elif action.is_kidMode():
+                        was_kid = True
+                        if user_msgs[-1].delay is None or dt >= user_msgs[-1].time - timedelta(seconds=user_msgs[-1].delay):
+                            is_kid = True
                     elif action.action == 'modMessage':
                         if action.is_spam() and (last_time['spam'] is None or dt > last_time['spam']):
                             last_time['spam'] = dt
@@ -650,7 +653,7 @@ class ChatAnalysis:
                     buttons.append(get_warn_btn('kidMode', "Kid Mode", kid_sus, user_name, txt_class="text-warning",
                                                 is_disabled=is_kid))
                 if buttons:
-                    btn_class = "btn-warning" if (kid_sus and not is_kid) or (len(buttons) > 1) else "btn-secondary"
+                    btn_class = "btn-warning" if not was_kid and (kid_sus or len(buttons) > 1) else "btn-secondary"
                     button_warn = f'<button class="btn {btn_class} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" '\
                         f'id="warn-ban" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"' \
                         f'style="cursor:pointer;">Action</button><span class="dropdown-menu" style="">' \

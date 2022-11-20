@@ -11,6 +11,64 @@
   {% if mod %}
   <div class="col my-3">
     {{mod.status_info()|safe}}
+    <div class="card-deck">
+      {% if mod.is_chat() %}
+      <div class="card border-success my-2" style="min-width:300px;">
+        <div class="card-body">
+          <a href="/chat" class="stretched-link" style="text-decoration:none;">
+            <h4 class="card-title text-success text-center">Public Chats</h4>
+          </a>
+          <p class="card-text">Monitoring (1) dubious words/phrases and (2) messages sent in a row or in a short period of time.</p>
+           <ul>
+            <li>To see the full chat, click somewhere inside the message box of interest.
+              Below the chat, you may also see the mod log of the selected user, if any.</li>
+            <li>To compose a custom multiline timeout, toggle the username button above the full chat.
+              Then click somewhere inside the box of each message you want to add and select the desired action under the field with the selected messages.</li>
+            <li>In this mode, after a timeout, comms mods can trigger additional actions if necessary.</li>
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+      {% if mod.is_boost() %}
+      <div class="card border-warning my-2" style="min-width:300px;">
+        <div class="card-body">
+          <a href="/boost" class="stretched-link" style="text-decoration:none;">
+            <h4 class="card-title text-warning text-center">Sandbaggers/Boosters</h4>
+          </a>
+          <p class="card-text">Analyzing the last N games of the player whose name is entered in the top field.</p>
+           <ul>
+            <li>To add relevant information to the notes field to the right, click the corresponding buttons in the tables.</li>
+            <li>To warn or mark the player, click the appropriate button at the top right.</li>
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+      {% if mod.is_alt() %}
+      <div class="card border-danger my-2" style="min-width:300px;">
+        <div class="card-body">
+          <a href="/alt" class="stretched-link" style="text-decoration:none;">
+            <h4 class="card-title text-danger text-center">Alts</h4>
+          </a>
+          <p class="card-text">Analyzing publicly available user information to determine similarities.</p>
+          <ul>
+            <li>Enter several user names in the first field and select the number of games of each user to investigate.</li>
+            <li>The more games and the greater the number of games, the longer you have to wait for the results.</li>
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+    {% if mod.is_mod() %}
+    <p><small>
+      * The website performs API requests on your behalf.
+      All requests are rate limited on Lichess.
+      Keep this in mind if you have other apps using Lichess APIs in parallel.
+      Do not run time-consuming actions on <b>multiple</b> pages of this website in parallel.
+      <br>
+      * All external links open in new tabs.
+    </small></p>
+    {% endif %}
+    {{mod.sessions_info()|safe}}
   </div>
   {% else %}
   <div class="row justify-content-center my-2">

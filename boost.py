@@ -6,6 +6,7 @@ import time
 import traceback
 from collections import defaultdict
 import math
+from threading import Thread
 from elements import get_user, get_ndjson, shorten, delta_s
 from elements import get_notes, add_note, load_mod_log, get_mod_log, add_variant_rating
 from elements import ModActionType, WarningStats, User, Games, Variants
@@ -495,6 +496,9 @@ class Boost:
         self.mod_log: ModLogData = None
         self.mod_log_out = ""
         self.info_games_played = ""
+        self.is_ready = False
+        self.output: dict = None
+        self.output_tournaments: dict = None
 
     def get_errors(self):
         if not self.errors:
@@ -583,10 +587,6 @@ class Boost:
     def analyse_tournaments(self, mod):
         try:
             now = datetime.now()
-            if self.last_update_tournaments:
-                delta = now - self.last_update_tournaments
-                if delta.total_seconds() < BOOST_UPDATE_PERIOD:
-                    return
             # Select tournaments
             selected_tournaments = [(arena, tourney_info, True)
                                     for arena, tourney_info in self.games.arena_tournaments.items()]
@@ -621,6 +621,42 @@ class Boost:
             self.last_update_tournaments = now
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
+        # Output tournaments
+        if not self.prefer_marking and not self.user.is_titled():
+            for tourney in self.tournaments:
+                if tourney.is_official and tourney.name.startswith('≤') and tourney.place and 1 <= tourney.place <= 3:
+                    self.prefer_marking = True
+                    break
+        output = self.get_enabled_buttons()
+        if self.tournaments:
+            rows = [tourney.get_table_row() for tourney in self.tournaments]
+            link = f'https://lichess.org/@/{self.user.name}/tournaments/recent'
+            table = f'''<table id="tournaments_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
+                  <thead><tr>
+                    <th class="text-left" style="cursor:default;">
+                        <button class="btn btn-primary p-0" style="min-width:120px;" 
+                            onclick="add_to_notes(this)" data-selection=\'{link}\'>Tournaments</button>
+                        <a class="ml-2" href="{link}" target="_blank">open</a>
+                    </th>
+                    <th class="text-center" style="cursor:default;">
+                        <abbr title="Place" style="text-decoration:none;"><i class="fas fa-trophy"></i></abbr></th>
+                    <th class="text-right" style="cursor:default;">
+                        <abbr title="# games" style="text-decoration:none;"><i class="fas fa-hashtag"></i></abbr></th>
+                    <th class="text-right" style="cursor:default;">
+                        <abbr title="Performance" style="text-decoration:none;"><i class="fas fa-chart-line"></i></abbr></th>
+                    <th class="text-right" style="cursor:default;">
+                        <abbr title="Score" style="text-decoration:none;"><i class="fas fa-plus"></i></abbr></th>
+                    <th class="text-right" style="cursor:default;">
+                        <abbr title="# players" style="text-decoration:none;"><i class="fas fa-users"></i></abbr></th>
+                  </tr></thead>
+                  {"".join(rows)}
+                </table>'''
+            output['tournaments'] = table
+        else:
+            output['tournaments'] = '<p class="mt-3">No tournaments</p>'
+        if self.user.is_error:
+            mod.boost_cache.pop(self.user.id, None)
+        self.output_tournaments = output
 
     def get_analysis(self):
         tables = [("Sandbagging", self.sandbagging), ("Boosting", self.boosting)]
@@ -653,40 +689,21 @@ class Boost:
             output.append(table)
         return '\n'.join(output)
 
-    def get_tournaments(self):
-        if not self.prefer_marking and not self.user.is_titled():
-            for tourney in self.tournaments:
-                if tourney.is_official and tourney.name.startswith('≤') and tourney.place and 1 <= tourney.place <= 3:
-                    self.prefer_marking = True
-                    break
-        output = self.get_enabled_buttons()
-        if not self.tournaments:
-            output['tournaments'] = '<p class="mt-3">No tournaments</p>'
-            return output
-        rows = [tourney.get_table_row() for tourney in self.tournaments]
-        link = f'https://lichess.org/@/{self.user.name}/tournaments/recent'
-        table = f'''<table id="tournaments_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
-              <thead><tr>
-                <th class="text-left" style="cursor:default;">
-                    <button class="btn btn-primary p-0" style="min-width:120px;" 
-                        onclick="add_to_notes(this)" data-selection=\'{link}\'>Tournaments</button>
-                    <a class="ml-2" href="{link}" target="_blank">open</a>
-                </th>
-                <th class="text-center" style="cursor:default;">
-                    <abbr title="Place" style="text-decoration:none;"><i class="fas fa-trophy"></i></abbr></th>
-                <th class="text-right" style="cursor:default;">
-                    <abbr title="# games" style="text-decoration:none;"><i class="fas fa-hashtag"></i></abbr></th>
-                <th class="text-right" style="cursor:default;">
-                    <abbr title="Performance" style="text-decoration:none;"><i class="fas fa-chart-line"></i></abbr></th>
-                <th class="text-right" style="cursor:default;">
-                    <abbr title="Score" style="text-decoration:none;"><i class="fas fa-plus"></i></abbr></th>
-                <th class="text-right" style="cursor:default;">
-                    <abbr title="# players" style="text-decoration:none;"><i class="fas fa-users"></i></abbr></th>
-              </tr></thead>
-              {"".join(rows)}
-            </table>'''
-        output['tournaments'] = table
-        return output
+    def get_tournaments(self, mod):
+        if not self.is_ready:
+            return NOT_READY
+        if self.output_tournaments:
+            now = datetime.now()
+            if self.last_update_tournaments:
+                if delta_s(now, self.last_update_tournaments) >= BOOST_UPDATE_PERIOD:
+                    self.output_tournaments = None
+            if self.output_tournaments is not None:
+                return self.output_tournaments
+        if self.output_tournaments is not None:
+            return NOT_READY
+        self.output_tournaments = {}
+        Thread(name="analyse_tournaments", target=self.analyse_tournaments, args=(mod,)).start()
+        return NOT_READY
 
     @staticmethod
     def calc_badness(value, limits):
@@ -747,10 +764,21 @@ class Boost:
         return f"{until:%Y-%m-%dT%H:%M}"
 
     def get_output(self, mod):
+        if not self.is_ready:
+            return NOT_READY
+        if self.output:
+            return self.output
+        if self.output is not None:
+            return NOT_READY
+        self.output = {}
+        Thread(name="set_output", target=self.set_output, args=(mod,)).start()
+        return NOT_READY
+
+    def set_output(self, mod):
+        output = {}
         before = self.get_datetime_before()
         if not self.before:
             self.before = before
-        output = {}
         if not self.user.is_error:
             try:
                 if not self.mod_log:
@@ -764,7 +792,7 @@ class Boost:
         # After self.enable_buttons():
         output.update({'part-1': self.get_info_1(mod), 'part-2': self.get_info_2(),
                        'num-games': self.games.max_num_games, 'datetime-before': before})
-        return output
+        self.output = output
 
 
 def get_boost_data(username, mod, num_games=None, before=None):
@@ -773,24 +801,29 @@ def get_boost_data(username, mod, num_games=None, before=None):
     boost, last_update = mod.boost_cache.get(user_id, (None, None))
     if num_games:
         num_games = int(num_games)
-    if boost and (boost.before == before or before is None) \
+    if boost and (boost.before == before or not before) \
             and (boost.games.max_num_games == num_games or num_games is None):
         if delta_s(now, last_update) < BOOST_UPDATE_PERIOD:
             return boost
     if not num_games:
         num_games = BOOST_NUM_GAMES[0]
     boost = Boost(username, num_games, before)
+    Thread(name="set_boost", target=set_boost, args=(boost, username, mod)).start()
+    mod.boost_cache[user_id] = boost, now
+    for user_id in list(mod.boost_cache.keys()):
+        if delta_s(now, mod.boost_cache[user_id][1]) >= BOOST_UPDATE_PERIOD:
+            del mod.boost_cache[user_id]
+    return boost
+
+
+def set_boost(boost, username, mod):
     user, api_error = get_user(username, mod)
     if api_error:
         boost.user.is_error = True
         boost.errors.append(api_error)
     else:
         boost.set(user, mod)
-        mod.boost_cache[user_id] = boost, now
-    for user_id in list(mod.boost_cache.keys()):
-        if delta_s(now, mod.boost_cache[user_id][1]) >= BOOST_UPDATE_PERIOD:
-            del mod.boost_cache[user_id]
-    return boost
+    boost.is_ready = True
 
 
 def send_boost_note(note, username, mod):

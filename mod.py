@@ -30,6 +30,7 @@ class Mod:
         self.mod_db = mod_db
         self.api_times = defaultdict(list)
         self.alt_cache = {}
+        self.alt_group_cache = {}
         self.refresh_openings_times = {}
         self.boost_cache = {}
         self.boost_ring_tool = ""
@@ -100,31 +101,41 @@ class Mod:
 
     def logout(self):
         if not self.current_session or not self.id or not self.name:
-            return
+            raise Exception("There's no active session.")
         try:
             self.wait_api('api/token:delete')
             headers = {'Authorization': f"Bearer {self.token}"}
             url = "https://lichess.org/api/token"
             r = requests.delete(url, headers=headers)
             if r.status_code != 204:
-                print(f"Error: @{self.name} logged out with status code {r.status_code}")
-                return
+                raise Exception(f"Failed to log out of Lichess.<br>Status code: {r.status_code}")
             self.mod_db.delete_instance()
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
+            raise exception
 
     def status_info(self):
         if not self.id or not self.name:
-            return f"<p>You're logged in as an anonymous.</p>{Mod.login_button}"
+            return f'<p class="mb-2">You\'re logged in as an anonymous.</p>{Mod.login_button}'
         try:
-            name = f'<p>You\'re logged in as <a href="https://lichess.org/@/{self.id}" target="_blank">{self.name}</a>.</p>'
-            logout = f'<a href="/logout" class="btn btn-lg btn-primary">Log out</a>'
-            now_tz = datetime.now(tz=tz.tzutc()).replace(tzinfo=None)
+            name = f'<p class="mb-2">You\'re logged in as <a href="https://lichess.org/@/{self.id}" target="_blank">' \
+                   f'{self.name}</a>.</p>'
+            logout = f'<a href="/logout" class="btn btn-lg btn-primary mb-2">Log out</a>' if self.current_session else ""
+            return f'{name}{logout}'
+        except Exception as exception:
+            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            return f'<div class="col my-2"><h2 class="text-danger text-center">Error</h2>' \
+                   f'<h4>Failed to load mod info: {exception}</h4></div>{Mod.login_button}'
+
+    def sessions_info(self):
+        if not self.id or not self.name:
+            return ""
+        try:
             sessions = list(Mods.select().where(Mods.modId == self.id).order_by(Mods.seenAt.desc()))
-            rows = []
             if not sessions:
-                no_table = f'You do not have any tokens that can be used on this website.'
-                return f'{name}{logout}{no_table}'
+                return f'You do not have any active sessions (tokens) on this website.'
+            now_tz = datetime.now(tz=tz.tzutc()).replace(tzinfo=None)
+            rows = []
             is_revoke = False
             for session in sessions:
                 is_current = self.current_session and self.current_session == session.tokenHash
@@ -154,22 +165,32 @@ class Mod:
                     f'<th>Created</th>' \
                     f'<th>Active</th>' \
                     f'<th>Revoke</th></tr></thead>{"".join(rows)}</table>'
-            return f'{name}{logout}{table}{revoke_info}'
+            return f'{table}{revoke_info}'
         except Exception as exception:
             traceback.print_exception(type(exception), exception, exception.__traceback__)
             return f'<div class="col my-2"><h2 class="text-danger text-center">Error</h2>' \
-                   f'<h4>Failed to load mod info: {exception}</h4></div>{Mod.login_button}'
+                   f'<h4>Failed to load sessions info: {exception}</h4></div>{Mod.login_button}'
 
     def get_bar(self):
         if not self.name:
             return ""
-        logout = f'<a href="/logout" class="btn btn-secondary ml-2 py-0">Log out</a>' if self.current_session else ""
+        field_class = "" if self.current_session else " disabled"
+        field = f'<a href="/" class="btn btn-secondary{field_class} ml-2 py-0">{self.name}</a>'
         return f'<div class="d-flex flex-row align-items-baseline p-2" style="position:absolute;top:0px;right:0px">' \
-               f'<p>{self.name}</p>{logout}</div>'
+               f'{field}</div>'
 
     def update_theme(self, cookies):
         mode = cookies.get('theme_mode', '-1')
         self.view.set_mode(mode)
+
+    def is_chat(self):
+        return not not self.token
+
+    def is_boost(self):
+        return self.is_mod()
+
+    def is_alt(self):
+        return self.is_admin
 
 
 class ModInfo:

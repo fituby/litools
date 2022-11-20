@@ -1,5 +1,5 @@
 # Chat
-CHAT_TOURNAMENT_FINISHED_AGO = 12 * 60  # [min]
+CHAT_TOURNAMENT_FINISHED_AGO = 24 * 60  # [min]
 CHAT_TOURNAMENT_STARTS_IN = 6 * 60  # [min]
 CHAT_SWISS_STARTED_AGO = 6 * 60  # [min]
 MAX_LEN_TOURNEY_NAME_SHORT = 25
@@ -38,7 +38,6 @@ MAX_LEN_TEXT = 140
 CHAT_NUM_PLAYED_GAMES = [100, 250]
 CHAT_CREATED_DAYS_AGO = [30, 60]
 STD_SHORT_MESSAGES = ["hi", "hello", "good luck", "bye", "gl", "hf", "thanks", "gg", "wp", "ggs", "ty", "gtg", "thx", "u2"]
-
 
 # Boost
 BOOST_UPDATE_PERIOD = 5 * 60  # seconds
@@ -92,3 +91,5 @@ CLIENT_ID = "litools"
 AUTH_ENDPOINT = "/oauth2"
 UPDATE_INTERVAL_MODS_SEEN_AT = 1 * 60  # [s]
 UPDATE_INTERVAL_MOD_PERMS = 24 * 60 * 60  # [s]
+
+NOT_READY = {'not ready': True}

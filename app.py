@@ -73,8 +73,7 @@ def create_tournaments(user):
     except:
         return Response(status=400)
     boost = get_boost_data(user.lower(), mod)
-    boost.analyse_tournaments(mod)
-    resp = make_response(boost.get_tournaments())
+    resp = make_response(boost.get_tournaments(mod))
     return resp
 
 
@@ -126,19 +125,9 @@ def get_alts(step):
         return Response(status=400)
     alt_names = request.form.get("alts", None)
     num_games = request.form.get("num_games", None)
-    usernames = Alts.get_usernames(alt_names)
-    alts = Alts(usernames, num_games, mod.view.theme_color, mod)
-    try:
-        step = int(step)
-    except:
-        step = 0
-    if step >= 1:
-        force_refresh_openings = False if step < 2 else bool(request.form.get("force_refresh_openings", False))
-        alts.process_step1(force_refresh_openings, mod)
-        if step >= 2:
-            alts.process_step2(mod)
-    resp = make_response(alts.get_output(mod))
-    return resp
+    force_refresh_openings = bool(request.form.get("force_refresh_openings", False))
+    resp = Alts.get_response(step, alt_names, num_games, force_refresh_openings, mod)
+    return make_response(resp)
 
 
 @app.route('/chat/', methods=['GET'])
@@ -303,7 +292,7 @@ def chat_add_tournament():
     except:
         return Response(status=400)
     page = request.form.get("page", "")
-    data = chat.add_tournament(page, mod)
+    data = chat.add_tournament(page, non_mod)
     data.update(chat.get_all(mod))
     resp = make_response(data)
     return resp
@@ -356,7 +345,7 @@ def chat_loop():
     global chat
     while True:
         chat.update_tournaments(non_mod)
-        chat.run(non_mod, auto_mod)  # chat.run(non_mod)
+        chat.run(non_mod, auto_mod)
 
 
 def encode_base64(b):
@@ -474,8 +463,7 @@ def logout():
         return make_response(redirect('/login'))
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
-        mod_none: Mod = None
-        resp = create_main_page(mod_none, error_title="Login error", error_text=str(exception))
+        resp = create_main_page(mod, error_title="Logout error", error_text=str(exception))
         return resp
 
 

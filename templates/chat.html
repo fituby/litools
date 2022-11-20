@@ -203,8 +203,6 @@
   }
   const sleeping = ms => new Promise(res => setTimeout(res, ms));
   async function refresh(to_wait=1000) {
-    if (to_wait != 1000)
-      console.log(`refresh ${to_wait}ms`);
     if (to_wait > 0)
       await sleeping(to_wait);
     if ($('#update_frequency_0').is('.active')) {
@@ -283,14 +281,10 @@
   function hide_msg(msg_id, flag) {
     if (!msg_id || msg_id.length <= 1 || msg_id == "--" || msg_id.startsWith('T'))
       return;
-    if (flag) {
+    if (flag)
       hidden_msgs.add(`${msg_id.substring(1)}`);
-      console.log(`+ ${msg_id.substring(1)}`);
-    }
-    else {
+    else
       hidden_msgs.delete(`${msg_id.substring(1)}`);
-      console.log(`- ${msg_id.substring(1)}`);
-    }
   }
   function set_ok(msg_id) {
     //if (!is_clickable()) return;
@@ -513,7 +507,6 @@
   }
   function reset_langs() {
     var flags = getCookie("chat_langs");
-    console.log(`flags := ${flags}`);
     if (flags == null)
       return;
     for (var i = 0; i < 9; i++)

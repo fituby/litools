@@ -141,32 +141,44 @@
     $('#userlink').attr("placeholder", username).val("").focus().blur();
     $('#user_downloading').removeClass("d-none").addClass("d-flex");
     $('#downloading_text').html(`Downloading ${username}&hellip;`);
-    $.ajax({
-      url: `/boost/${username}`,
-      type: "post",
-      data: {before: $('#datetime-before').val(), num_games: $('#num-games').val()}})
-      .done(function(data, textStatus, jqXHR) {
-        $('#user_downloading').removeClass("d-flex").addClass("d-none");
-        $('#downloading_text').html("Downloading user data&hellip;");
-        $('#row-datetime').removeClass("d-none");
-        $('#datetime-before').val(data["datetime-before"]);
-        $('#num-games').val(data["num-games"])
-        $('#part-1').html(data["part-1"]);
-        $('#part-2').html(data["part-2"]);
-        $('#mod-log').html(data["mod-log"]);
-        update_mod_notes(data);
-        $('#notes-section').removeClass("d-none").addClass("d-block");
-        $('#tournaments_downloading').removeClass("d-none").addClass("d-flex");
-        //$('#embed_frame')[0].src = `https://lichess.org/@/${username}?mod`;
-        enable_buttons(data);
-        $.ajax({url: `/boost/${username}/tournaments/`})
-          .done(function(data, textStatus, jqXHR) {
-            $('#tournaments_downloading').removeClass("d-flex").addClass("d-none");
-            $('#tournaments').css("display","block");
-            $('#tournaments').html(data["tournaments"]);
-            enable_buttons(data);
-          });
-      });
+    var timer1 = 0;
+    timer1 = setInterval(function() {
+      $.ajax({
+        url: `/boost/${username}/`,
+        type: "post",
+        data: {before: $('#datetime-before').val(), num_games: $('#num-games').val()}})
+        .done(function(data, textStatus, jqXHR) {
+          if ("not ready" in data)
+            return;
+          clearInterval(timer1);
+          $('#user_downloading').removeClass("d-flex").addClass("d-none");
+          $('#downloading_text').html("Downloading user data&hellip;");
+          $('#row-datetime').removeClass("d-none");
+          $('#datetime-before').val(data["datetime-before"]);
+          $('#num-games').val(data["num-games"])
+          $('#part-1').html(data["part-1"]);
+          $('#part-2').html(data["part-2"]);
+          $('#mod-log').html(data["mod-log"]);
+          update_mod_notes(data);
+          $('#notes-section').removeClass("d-none").addClass("d-block");
+          $('#tournaments_downloading').removeClass("d-none").addClass("d-flex");
+          //$('#embed_frame')[0].src = `https://lichess.org/@/${username}?mod`;
+          enable_buttons(data);
+          var timer2 = 0;
+          timer2 = setInterval(function() {
+            $.ajax({url: `/boost/${username}/tournaments/`})
+              .done(function(data, textStatus, jqXHR) {
+                if ("not ready" in data)
+                  return;
+                clearInterval(timer2);
+                $('#tournaments_downloading').removeClass("d-flex").addClass("d-none");
+                $('#tournaments').css("display","block");
+                $('#tournaments').html(data["tournaments"]);
+                enable_buttons(data);
+              });
+          }, 1000)
+        });
+    }, 1000)
   }
   function clear_data() {
     clear_notes();

@@ -112,39 +112,58 @@
     //$('#alt-names').attr("placeholder", alts).val("").focus().blur();
     $('#alts_downloading').removeClass("d-none").addClass("d-flex");
     $('#downloading_text').html(`Downloading ${alts}&hellip;`);
-    $.ajax({
-      url: `/alts/0/`,
-      type: "post",
-      data: {alts: alts, num_games: $('#num-games').val()}})
-      .done(function(data, textStatus, jqXHR) {
-        $('#alts_downloading').removeClass("d-flex").addClass("d-none");
-        $('#downloading_text').html("Downloading user data&hellip;");
-        $('#part-1').html(data["part-1"]);
-        $('#part-2').html(data["part-2"]);
-        $('#part-3').html(data["part-3"]);
-        $('#openings_downloading').removeClass("d-none").addClass("d-flex");
-        $.ajax({
-          url: `/alts/1/`,
-          type: "post",
-          data: {alts: alts, num_games: $('#num-games').val()}})
-          .done(function(data, textStatus, jqXHR) {
-            $('#openings_downloading').removeClass("d-flex").addClass("d-none");
-            $('#part-1').html(data["part-1"]);
-            $('#part-2').html(data["part-2"]);
-            $('#part-3').html(data["part-3"]);
-            $('#games_downloading').removeClass("d-none").addClass("d-flex");
+    var num_games_val = $('#num-games').val();
+    var timer0 = 0;
+    timer0 = setInterval(function() {
+      $.ajax({
+        url: `/alts/0/`,
+        type: "post",
+        data: {alts: alts, num_games: num_games_val}})
+        .done(function(data, textStatus, jqXHR) {
+          if ("not ready" in data)
+            return;
+          clearInterval(timer0);
+          $('#alts_downloading').removeClass("d-flex").addClass("d-none");
+          $('#downloading_text').html("Downloading user data&hellip;");
+          $('#part-1').html(data["part-1"]);
+          $('#part-2').html(data["part-2"]);
+          $('#part-3').html(data["part-3"]);
+          $('#openings_downloading').removeClass("d-none").addClass("d-flex");
+          var timer1 = 0;
+          timer1 = setInterval(function() {
             $.ajax({
-              url: `/alts/2/`,
+              url: `/alts/1/`,
               type: "post",
-              data: {alts: alts, num_games: $('#num-games').val()}})
+              data: {alts: alts, num_games: num_games_val}})
               .done(function(data, textStatus, jqXHR) {
-                $('#games_downloading').removeClass("d-flex").addClass("d-none");
+                if ("not ready" in data)
+                  return;
+                clearInterval(timer1);
+                $('#openings_downloading').removeClass("d-flex").addClass("d-none");
                 $('#part-1').html(data["part-1"]);
                 $('#part-2').html(data["part-2"]);
                 $('#part-3').html(data["part-3"]);
+                $('#games_downloading').removeClass("d-none").addClass("d-flex");
+                var timer2 = 0;
+                timer2 = setInterval(function() {
+                  $.ajax({
+                    url: `/alts/2/`,
+                    type: "post",
+                    data: {alts: alts, num_games: num_games_val}})
+                    .done(function(data, textStatus, jqXHR) {
+                      if ("not ready" in data)
+                        return;
+                      clearInterval(timer2);
+                      $('#games_downloading').removeClass("d-flex").addClass("d-none");
+                      $('#part-1').html(data["part-1"]);
+                      $('#part-2').html(data["part-2"]);
+                      $('#part-3').html(data["part-3"]);
+                    });
+                }, 1000)
               });
-          });
-      });
+          }, 1000)
+        });
+    }, 1000)
   }
   function clear_data() {
     $('#notes-section').removeClass("d-block").addClass("d-none");
@@ -158,16 +177,23 @@
   function refresh_openings() {
     $('#refresh-openings').removeClass("d-flex").addClass("d-none");
     $('#openings_downloading').removeClass("d-none").addClass("d-flex");
-    $.ajax({
-      url: `/alts/2/`,
-      type: "post",
-      data: {alts: current_alts, num_games: $('#num-games').val(), force_refresh_openings: true}})
-      .done(function(data, textStatus, jqXHR) {
-        $('#openings_downloading').removeClass("d-flex").addClass("d-none");
-        $('#part-1').html(data["part-1"]);
-        $('#part-2').html(data["part-2"]);
-        $('#part-3').html(data["part-3"]);
-      });
+    var num_games_val = $('#num-games').val();
+    var timer2 = 0;
+    timer2 = setInterval(function() {
+      $.ajax({
+        url: `/alts/2/`,
+        type: "post",
+        data: {alts: current_alts, num_games: num_games_val, force_refresh_openings: true}})
+        .done(function(data, textStatus, jqXHR) {
+          if ("not ready" in data)
+            return;
+          clearInterval(timer2);
+          $('#openings_downloading').removeClass("d-flex").addClass("d-none");
+          $('#part-1').html(data["part-1"]);
+          $('#part-2').html(data["part-2"]);
+          $('#part-3').html(data["part-3"]);
+        });
+    }, 1000)
   }
   function update_mode(val, to_request=true) {
     if (val == 0)
