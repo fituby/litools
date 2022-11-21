@@ -1,13 +1,11 @@
 from datetime import datetime
 from dateutil import tz
-import time
-from collections import defaultdict
-import requests
 import traceback
 from enum import IntEnum
 from threading import Lock
-from elements import delta_s, decode_string, read_notes, datetime_to_abbr_ago
-from database import Mods, Authentication
+from elements import decode_string, read_notes, datetime_to_abbr_ago
+from database import Mods
+from api import Api, ApiType
 from consts import BOOST_RING_TOOL
 
 
@@ -28,7 +26,7 @@ class Mod:
         self.token = token
         self.current_session = current_session
         self.mod_db = mod_db
-        self.api_times = defaultdict(list)
+        self.api = Api()
         self.alt_cache = {}
         self.alt_group_cache = {}
         self.refresh_openings_times = {}
@@ -53,24 +51,6 @@ class Mod:
         self.to_read_mod_log = self.is_mod()
         self.to_read_notes = self.is_mod()
 
-    def wait_api(self, api_type, delay=1.0, num_requests=1):
-        now = datetime.now()
-        wait_s = 0
-        if len(self.api_times[api_type]) >= num_requests:
-            wait_s = delay - delta_s(now, self.api_times[api_type][-num_requests])
-        self.api_times[api_type].append(now)
-        if len(self.api_times[api_type]) > num_requests:
-            self.api_times[api_type] = self.api_times[api_type][-num_requests:]
-        if wait_s > 0:
-            #print(f'Waiting for "{api_type}" for {wait_s:0.1f}s')
-            time.sleep(wait_s)
-
-    def get_waiting_api_time(self, api_type, delay, num_requests):
-        now = datetime.now()
-        if len(self.api_times[api_type]) >= num_requests:
-            return delay - delta_s(now, self.api_times[api_type][-num_requests])
-        return 0
-
     def is_mod(self):
         return not not self.boost_ring_tool  # workaround
 
@@ -85,10 +65,8 @@ class Mod:
 
     def get_public_data(self):
         try:
-            self.wait_api('api/account')
-            headers = {'Authorization': f"Bearer {self.token}"}
             url = "https://lichess.org/api/account"
-            r = requests.get(url, headers=headers)
+            r = self.api.get(ApiType.ApiAccount, url, token=self.token)
             if r.status_code == 200:
                 data = r.json()
                 return data['id'], data['username']
@@ -103,10 +81,8 @@ class Mod:
         if not self.current_session or not self.id or not self.name:
             raise Exception("There's no active session.")
         try:
-            self.wait_api('api/token:delete')
-            headers = {'Authorization': f"Bearer {self.token}"}
             url = "https://lichess.org/api/token"
-            r = requests.delete(url, headers=headers)
+            r = self.api.delete(ApiType.ApiToken_Delete, url, token=self.token)
             if r.status_code != 204:
                 raise Exception(f"Failed to log out of Lichess.<br>Status code: {r.status_code}")
             self.mod_db.delete_instance()

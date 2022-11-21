@@ -4,9 +4,9 @@ from dateutil import tz
 from collections import defaultdict
 import pygal
 from pygal.style import DefaultStyle, DarkStyle, BlueStyle, DarkGreenBlueStyle
-import requests
 from enum import Enum
 from threading import Thread
+from api import ApiType
 from elements import UserData, Games, Variants, ModActionType
 from elements import get_tc, delta_s, deltainterval, datetime_to_ago, get_user_ids
 from elements import load_mod_log, get_mod_log, get_notes
@@ -33,18 +33,15 @@ class OpeningStage(Enum):
 def download_openings(user_id, color, opening_stage, mod, to_refresh=False):
     try:
         if to_refresh:
-            mod.wait_api('insights/refresh', 60, 4)
             url_refresh = f'https://lichess.org/insights/refresh/{user_id}'
-            r = requests.post(url_refresh, headers={'Authorization': f"Bearer {mod.token}"})
+            r = mod.api.post(ApiType.InsightsRefresh, url_refresh, token=mod.token)
             if r.status_code != 200:
                 print(f"Failed to refresh insights for @{user_id}: Status {r.status_code}")
-        mod.wait_api('insights/data')
         url = f'https://lichess.org/insights/data/{user_id}'
-        headers = {'Content-Type': "application/json",
-                   'Authorization': f"Bearer {mod.token}"}
+        headers = {'Content-Type': "application/json"}
         data = {"metric": "opponentRating", "dimension": opening_stage.name, "filters": {"color": [color.name]}}
         # ... "filters":{"variant": ["rapid"], "period": ["60"]}}'
-        r = requests.post(url, json=data, headers=headers)
+        r = mod.api.post(ApiType.InsightsData, url, token=mod.token, json=data, headers=headers)
         if r.status_code != 200:
             return None
         res = r.json()
@@ -153,7 +150,7 @@ class Alt:
             for opening_stage in OpeningStage:
                 to_refresh = self.needs_to_refresh_openings(now, mod)
                 if to_refresh and not refresh_openings:
-                    wait_s = mod.get_waiting_api_time('insights/refresh', 60, 4)
+                    wait_s = mod.api.get_waiting_time(ApiType.InsightsRefresh)
                     to_refresh = (wait_s <= 0)
                 self.hist_openings[color][opening_stage] = download_openings(self.user.id, color, opening_stage, mod,
                                                                              to_refresh)
@@ -171,11 +168,9 @@ class Alt:
         now = datetime.now()
         if self.time_step1 and delta_s(now, self.time_step1) < ALT_UPDATE_PERIOD:
             return
-        mod.wait_api('api/team/of')
         url = f'https://lichess.org/api/team/of/{self.user.id}'
-        headers = {'Content-Type': "application/json",
-                   'Authorization': f"Bearer {mod.token}"}
-        r = requests.get(url, headers=headers)
+        headers = {'Content-Type': "application/json"}
+        r = mod.api.get(ApiType.ApiTeamOf, url, token=mod.token, headers=headers)
         if r.status_code != 200:
             return None
         teams = r.json()
@@ -197,11 +192,9 @@ class Alt:
     #     now = datetime.now()
     #     if self.time_step1 and delta_s(now, self.time_step1) < ALT_UPDATE_PERIOD:
     #         return
-    #     mod.wait_api('@/username/following')
     #     url = f'https://lichess.org/@/{self.user.id}/following'
-    #     headers = {'Content-Type': "application/json",
-    #                'Authorization': f"Bearer {mod.token}"}
-    #     r = requests.get(url, headers=headers)
+    #     headers = {'Content-Type': "application/json"}
+    #     r = mod.api.get(ApiType.AtUsernameFollowing, url, token=mod.token, headers=headers)
     #     if r.status_code != 200:
     #         return None
     #     following = r.json()

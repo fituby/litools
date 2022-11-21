@@ -1,4 +1,3 @@
-import requests
 from datetime import datetime, timedelta
 from dateutil import tz
 import time
@@ -7,7 +6,8 @@ from threading import Lock
 import re
 from collections import defaultdict
 from typing import DefaultDict, Dict
-from elements import Reason, TournType, get_ndjson, delta_s, log
+from api import ApiType
+from elements import Reason, TournType, delta_s, log
 from elements import get_notes, add_note, load_mod_log, get_mod_log, get_highlight_style, add_timeout_msg
 from elements import ModActionType, ModAction, UserData
 from chat_message import Message
@@ -266,7 +266,6 @@ class ChatAnalysis:
             else "swiss" if msg.tournament.t_type == TournType.Swiss \
             else "study" if msg.tournament.t_type == TournType.Study \
             else None
-        headers = {'Authorization': f"Bearer {mod.token if mod else ''}"}
         text = f'{msg.text[:MAX_LEN_TEXT-1]}…' if len(msg.text) > MAX_LEN_TEXT else msg.text
         data = {'reason': reason_tag,
                 'userId': msg.username.lower(),
@@ -274,9 +273,8 @@ class ChatAnalysis:
                 'chan': chan,
                 'text': text}
         if is_timeout_manual or (is_auto and mod and mod.is_mod()):
-            mod.wait_api('mod/public-chat/timeout')
             url = "https://lichess.org/mod/public-chat/timeout"
-            r = requests.post(url, headers=headers, json=data)
+            r = mod.api.post(ApiType.ModPublicChatTimeout, url, token=mod.token if mod else '', json=data)
             timeout_tag = ('' if is_timeout_manual else '[AUTO] ') if is_auto else ""
             if len(msg.text) > MAX_LEN_TEXT:
                 text = f'{text}{msg.text[MAX_LEN_TEXT-1:]}'
@@ -356,10 +354,8 @@ class ChatAnalysis:
             return
         if check_updates and not self.is_user_up_to_date(username, mod):
             return
-        mod.wait_api('mod/warn')
-        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
-        r = requests.post(url, headers=headers)
+        r = mod.api.post(ApiType.ModWarn, url, token=mod.token)
         if r.status_code == 200:
             log(f"WARNING @{username}: {subject}", True)
             self.update_selected_user(mod)
@@ -370,10 +366,8 @@ class ChatAnalysis:
     def api_kidMode(self, username, mod, to_update):
         if not self.is_user_up_to_date(username, mod):
             return False
-        mod.wait_api('mod/kid')
-        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/kid"
-        r = requests.post(url, headers=headers)
+        r = mod.api.post(ApiType.ModKid, url, token=mod.token)
         if r.status_code == 200:
             log(f"ACTION @{username}: kidMode", True)
             if to_update:
@@ -388,10 +382,8 @@ class ChatAnalysis:
     def api_SB(self, username, mod):
         if not self.is_user_up_to_date(username, mod):
             return
-        mod.wait_api('mod/troll')
-        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/troll/true"
-        r = requests.post(url, headers=headers)
+        r = mod.api.post(ApiType.ModTroll, url, token=mod.token)
         if r.status_code == 200:
             log(f"SB @{username}", True)
             self.update_selected_user(mod)
@@ -805,10 +797,9 @@ class ChatAnalysis:
                 if tourn_id in self.tournaments:
                     self.tournaments[tourn_id].is_monitored = True
                 else:
-                    headers = {}  # {'Authorization': f"Bearer {mod.token}"}
                     if page.startswith(arena_tournament_page) and i == len(arena_tournament_page) - 1:
-                        mod.wait_api('api/tournament/id')
-                        r = requests.get(f"https://lichess.org/api/tournament/{tourn_id}", headers=headers)
+                        url_tournament = f"https://lichess.org/api/tournament/{tourn_id}"
+                        r = mod.api.get(ApiType.ApiTournamentId, url_tournament, token=None)
                         if r.status_code != 200:
                             raise Exception(f"ERROR /api/tournament/{tourn_id}: Status Code {r.status_code}")
                         arena = r.json()
@@ -816,8 +807,8 @@ class ChatAnalysis:
                             raise Exception(f"ERROR {page}: Wrong ID {tourn_id} != {arena['id']}")
                         self.tournaments[tourn_id] = Tournament(arena, TournType.Arena, is_monitored=True)
                     elif page.startswith(swiss_tournament_page) and i == len(swiss_tournament_page) - 1:
-                        mod.wait_api('api/swiss')
-                        r = requests.get(f"https://lichess.org/api/swiss/{tourn_id}", headers=headers)
+                        url_swiss = f"https://lichess.org/api/swiss/{tourn_id}"
+                        r = mod.api.get(ApiType.ApiSwiss, url_swiss, token=None)
                         if r.status_code != 200:
                             raise Exception(f"ERROR /api/swiss/{tourn_id}: Status Code {r.status_code}")
                         swiss = r.json()
@@ -979,17 +970,15 @@ class ChatAnalysis:
 
 
 def get_current_tournaments(non_mod):
-    headers = {}  # {'Authorization': f"Bearer {mod.token}"}
     # Arenas of official teams
     arenas = []
     for teamId in official_teams:
         url = f"https://lichess.org/api/team/{teamId}/arena"
-        data = get_ndjson(url, non_mod, "api/team/arena", Accept="application/nd-json")
+        data = non_mod.api.get_ndjson(ApiType.ApiTeamArena, url, non_mod.token, Accept="application/nd-json")
         arenas.extend(data)
     # Arena
-    non_mod.wait_api('api/tournament')
     url = "https://lichess.org/api/tournament"
-    r = requests.get(url, headers=headers)
+    r = non_mod.api.get(ApiType.ApiTournament, url, token=None)
     if r.status_code != 200:
         raise Exception(f"ERROR /api/tournament: Status Code {r.status_code}")
     data = r.json()
@@ -1003,7 +992,7 @@ def get_current_tournaments(non_mod):
     # Swiss
     for teamId in official_teams:
         url = f"https://lichess.org/api/team/{teamId}/swiss"
-        swiss_data = get_ndjson(url, non_mod, "api/team/swiss", Accept="application/nd-json")
+        swiss_data = non_mod.api.get_ndjson(ApiType.ApiTeamSwiss, url, non_mod.token, Accept="application/nd-json")
         for swiss in swiss_data:
             try:
                 tourn = Tournament(swiss, TournType.Swiss)
@@ -1013,7 +1002,7 @@ def get_current_tournaments(non_mod):
                 traceback.print_exception(type(exception), exception, exception.__traceback__)
     # Broadcast
     url = f"https://lichess.org/api/broadcast?nb={NUM_RECENT_BROADCASTS_TO_FETCH}"
-    broadcast_data = get_ndjson(url, non_mod, "api/broadcast", Accept="application/nd-json")
+    broadcast_data = non_mod.api.get_ndjson(ApiType.ApiBroadcast, url, non_mod.token, Accept="application/nd-json")
     for broadcast in broadcast_data:
         try:
             broadcast_name = broadcast['tour']['name']

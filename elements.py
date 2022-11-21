@@ -1,5 +1,3 @@
-import requests
-import json
 from datetime import datetime, timedelta
 from dateutil import tz
 from dateutil.relativedelta import relativedelta
@@ -14,6 +12,7 @@ import math
 import base64
 import random
 import struct
+from api import ApiType
 from consts import *
 
 
@@ -376,10 +375,8 @@ class UserData(User):
 
 def get_user(username, mod):
     try:
-        mod.wait_api('api/user')
-        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/api/user/{username}"
-        r = requests.get(url, headers=headers)
+        r = mod.api.get(ApiType.ApiUser, url, token=mod.token)
         if r.status_code == 200:
             return r.json(), ""
         return None, f"ERROR /api/user/: Status Code {r.status_code}"
@@ -635,7 +632,7 @@ class Games:
         url = f"https://lichess.org/api/games/user/{self.user_id}?{rated}{perfType}finished=true&max={max_num_games}" \
               f"{moves}&since={since}{str_until}"
         self.since = None if since == ts_Xmonths_ago else since
-        games = get_ndjson(url, mod, "api/games/user")
+        games = mod.api.get_ndjson(ApiType.ApiGamesUser, url, mod.token)
         if len(games) > self.max_num_games:
             num_to_delete = len(games) - self.max_num_games
             self.games = []
@@ -701,25 +698,6 @@ class Games:
         elif self.games:
             str_num = f'{str_num} from {first_createdAt:%Y-%m-%d %H:%M} UTC'
         return f'<div class="mb-3">{str_num}</div>'
-
-
-def get_ndjson(url, mod, api_type, Accept="application/x-ndjson"):
-    mod.wait_api(api_type)
-    headers = {'Accept': Accept,
-               'Authorization': f"Bearer {mod.token}"}
-    r = requests.get(url, allow_redirects=True, headers=headers)
-    if r.status_code != 200:
-        try:
-            i1 = url.find(".org/")
-            i2 = url.rfind("/")
-            api = url[i1 + 4:i2 + 1]
-        except:
-            api = url
-        raise Exception(f"{api}: Status code = {r.status_code}")
-    content = r.content.decode("utf-8")
-    lines = content.split("\n")[:-1]
-    data = [json.loads(line) for line in lines]
-    return data
 
 
 def datetime_to_ago(t, now_utc=None, short=False):
@@ -914,10 +892,8 @@ def get_user_link(username, no_name="Unknown User", class_a="text-info", max_len
 
 
 def read_notes(username, mod):
-    mod.wait_api('api/user/note')
-    headers = {'Authorization': f"Bearer {mod.token}"}
     url = f"https://lichess.org/api/user/{username}/note"
-    r = requests.get(url, headers=headers)
+    r = mod.api.get(ApiType.ApiUserNote, url, token=mod.token)
     if r.status_code != 200:
         raise Exception(f"ERROR /api/user/{username}/note: Status Code {r.status_code}")
     return r.json()
@@ -967,12 +943,10 @@ def get_notes(username, mod, mod_log_data=None):
 
 def add_note(username, note, mod):
     try:
-        mod.wait_api('api/user/note:post')
-        headers = {'Authorization': f"Bearer {mod.token}"}
         data = {'text': note,
                 'mod': True}
         url = f"https://lichess.org/api/user/{username}/note"
-        r = requests.post(url, headers=headers, json=data)
+        r = mod.api.post(ApiType.ApiUserNote_Post, url, token=mod.token, json=data)
         if r.status_code == 200:
             log(f"ADD NOTE for @{username}:\n{note}", False)
             return True
@@ -983,10 +957,8 @@ def add_note(username, note, mod):
 
 def load_mod_log(username, mod):
     try:
-        mod.wait_api('api/user/mod-log')
-        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/api/user/{username}/mod-log"
-        r = requests.get(url, headers=headers)
+        r = mod.api.get(ApiType.ApiUserModLog, url, token=mod.token)
         if r.status_code != 200:
             raise Exception(f"ERROR /api/user/{username}/mod-log: Status Code {r.status_code}")
         return r.json()
@@ -1132,10 +1104,8 @@ class ModAction:
                 ids.add(action.mod_id)
         ids = list(ids)
         if ids:
-            mod.wait_api('api/users/status')
-            headers = {'Authorization': f"Bearer {mod.token}"}
             url = f"https://lichess.org/api/users/status?ids={','.join(ids)}"
-            r = requests.get(url, headers=headers)
+            r = mod.api.get(ApiType.ApiUsersStatus, url, token=mod.token)
             if r.status_code != 200:
                 raise Exception(f"ERROR /api/users/status?ids={','.join(ids)}: Status Code {r.status_code}")
             data = r.json()
@@ -1338,10 +1308,8 @@ class ChatModAction(ModAction):
 
 def warn_user(username, subject, mod):
     try:
-        mod.wait_api('api/warn')
-        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
-        r = requests.post(url, headers=headers)
+        r = mod.api.post(ApiType.ApiWarn, url, token=mod.token)
         if r.status_code == 200:
             log(f"WARNING @{username}: {subject}", True)
             return True
@@ -1360,10 +1328,8 @@ def warn_boosting(username, mod):
 
 def mark_booster(username, mod):
     try:
-        mod.wait_api('api/booster')
-        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/mod/{username}/booster/true"
-        r = requests.post(url, headers=headers)
+        r = mod.api.post(ApiType.ApiBooster, url, token=mod.token)
         if r.status_code == 200:
             log(f'MARK BOOST: @{username}', True)
             return True
@@ -1391,10 +1357,8 @@ class WarningStats:
 
 def get_boost_reports(mod):
     try:
-        mod.wait_api('report/list/boost')
-        headers = {'Authorization': f"Bearer {mod.token}"}
         url = f"https://lichess.org/report/list/boost"
-        r = requests.get(url, headers=headers)
+        r = mod.api.get(ApiType.ReportListBoost, url, token=mod.token)
         if r.status_code != 200:
             raise Exception(f"ERROR /report/list/boost: Status Code {r.status_code}")
         return r.json()

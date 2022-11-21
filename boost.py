@@ -1,4 +1,3 @@
-import requests
 import statistics
 from datetime import datetime
 from dateutil import tz
@@ -7,7 +6,8 @@ import traceback
 from collections import defaultdict
 import math
 from threading import Thread
-from elements import get_user, get_ndjson, shorten, delta_s
+from api import ApiType
+from elements import get_user, shorten, delta_s
 from elements import get_notes, add_note, load_mod_log, get_mod_log, add_variant_rating
 from elements import ModActionType, WarningStats, User, Games, Variants
 from elements import warn_sandbagging, warn_boosting, mark_booster
@@ -263,11 +263,9 @@ class UserTournament:
         self.performance: int = None
 
     def download(self, mod):
-        headers = {'Authorization': f"Bearer {mod.token}"}
         if self.is_arena:
-            mod.wait_api('api/tournament')
             url = f"https://lichess.org/api/tournament/{self.tournament_id}"
-            r = requests.get(url, headers=headers)
+            r = mod.api.get(ApiType.ApiTournamentId, url, token=mod.token)
             if r.status_code != 200:
                 raise Exception(f"ERROR /api/tournament/: Status Code {r.status_code}")
             arena = r.json()
@@ -287,7 +285,7 @@ class UserTournament:
                     self.score = player['score']
                     break
             url = f"https://lichess.org/api/tournament/{self.tournament_id}/results?nb={MAX_NUM_TOURNEY_PLAYERS}"
-            arena_res = get_ndjson(url, mod, "api/tournament/results")
+            arena_res = mod.api.get_ndjson(ApiType.ApiTournamentResults, url, mod.token)
             for player in arena_res:
                 if player['username'].lower() == self.user_id:
                     self.place = player['rank']
@@ -296,7 +294,7 @@ class UserTournament:
                     break
         else:
             url = f"https://lichess.org/api/swiss/{self.tournament_id}/results?nb={MAX_NUM_TOURNEY_PLAYERS}"
-            swiss_res = get_ndjson(url, mod, "api/swiss/results")
+            swiss_res = mod.api.get_ndjson(ApiType.ApiSwissResults, url, mod.token)
             self.num_players = len(swiss_res)
             self.name = f"Swiss/{self.tournament_id}"
             for player in swiss_res:

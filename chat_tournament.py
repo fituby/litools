@@ -1,4 +1,3 @@
-import requests
 from datetime import datetime, timedelta
 from dateutil import tz
 import json
@@ -7,6 +6,7 @@ from fake_useragent import UserAgent
 from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, shorten, add_timeout_msg, Error500
 from chat_re import ReUser, Lang
 from chat_message import Message
+from api import ApiType
 from consts import *
 
 
@@ -139,8 +139,11 @@ class Tournament:
         return max(2, (delta_min - len(self.messages)) // 10)
 
     def get_type(self):
-        return "tournament" if self.t_type == TournType.Arena else \
-            "swiss" if self.t_type == TournType.Swiss else None
+        return ApiType.TournamentId if self.t_type == TournType.Arena else \
+            ApiType.SwissId if self.t_type == TournType.Swiss else ApiType.BroadcastId
+
+    def get_endpoint(self):
+        return "tournament" if self.t_type == TournType.Arena else "swiss" if self.t_type == TournType.Swiss else ""
 
     def download(self, msg_lock, now_utc, non_mod):
         new_messages = []
@@ -148,13 +151,13 @@ class Tournament:
         if self.errors or self.is_error_404_recently(now_utc):
             return new_messages, deleted_messages
         try:
-            non_mod.wait_api(self.get_type())
             ua = UserAgent()
             headers = {'User-Agent': str(ua.chrome)}
             #if not self.is_arena:
-            #   headers['Authorization'] = f"Bearer {mod.token}"  # otherwise it doesn't load messages
-            url = self.link if self.link else f"https://lichess.org/{self.get_type()}/{self.id}"
-            r = requests.get(url, headers=headers)
+            #    token = mod.token  # otherwise it doesn't load messages
+            token = None
+            url = self.link if self.link else f"https://lichess.org/{self.get_endpoint()}/{self.id}"
+            r = non_mod.api.get(self.get_type(), url, token=token, headers=headers)
             if r.status_code != 200:
                 if r.status_code >= 500:
                     if self.errors_500 and self.errors_500[-1].is_ongoing():
@@ -268,7 +271,7 @@ class Tournament:
 
     def get_link(self, short=True):
         name = shorten(self.name, MAX_LEN_TOURNEY_NAME_SHORT if short else MAX_LEN_TOURNEY_NAME_LONG)
-        link = self.link if self.link else f'https://lichess.org/{self.get_type()}/{self.id}'
+        link = self.link if self.link else f'https://lichess.org/{self.get_endpoint()}/{self.id}'
         tournament = f'<a href="{link}" target="_blank">{name}</a>'
         return tournament
 
