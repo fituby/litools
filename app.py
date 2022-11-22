@@ -10,14 +10,12 @@ import requests
 from datetime import datetime, timedelta
 from dateutil import tz
 import math
-import traceback
 from peewee import DoesNotExist
 from boost import get_boost_data, send_boost_note, send_mod_action
-from leaderboard import update_leaderboard
 from chat import ChatAnalysis
 from alt import Alts
 from mod import Mod, ModInfo, View
-from elements import get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s
+from elements import get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s, log_exception
 from database import Mods, Authentication
 from consts import *
 
@@ -142,23 +140,23 @@ def create_chat():
     return resp
 
 
-@app.route('/chat/update/', methods=['POST'])
-def get_chat_update():
+@app.route('/chat/update/<state>', methods=['POST'])
+def get_chat_update(state):
     try:
         get_mod(request.cookies)  # can be omitted
     except:
         return Response(status=400)
-    resp = make_response(chat.get_tournaments())
+    resp = make_response(chat.get_tournaments_data(state))
     return resp
 
 
-@app.route('/chat/process/', methods=['POST'])
-def get_chat_process():
+@app.route('/chat/process/<state>', methods=['POST'])
+def get_chat_process(state):
     try:
         mod = get_mod(request.cookies)
     except:
         return Response(status=400)
-    data = chat.get_all(mod)
+    data = chat.get_all_data(mod, state)
     return make_response(data)
 
 
@@ -268,6 +266,16 @@ def chat_flip_tournament(tourn_id):
     return Response(status=204)
 
 
+@app.route('/chat/delete_tournament/<tourn_id>', methods=['POST'])
+def chat_delete_tournament(tourn_id):
+    try:
+        get_mod(request.cookies, update_seenAt=True)  # can be omitted
+    except:
+        return Response(status=400)
+    resp = make_response(chat.delete_tournament(tourn_id))
+    return resp
+
+
 @app.route('/chat/set_tournament_group/<group>/<checked>', methods=['POST'])
 def chat_set_tournament_group(group, checked):
     try:
@@ -344,8 +352,10 @@ def set_mode(mode):
 def chat_loop():
     global chat
     while True:
-        chat.update_tournaments(non_mod)
-        chat.run(non_mod, auto_mod)
+        if chat.wait_refresh_tournaments():
+            chat.update_tournaments(non_mod)
+        chat.wait_refresh_chats()
+        chat.update_chats(non_mod, auto_mod)
 
 
 def encode_base64(b):
@@ -372,7 +382,7 @@ def get_mod_token(token1, print_exception=False):
         return token, token_hash, mod_db
     except Exception as exception:
         if print_exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
         raise Exception(f'Failed to read the token stored in your browser: {exception}')
 
 
@@ -462,7 +472,7 @@ def logout():
         mod_cache.pop(token1, None)
         return make_response(redirect('/login'))
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
         resp = create_main_page(mod, error_title="Logout error", error_text=str(exception))
         return resp
 
@@ -490,7 +500,7 @@ def login():
         session['state'] = state
         resp = make_response(redirect(f'https://lichess.org/oauth?{urlencode(params, quote_via=quote_plus)}'))
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
         mod_none: Mod = None
         resp = create_main_page(mod_none, error_title="Login error", error_text=str(exception))
     return resp
@@ -549,7 +559,7 @@ def oauth2_callback():
             raise Exception(f"Failed to get 'expires_in'.")
         resp = save_token(access_token, expires_in)
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
         mod_none: Mod = None
         resp = create_main_page(mod_none, error_title="Authorization error", error_text=str(exception))
     return resp

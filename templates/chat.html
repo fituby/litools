@@ -178,6 +178,7 @@
         if ($('#mode_0').is('.active'))
           update_mode(event.matches ? -1 : -2);
       });
+    $("#tournament_link").on('keypress', tournament_entered);
     update_frequency({{update_frequency}}, false);
     filter_score(0, false);
     reset_langs();
@@ -198,6 +199,13 @@
   var is_reviewed = false;
   var update_periods = [1, 5, 25, 60];
   var update_period = update_periods[{{update_frequency}}];
+  function tournament_entered(e) {
+    if (!e) e = window.event;
+    var keyCode = e.code || e.key;
+    if (keyCode == 'Enter') {
+      add_tournament();
+    }
+  }
   function is_clickable() {
     return (new Date().getTime()) >= last_update + 1000;
   }
@@ -209,9 +217,9 @@
       refresh();
     }
     else {
-      await $.ajax({url: `/chat/update/`, type: "post"})
+      await $.ajax({url: `/chat/update/${state_tournaments}`, type: "post"})
         .done(function(data, textStatus, jqXHR) {
-          $.ajax({url: `/chat/process/`, type: "post"})
+          $.ajax({url: `/chat/process/${state_reports}`, type: "post"})
             .done(function(data_chats, textStatus, jqXHR) {
               if ($('#update_frequency_0').is('.active')) {
                 refresh();
@@ -556,13 +564,21 @@
         update_tournament_list(data);
       });
   }
+  function delete_tournament(tourn_id) {
+    $(`#tt_${tourn_id}`).closest('div').remove();
+    $.ajax({url: `/chat/delete_tournament/${tourn_id}`, type: "post"})
+      .done(function(data, textStatus, jqXHR) {
+        update_tournament_list(data);
+      });
+  }
   function add_tournament() {
+    var tournament_link = $("#tournament_link")[0].value;
+    $("#tournament_link")[0].value = "";
     $.ajax({
       url: "/chat/add_tournament",
       type: "post",
-      data: {page: $("#tournament_link")[0].value}})
+      data: {page: tournament_link}})
         .done(function(data, textStatus, jqXHR) {
-          $("#tournament_link")[0].value = "";
           update_tournament_list(data);
           update_data(data);
         });

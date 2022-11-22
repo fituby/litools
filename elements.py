@@ -128,7 +128,7 @@ def get_token():
             config = yaml.safe_load(stream)
             token = config.get('token', "")
     except Exception as e:
-        print(f"There appears to be a syntax problem with {config_file}: {e}")
+        log(f"There appears to be a syntax problem with {config_file}: {e}", to_print=True, to_save=True)
         token = ""
     return token
 
@@ -381,7 +381,7 @@ def get_user(username, mod):
             return r.json(), ""
         return None, f"ERROR /api/user/: Status Code {r.status_code}"
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
         return None, str(exception)
     except:
         return None, "ERROR"
@@ -613,7 +613,7 @@ class Games:
                 self.until = datetime.strptime(before, '%Y-%m-%dT%H:%M').replace(tzinfo=tz.tzutc())
             except Exception as exception:
                 before = None
-                traceback.print_exception(type(exception), exception, exception.__traceback__)
+                log_exception(exception)
         if before:
             str_until = f"&until={int(self.until.timestamp() * 1000)}"
         else:
@@ -738,6 +738,12 @@ def datetime_to_abbr_ago(dt, now_utc=None, short=False):
     return f'<abbr title="{dt:%Y-%m-%d %H:%M:%S} UTC" style="text-decoration:none;">' \
            f'{datetime_to_ago(dt, now_utc, short)}</abbr>'
 
+
+def datetime_to_abbr_in(dt, now_utc, short=False):
+    str_period = datetime_to_ago(now_utc, dt, short)
+    if " ago" in str_period:
+        str_period = f'in {str_period.replace(" ago", "")}'
+    return f'<abbr title="{dt:%Y-%m-%d %H:%M:%S} UTC" style="text-decoration:none;">{str_period}</abbr>'
 
 def timestamp_to_abbr_ago(ts_ms, now_utc=None, short=False):
     t = datetime.fromtimestamp(ts_ms // 1000, tz=tz.tzutc())
@@ -880,6 +886,12 @@ def log(text, to_print=False, to_save=True):
         log_file = ""
 
 
+def log_exception(exception, to_print=True, to_save=True):
+    if to_print:
+        traceback.print_exception(type(exception), exception, exception.__traceback__)
+    text = f"EXCEPTION: {exception}"
+    log(text, to_print=False, to_save=to_save)
+
 def get_user_link(username, no_name="Unknown User", class_a="text-info", max_len=10):
     if username:
         if len(username) > max_len:
@@ -934,7 +946,7 @@ def get_notes(username, mod, mod_log_data=None):
                 info.append(f'<tr><td class="text-left text-nowrap mr-2">{author}:{str_time}{str_mod}</td>'
                             f'<td class="text-left text-wrap" style="{STYLE_WORD_BREAK}">{text}</td></tr>')
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
         if not info:
             return None
     return f'<table class="table table-sm table-striped table-hover border text-nowrap">' \
@@ -951,7 +963,7 @@ def add_note(username, note, mod):
             log(f"ADD NOTE for @{username}:\n{note}", False)
             return True
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
     return False
 
 
@@ -963,7 +975,7 @@ def load_mod_log(username, mod):
             raise Exception(f"ERROR /api/user/{username}/mod-log: Status Code {r.status_code}")
         return r.json()
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
     return None
 
 
@@ -1021,7 +1033,7 @@ def get_mod_log(data, mod, action_type=ModActionType.Standard):
                    f'<tbody>{"".join(info)}</tbody></table>' if info else ""
         return out_info, actions
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
     return "", actions
 
 
@@ -1314,7 +1326,7 @@ def warn_user(username, subject, mod):
             log(f"WARNING @{username}: {subject}", True)
             return True
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
     return False
 
 
@@ -1334,7 +1346,7 @@ def mark_booster(username, mod):
             log(f'MARK BOOST: @{username}', True)
             return True
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
     return False
 
 
@@ -1363,7 +1375,7 @@ def get_boost_reports(mod):
             raise Exception(f"ERROR /report/list/boost: Status Code {r.status_code}")
         return r.json()
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
     return None
 
 

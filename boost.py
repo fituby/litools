@@ -2,12 +2,11 @@ import statistics
 from datetime import datetime
 from dateutil import tz
 import time
-import traceback
 from collections import defaultdict
 import math
 from threading import Thread
 from api import ApiType
-from elements import get_user, shorten, delta_s
+from elements import get_user, shorten, delta_s, log, log_exception
 from elements import get_notes, add_note, load_mod_log, get_mod_log, add_variant_rating
 from elements import ModActionType, WarningStats, User, Games, Variants
 from elements import warn_sandbagging, warn_boosting, mark_booster
@@ -618,7 +617,7 @@ class Boost:
             #self.tournaments.sort(key=lambda tourney: tourney.num_games, reverse=True)
             self.last_update_tournaments = now
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
         # Output tournaments
         if not self.prefer_marking and not self.user.is_titled():
             for tourney in self.tournaments:
@@ -786,7 +785,7 @@ class Boost:
                 output.update(self.get_mod_notes(self.mod_log.data, mod))
                 output.update(self.get_enabled_buttons())
             except Exception as exception:
-                traceback.print_exception(type(exception), exception, exception.__traceback__)
+                log_exception(exception)
         # After self.enable_buttons():
         output.update({'part-1': self.get_info_1(mod), 'part-2': self.get_info_2(),
                        'num-games': self.games.max_num_games, 'datetime-before': before})
@@ -836,11 +835,11 @@ def send_boost_note(note, username, mod):
             header_notes = "Notes:" if mod_notes else "No notes"
             return {'mod-notes': mod_notes, 'notes-header': header_notes, 'user': username}
     except Exception as exception:
-        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_exception(exception)
         try:
             boost.errors.append(str(exception))
         except:
-            print("Error: no boost instance")
+            log("Error: no boost instance", to_print=True, to_save=True)
     return {'user': username, 'mod-notes': "", "notes-header": "No notes (ERROR)"}
 
 
@@ -985,15 +984,15 @@ def send_mod_action(action, username, mod):
                 is_ok = mark_booster(username, mod)
             else:
                 raise Exception(f"Wrong mod action: [{username}]: {action}")
-            print(f"{username}: {action} -> {'DONE' if is_ok else 'skipped'}")
+            log(f"{username}: {action} -> {'DONE' if is_ok else 'skipped'}", to_print=True, to_save=True)
             if is_ok:
                 boost.update_mod_log(mod)
                 return {'user': username, 'mod-log': boost.mod_log_out,
                         'enable-sandbagging': -1, 'enable-boosting': -1, 'enable-marking': -1}
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             try:
                 boost.errors.append(str(exception))
             except:
-                print(f"Error: no boost instance for {username}")
+                log(f"Error: no boost instance for {username}", to_print=True, to_save=True)
     return output

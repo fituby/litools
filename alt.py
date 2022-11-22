@@ -8,7 +8,7 @@ from enum import Enum
 from threading import Thread
 from api import ApiType
 from elements import UserData, Games, Variants, ModActionType
-from elements import get_tc, delta_s, deltainterval, datetime_to_ago, get_user_ids
+from elements import get_tc, delta_s, deltainterval, datetime_to_ago, get_user_ids, log
 from elements import load_mod_log, get_mod_log, get_notes
 from consts import *
 
@@ -36,7 +36,7 @@ def download_openings(user_id, color, opening_stage, mod, to_refresh=False):
             url_refresh = f'https://lichess.org/insights/refresh/{user_id}'
             r = mod.api.post(ApiType.InsightsRefresh, url_refresh, token=mod.token)
             if r.status_code != 200:
-                print(f"Failed to refresh insights for @{user_id}: Status {r.status_code}")
+                log(f"Failed to refresh insights for @{user_id}: Status {r.status_code}", to_print=True, to_save=True)
         url = f'https://lichess.org/insights/data/{user_id}'
         headers = {'Content-Type': "application/json"}
         data = {"metric": "opponentRating", "dimension": opening_stage.name, "filters": {"color": [color.name]}}

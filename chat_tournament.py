@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
 from dateutil import tz
 import json
-import traceback
 from fake_useragent import UserAgent
 from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, shorten, add_timeout_msg, Error500
+from elements import log, log_exception
 from chat_re import ReUser, Lang
 from chat_message import Message
 from api import ApiType
@@ -22,7 +22,7 @@ class Tournament:
         elif isinstance(startsAt, str):
             i = startsAt.rfind('.')
             if i < 0:
-                print(f"Error 'startsAt' {t_type}={self.id}: {tourney}")
+                log(f"Error Tournament 'startsAt' {t_type}={self.id}: {tourney}", to_print=True, to_save=True)
                 self.startsAt = datetime.now(tz=tz.tzutc())
             else:
                 self.startsAt = datetime.strptime(startsAt[:i], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=tz.tzutc())
@@ -138,10 +138,6 @@ class Tournament:
         delta_min = deltaseconds(self.startsAt, now_utc) // 60
         return max(2, (delta_min - len(self.messages)) // 10)
 
-    def get_type(self):
-        return ApiType.TournamentId if self.t_type == TournType.Arena else \
-            ApiType.SwissId if self.t_type == TournType.Swiss else ApiType.BroadcastId
-
     def get_endpoint(self):
         return "tournament" if self.t_type == TournType.Arena else "swiss" if self.t_type == TournType.Swiss else ""
 
@@ -157,7 +153,7 @@ class Tournament:
             #    token = mod.token  # otherwise it doesn't load messages
             token = None
             url = self.link if self.link else f"https://lichess.org/{self.get_endpoint()}/{self.id}"
-            r = non_mod.api.get(self.get_type(), url, token=token, headers=headers)
+            r = non_mod.api.get(ApiType.TournamentId, url, token=token, headers=headers)
             if r.status_code != 200:
                 if r.status_code >= 500:
                     if self.errors_500 and self.errors_500[-1].is_ongoing():
@@ -179,7 +175,7 @@ class Tournament:
             self.reports = self.get_info(now_utc)
             self.last_update = now_utc
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             self.errors.append(f"{now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
         except:
             self.errors.append(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC")
@@ -489,9 +485,10 @@ class Tournament:
         self.multiline_reports = output
         return multi_messages, to_timeout
 
-    def get_list_item(self, now_utc):
-        checked = ' checked=""' if (self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS) and self.is_active(now_utc) else ""
-        disabled = "" if self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS else ' disabled'
+    def get_list_item(self, now_utc, monitored=False):
+        checked = ' checked=""' if monitored or ((self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS)
+                                                 and self.is_active(now_utc)) else ""
+        disabled = "" if monitored or self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS else ' disabled'
         if now_utc < self.startsAt:
             info = f'{deltaperiod(self.startsAt, now_utc, short=True)}'
         elif self.t_type == TournType.Arena and now_utc < self.finishesAt:
@@ -500,8 +497,8 @@ class Tournament:
             info = f'{deltaperiod(now_utc, self.finishesAt, short=True)}'
         else:
             info = f'started {deltaperiod(now_utc, self.startsAt, short=True)} ago'
-        num_messages = f'{len(self.messages):03d}' if self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS \
-                       else "&minus;&minus;&minus;"
+        num_messages = f'{len(self.messages):03d}' if self.t_type != TournType.Swiss \
+                                                      or CHAT_UPDATE_SWISS or len(self.messages) else "&minus;&minus;&minus;"
         if len(self.messages) > 0:
             tag = 'T'
             i = max(0, len(self.messages) - NUM_MSGS_BEFORE)
@@ -510,9 +507,11 @@ class Tournament:
         else:
             num_messages = f'<span class="px-1">{num_messages}</span>'
         text_class = " text-info" if self.is_monitored else ""
+        id_prefix = "tt" if monitored else "t"
+        onchange = "delete_tournament" if monitored else "set_tournament"
         return f"""<div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="t_{self.id}" onchange="set_tournament('{self.id}')"
-          {checked}{disabled}>
+          <input class="form-check-input" type="checkbox" id="{id_prefix}_{self.id}" 
+          onchange="{onchange}('{self.id}')"{checked}{disabled}>
           <label class="form-check-label d-flex justify-content-between{text_class}" for="t_{self.id}">
           <span>{num_messages} {self.get_link()}</span><span>{info}</span></label>
         </div>"""

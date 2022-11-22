@@ -1,9 +1,8 @@
 from datetime import datetime
 from dateutil import tz
-import traceback
 from enum import IntEnum
 from threading import Lock
-from elements import decode_string, read_notes, datetime_to_abbr_ago
+from elements import decode_string, read_notes, datetime_to_abbr_ago, datetime_to_abbr_in, log_exception
 from database import Mods
 from api import Api, ApiType
 from consts import BOOST_RING_TOOL
@@ -71,7 +70,7 @@ class Mod:
                 data = r.json()
                 return data['id'], data['username']
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
         return "", ""
 
     def set_public_data(self):
@@ -87,7 +86,7 @@ class Mod:
                 raise Exception(f"Failed to log out of Lichess.<br>Status code: {r.status_code}")
             self.mod_db.delete_instance()
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             raise exception
 
     def status_info(self):
@@ -99,7 +98,7 @@ class Mod:
             logout = f'<a href="/logout" class="btn btn-lg btn-primary mb-2">Log out</a>' if self.current_session else ""
             return f'{name}{logout}'
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             return f'<div class="col my-2"><h2 class="text-danger text-center">Error</h2>' \
                    f'<h4>Failed to load mod info: {exception}</h4></div>{Mod.login_button}'
 
@@ -120,8 +119,9 @@ class Mod:
                     session_tag = f'{session_tag}<span class="text-warning ml-2">CURRENT</span>'
                 row = f'<tr id="{session.tokenHash}">' \
                       f'<td class="text-left align-baseline">{session_tag}</td>' \
+                      f'<td class="align-baseline">{datetime_to_abbr_ago(session.seenAt, now_tz)}</td>' \
                       f'<td class="align-baseline">{datetime_to_abbr_ago(session.createdAt, now_tz)}</td>' \
-                      f'<td class="align-baseline">{datetime_to_abbr_ago(session.seenAt, now_tz)}</td>'
+                      f'<td class="align-baseline">{datetime_to_abbr_in(session.expiresAt, now_tz)}</td>'
                 if is_current:
                     row = f'{row}<td class="align-baseline"><a href="/logout" class="btn btn-danger">Log out</a></td>'
                 else:
@@ -138,12 +138,13 @@ class Mod:
             table = f'<table id="table-sessions" ' \
                     f'class="table table-striped table-hover text-center w-auto text-nowrap mt-5">' \
                     f'<thead><tr><th>Session</th>' \
-                    f'<th>Created</th>' \
                     f'<th>Active</th>' \
+                    f'<th>Created</th>' \
+                    f'<th>Expires</th>' \
                     f'<th>Revoke</th></tr></thead>{"".join(rows)}</table>'
             return f'{table}{revoke_info}'
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             return f'<div class="col my-2"><h2 class="text-danger text-center">Error</h2>' \
                    f'<h4>Failed to load sessions info: {exception}</h4></div>{Mod.login_button}'
 
@@ -196,7 +197,7 @@ class View:
             if self.mode not in [Mode.AutoLight, Mode.AutoDark, Mode.Dark, Mode.Light]:
                 self.mode = int(Mode.AutoDark)
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             self.mode = int(Mode.AutoDark)
         except:
             self.mode = int(Mode.AutoDark)

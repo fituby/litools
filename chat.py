@@ -1,13 +1,12 @@
 from datetime import datetime, timedelta
 from dateutil import tz
 import time
-import traceback
 from threading import Lock
 import re
 from collections import defaultdict
 from typing import DefaultDict, Dict
 from api import ApiType
-from elements import Reason, TournType, delta_s, log
+from elements import Reason, TournType, delta_s, log, log_exception
 from elements import get_notes, add_note, load_mod_log, get_mod_log, get_highlight_style, add_timeout_msg
 from elements import ModActionType, ModAction, UserData
 from chat_message import Message
@@ -29,20 +28,19 @@ official_teams = [
 ]
 
 arena_tournament_page = "https://lichess.org/tournament/"
-swiss_tournament_page = "https://lichess.org/siwss/"
+swiss_tournament_page = "https://lichess.org/swiss/"
 
 
 class ChatAnalysis:
-    kid_years = re.compile(r"(?:\b|\D)({})(?:\b|\D)".format("|".join(
+    re_kid_years = re.compile(r"(?:\b|\D)({})(?:\b|\D)".format("|".join(
         [f"{y}\s*(?:г|л|y|j)|{datetime.now().year - y}" for y in range(6, 12)])), re.IGNORECASE)
+    re_tourn_id = re.compile(r"^\w{8}$")
 
     def __init__(self):
         self.tournaments = {}
         self.tournament_messages = {}
         self.all_messages = {}
         #self.user_messages = defaultdict(dict)
-        self.processing_lock = Lock()
-        self.last_api_time: datetime = None
         self.last_refresh: datetime = None
         self.last_tournaments_update: datetime = None
         self.errors = []
@@ -57,9 +55,9 @@ class ChatAnalysis:
         self.multi_messages = {}
         self.to_timeout = {}
         self.recommended_timeouts = {}
-        self.state_tournaments = 1
-        self.state_reports = 1
-        self.state_users = 1
+        self.state_tournaments = 0
+        self.state_reports = 0
+        self.state_users = 0
         self.cache_tournaments = {'state_tournaments': 0}
         self.cache_reports = {'state_reports': 0}
         # Mod data
@@ -78,15 +76,7 @@ class ChatAnalysis:
             self.warnings.append(text)
         log(text, to_print=True, to_save=True)
 
-    def wait_api(self):
-        now = datetime.now()
-        if self.last_api_time:
-            wait_s = API_TOURNEY_PAGE_DELAY - delta_s(now, self.last_api_time)
-            if wait_s > 0:
-                time.sleep(wait_s)
-        self.last_api_time = now
-
-    def wait_refresh(self):
+    def wait_refresh_chats(self):
         now = datetime.now()
         if self.last_refresh:
             wait_s = API_CHAT_REFRESH_PERIOD[self.i_update_frequency] - delta_s(now, self.last_refresh)
@@ -94,102 +84,109 @@ class ChatAnalysis:
                 time.sleep(wait_s)
         self.last_refresh = now
 
-    def update_tournaments(self, non_mod):
-        if self.processing_lock.locked() or self.errors:
-            return
+    def wait_refresh_tournaments(self):
         if self.i_update_frequency == IDX_NO_PAGE_UPDATE:
             time.sleep(1)
+            return False
+        now_utc = datetime.now(tz=tz.tzutc())
+        if not self.last_tournaments_update:
+            return True
+        return delta_s(now_utc, self.last_tournaments_update) >= PERIOD_UPDATE_TOURNAMENTS
+
+    def update_tournaments(self, non_mod):
+        if self.errors:
             return
         now_utc = datetime.now(tz=tz.tzutc())
-        if self.last_tournaments_update and delta_s(now_utc, self.last_tournaments_update) < PERIOD_UPDATE_TOURNAMENTS:
-            return
-        with self.processing_lock:
-            self.last_tournaments_update = now_utc
-            try:
-                if self.tournament_groups["monitored"] or self.tournament_groups["started"] \
-                        or self.tournament_groups["created"]:
-                    active_tournaments = {t.id: t for t in get_current_tournaments(non_mod)}
-                    keys = list(self.tournaments.keys())
-                    for tourn_id in keys:
-                        if tourn_id in active_tournaments:
-                            self.tournaments[tourn_id].update(active_tournaments[tourn_id])
-                            del active_tournaments[tourn_id]
-                        elif (not self.tournaments[tourn_id].is_monitored
-                              and not self.tournaments[tourn_id].is_active(now_utc)) \
-                                or not self.tournaments[tourn_id].is_enabled:
-                            with self.msg_lock:
-                                try:
-                                    for del_msg in self.tournaments[tourn_id].messages:
-                                        del self.tournament_messages[del_msg.id]
-                                        del self.all_messages[del_msg.id]
-                                except Exception as exception:
-                                    traceback.print_exception(type(exception), exception, exception.__traceback__)
-                            del self.tournaments[tourn_id]
-                    for tourn_id, tourn in active_tournaments.items():
-                        self.tournaments[tourn_id] = tourn
-                self.state_tournaments += 1
-            except Exception as exception:
-                traceback.print_exception(type(exception), exception, exception.__traceback__)
-                if not self.tournaments:
-                    self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}")  # only if it doesn't work from the very beginning
-            except:
-                self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in update_tournaments")
+        self.last_tournaments_update = now_utc
+        try:
+            if self.tournament_groups["monitored"] or self.tournament_groups["started"] \
+                    or self.tournament_groups["created"]:
+                active_tournaments = {t.id: t for t in get_current_tournaments(non_mod)}
+                for tourn_id in list(self.tournaments.keys()):
+                    if tourn_id in active_tournaments:
+                        self.tournaments[tourn_id].update(active_tournaments[tourn_id])
+                        del active_tournaments[tourn_id]
+                    elif (not self.tournaments[tourn_id].is_monitored
+                          and not self.tournaments[tourn_id].is_active(now_utc)) \
+                            or not self.tournaments[tourn_id].is_enabled:
+                        with self.msg_lock:
+                            try:
+                                for del_msg in self.tournaments[tourn_id].messages:
+                                    del self.tournament_messages[del_msg.id]
+                                    del self.all_messages[del_msg.id]
+                            except Exception as exception:
+                                log_exception(exception)
+                        del self.tournaments[tourn_id]
+                for tourn_id, tourn in active_tournaments.items():
+                    self.tournaments[tourn_id] = tourn
+            self.state_tournaments += 1
+            self.get_tournaments()
+        except Exception as exception:
+            log_exception(exception)
+            if not self.tournaments:
+                self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}")  # only if it doesn't work from the very beginning
+        except:
+            self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in update_tournaments")
 
-    def run(self, non_mod, auto_mod=None):
-        if self.processing_lock.locked() or self.errors or self.i_update_frequency == IDX_NO_PAGE_UPDATE:
+    def update_chats(self, non_mod, auto_mod=None):
+        if self.errors or self.i_update_frequency == IDX_NO_PAGE_UPDATE:
             return
-        with self.processing_lock:
-            self.wait_refresh()
-            now_utc = datetime.now(tz=tz.tzutc())
-            try:
-                keys = list(self.tournaments.keys())  # needed as self.tournaments may be changed from add_tournament()
-                for tourn_id in keys:
-                    tourn = self.tournaments[tourn_id]
-                    if tourn.t_type == TournType.Swiss and not CHAT_UPDATE_SWISS:
+        now_utc = datetime.now(tz=tz.tzutc())
+        try:
+            for tourn_id in list(self.tournaments.keys()):
+                tourn = self.tournaments[tourn_id]
+                if tourn.t_type == TournType.Swiss and not CHAT_UPDATE_SWISS:
+                    continue
+                if not tourn.is_just_added:
+                    if not tourn.is_enabled:
                         continue
-                    if tourn.is_just_added:
-                        tourn.is_just_added = False
-                    else:
-                        if not tourn.is_enabled:
+                    is_ongoing = tourn.is_ongoing(now_utc)
+                    if self.update_count == 0 and not is_ongoing:
+                        continue
+                    if not is_ongoing:
+                        hash_num = sum(ord(ch) for ch in tourn_id)
+                        update_period = tourn.update_period(now_utc)
+                        if self.update_count % update_period != hash_num % update_period:
                             continue
-                        is_ongoing = tourn.is_ongoing(now_utc)
-                        if self.update_count == 0 and not is_ongoing:
-                            continue
-                        if not is_ongoing:
-                            hash_num = sum(ord(ch) for ch in tourn_id)
-                            update_period = tourn.update_period(now_utc)
-                            if self.update_count % update_period != hash_num % update_period:
-                                continue
-                    self.wait_api()
-                    new_messages, deleted_messages = tourn.download(self.msg_lock, now_utc, non_mod)
-                    with self.msg_lock:
-                        if not new_messages and tourn.is_error_404_too_long(now_utc) \
-                                and not [msg for msg in tourn.messages if msg.score and not msg.is_hidden()]:
-                            del self.tournaments[tourn_id]
-                            continue
-                        self.tournament_messages.update({msg.id: tourn_id for msg in new_messages})
-                        self.all_messages.update({msg.id: msg for msg in new_messages})
-                        for del_msg in deleted_messages:
-                            del self.tournament_messages[del_msg.id]
-                            del self.all_messages[del_msg.id]
-                        to_timeout_i = tourn.analyse()
-                        for m in to_timeout_i.values():
-                            add_timeout_msg(self.to_timeout, m)
-                        # Process multiline messages and do timeouts
-                        multi_msgs, to_timeout_i = tourn.process_frequent_data(now_utc, self.reset_multi_messages)
-                        self.multi_messages.update(multi_msgs)
-                        for m in to_timeout_i.values():
-                            add_timeout_msg(self.to_timeout, m)
-                        for msg in self.to_timeout.values():
-                            self.api_timeout(msg, msg.best_ban_reason(), False, auto_mod, is_auto=DO_AUTO_TIMEOUTS)
-                        self.to_timeout.clear()
-            except Exception as exception:
-                traceback.print_exception(type(exception), exception, exception.__traceback__)
-                self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
-            except:
-                self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in chat.run")
-            self.update_count += 1
-            self.state_reports += 1
+                self.update_chat(tourn_id, non_mod, auto_mod, now_utc)
+        except Exception as exception:
+            log_exception(exception)
+            self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
+        except:
+            self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in chat.run")
+        self.update_count += 1
+        self.state_reports += 1
+        self.get_all(non_mod)
+        self.get_tournaments()
+
+    def update_chat(self, tourn_id, non_mod, auto_mod=None, now_utc=None):
+        if now_utc is None:
+            now_utc = datetime.now(tz=tz.tzutc())
+        tourn = self.tournaments[tourn_id]
+        if tourn.is_just_added:
+            tourn.is_just_added = False
+        new_messages, deleted_messages = tourn.download(self.msg_lock, now_utc, non_mod)
+        with self.msg_lock:
+            if not new_messages and tourn.is_error_404_too_long(now_utc) \
+                    and not [msg for msg in tourn.messages if msg.score and not msg.is_hidden()]:
+                del self.tournaments[tourn_id]
+                return
+            self.tournament_messages.update({msg.id: tourn_id for msg in new_messages})
+            self.all_messages.update({msg.id: msg for msg in new_messages})
+            for del_msg in deleted_messages:
+                del self.tournament_messages[del_msg.id]
+                del self.all_messages[del_msg.id]
+            to_timeout_i = tourn.analyse()
+            for m in to_timeout_i.values():
+                add_timeout_msg(self.to_timeout, m)
+            # Process multiline messages and do timeouts
+            multi_msgs, to_timeout_i = tourn.process_frequent_data(now_utc, self.reset_multi_messages)
+            self.multi_messages.update(multi_msgs)
+            for m in to_timeout_i.values():
+                add_timeout_msg(self.to_timeout, m)
+            for msg in self.to_timeout.values():
+                self.api_timeout(msg, msg.best_ban_reason(), False, auto_mod, is_auto=DO_AUTO_TIMEOUTS)
+            self.to_timeout.clear()
 
     def set_msg_ok(self, msg_id):
         try:
@@ -209,7 +206,7 @@ class ChatAnalysis:
                     msg.tournament.update_reports(now_utc, self.reset_multi_messages)
                 self.state_reports += 1
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             now_utc = datetime.now(tz=tz.tzutc())
             self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
             self.state_reports += 1
@@ -224,7 +221,7 @@ class ChatAnalysis:
                     self.multi_messages[msg_id][0].tournament.update_reports(now_utc, self.reset_multi_messages)
                 del self.multi_messages[msg_id]
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             now_utc = datetime.now(tz=tz.tzutc())
             self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
             self.state_reports += 1
@@ -321,7 +318,7 @@ class ChatAnalysis:
                     msg.tournament.update_reports(now_utc, self.reset_multi_messages)
                     self.state_reports += 1
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             self.add_error(f"ERROR at{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: {exception}", False)
             self.state_reports += 1
 
@@ -343,7 +340,7 @@ class ChatAnalysis:
                     tournament.update_reports(now_utc, self.reset_multi_messages)
                     self.state_reports += 1
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout_multi: {exception}", False)
             self.state_reports += 1
 
@@ -406,13 +403,13 @@ class ChatAnalysis:
                     elif subject_tag in ModAction.warnings:
                         self.api_warn(username, warning, mod)
                     else:
-                        print(f"WRONG WARNING @{username}: {warning}")
+                        log(f"WRONG WARNING @{username}: {warning}", to_print=True, to_save=True)
                 else:
                     self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: warn @{username}: "
                                    f"INCORRECT WARNING: {subject_tag}", False)
                     self.state_reports += 1
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: warn @{username}: "
                            f"{exception}", False)
             self.state_reports += 1
@@ -446,7 +443,7 @@ class ChatAnalysis:
                     msgs[0].tournament.update_reports(now_utc, self.reset_multi_messages)
                     self.state_reports += 1
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: custom_timeout: {exception}", False)
             self.state_reports += 1
 
@@ -518,7 +515,7 @@ class ChatAnalysis:
                     del self.users[mod.id][un]
             self.users[mod.id][username] = user
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
 
     def select_message(self, msg_id, mod):
         def create_info(info):
@@ -536,7 +533,7 @@ class ChatAnalysis:
             return self.get_messages_nearby(self.selected_msg_id[mod.id], mod)
         except Exception as exception:
             self.selected_msg_id[mod.id] = 0
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             return create_info(f'<p class="text-danger">Error: {exception}</p>')
         except:
             self.selected_msg_id[mod.id] = 0
@@ -637,7 +634,7 @@ class ChatAnalysis:
                                                      or self.selected_user_num_recent_timeouts[mod.id])
                     buttons.append(get_warn_btn('SB', "Shadowban", True, user_name, txt_class="text-danger",
                                                 is_disabled=is_SBed or not is_SBable))
-                kid_sus = ChatAnalysis.kid_years.search(user_data.profile.bio)
+                kid_sus = ChatAnalysis.re_kid_years.search(user_data.profile.bio)
                 if kid_sus:
                     add_info = f'{add_info}{" + " if add_info else ""}<span class="text-warning">' \
                                f'kid?</span>'
@@ -719,7 +716,7 @@ class ChatAnalysis:
             info_filtered = "".join(msgs_user)
             return create_output(info_selected, tournament_name, user, filtered_info=info_filtered, user_msgs=user_msgs)
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             return create_output(f'<p class="text-danger">Error: {exception}</p>', tournament_name, None)
         except:
             return create_output(f'<p class="text-danger">Error: get_messages_near()</p>', tournament_name, None)
@@ -743,7 +740,7 @@ class ChatAnalysis:
                 else:
                     self.add_error(f"ERROR: Failed to clear tournament errors: \"{tourn_id}\"", False)
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: clear_errors({tourn_id}): "
                            f"{exception}", False)
         self.state_reports += 1
@@ -755,6 +752,15 @@ class ChatAnalysis:
             self.state_reports += 1
             return
         tournament.is_enabled = (not tournament.is_enabled) if checked is None else checked
+
+    def delete_tournament(self, tourn_id):
+        tournament = self.tournaments.get(tourn_id)
+        if tournament:
+            tournament.is_monitored = False
+        else:
+            self.add_error(f"ERROR: No tournament \"{tourn_id}\" to delete", False)
+            self.state_reports += 1
+        return self.get_tournaments()
 
     def set_tournament_group(self, group, checked):
         if group.endswith("2"):
@@ -768,7 +774,7 @@ class ChatAnalysis:
             if group == "monitored":
                 for tourney in active_tournaments:
                     if tourney.is_monitored:
-                        tourney.is_enabled = checked
+                        tourney.is_monitored = False
             if group == "created":
                 for tourney in active_tournaments:
                     if tourney.is_created(now_utc):
@@ -784,12 +790,14 @@ class ChatAnalysis:
         self.state_tournaments += 1
         return self.get_tournaments(active_tournaments)
 
-    def add_tournament(self, page, mod):
-        # while self.processing_lock.locked():
-        #     time.sleep(0.1)
+    def add_tournament(self, page, non_mod, auto_mod=None):
         str_lichess = "https://lichess.org/"
         if page:
             page = page.strip()
+            if page.startswith('/'):
+                page = page[1:]
+        if len(page) == 8 and ChatAnalysis.re_tourn_id.search(page):
+            page = f'{arena_tournament_page}{page}'
         if page and page.startswith(str_lichess):
             i = page.rfind('/')
             if 0 < i < len(page):
@@ -799,7 +807,7 @@ class ChatAnalysis:
                 else:
                     if page.startswith(arena_tournament_page) and i == len(arena_tournament_page) - 1:
                         url_tournament = f"https://lichess.org/api/tournament/{tourn_id}"
-                        r = mod.api.get(ApiType.ApiTournamentId, url_tournament, token=None)
+                        r = non_mod.api.get(ApiType.ApiTournamentId, url_tournament, token=None)
                         if r.status_code != 200:
                             raise Exception(f"ERROR /api/tournament/{tourn_id}: Status Code {r.status_code}")
                         arena = r.json()
@@ -808,7 +816,7 @@ class ChatAnalysis:
                         self.tournaments[tourn_id] = Tournament(arena, TournType.Arena, is_monitored=True)
                     elif page.startswith(swiss_tournament_page) and i == len(swiss_tournament_page) - 1:
                         url_swiss = f"https://lichess.org/api/swiss/{tourn_id}"
-                        r = mod.api.get(ApiType.ApiSwiss, url_swiss, token=None)
+                        r = non_mod.api.get(ApiType.ApiSwiss, url_swiss, token=None)
                         if r.status_code != 200:
                             raise Exception(f"ERROR /api/swiss/{tourn_id}: Status Code {r.status_code}")
                         swiss = r.json()
@@ -827,7 +835,9 @@ class ChatAnalysis:
                                 }
                         self.tournaments[tourn_id] = Tournament(data, TournType.Study, link=page, is_monitored=True)
                 self.tournaments[tourn_id].is_just_added = True
-        self.state_tournaments += 1
+                self.update_chat(tourn_id, non_mod, auto_mod)
+                self.state_tournaments += 1
+                self.state_reports += 1
         return self.get_tournaments()
 
     def get_score_sorted_tournaments(self, now_utc, active_only=True):
@@ -839,6 +849,17 @@ class ChatAnalysis:
         active_tournaments = [tourn for tourn in self.tournaments.values() if not active_only or tourn.is_active(now_utc)]
         active_tournaments.sort(key=lambda tourn: tourn.priority_time(now_utc), reverse=True)
         return active_tournaments
+
+    def get_all_data(self, mod, state):
+        if state is not None:
+            try:
+                state = int(state)
+            except:
+                state = -1
+            state_all = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
+            if state == state_all:
+                return {'state_reports': state}
+        return self.get_all(mod)
 
     def get_all(self, mod):
         with self.reports_lock:
@@ -870,10 +891,20 @@ class ChatAnalysis:
             ret_data.update(self.cache_selected_data[mod.id])
             return ret_data
 
+    def get_tournaments_data(self, state):
+        try:
+            state = int(state)
+        except:
+            state = -1
+        with self.tournaments_lock:
+            if state == self.cache_tournaments['state_tournaments']:
+                return {'state_tournaments': state}
+            return self.cache_tournaments.copy()
+
     def get_tournaments(self, active_tournaments=None):
         with self.tournaments_lock:
-            if self.state_tournaments == self.cache_tournaments['state_tournaments']:
-                return self.cache_tournaments
+            if self.state_tournaments + self.state_reports == self.cache_tournaments['state_tournaments']:
+                return self.cache_tournaments.copy()
 
             # Lists
             def get_group_desc(group, group_name, desc, suffix=""):
@@ -937,10 +968,10 @@ class ChatAnalysis:
                 state = tournament.get_state(now_utc)
                 self.cache_tournaments[state].append(tournament.get_list_item(now_utc))
                 if tournament.is_monitored:
-                    self.cache_tournaments['tournaments'].append(tournament.get_list_item(now_utc))
+                    self.cache_tournaments['tournaments'].append(tournament.get_list_item(now_utc, monitored=True))
             for state, t in self.cache_tournaments.items():
                 self.cache_tournaments[state] = "".join(t)
-            self.cache_tournaments['state_tournaments'] = self.state_tournaments
+            self.cache_tournaments['state_tournaments'] = self.state_tournaments + self.state_reports
             return self.cache_tournaments
 
     def send_note(self, note, username, mod):
@@ -963,7 +994,7 @@ class ChatAnalysis:
                     data.update(add_data)
                     return data
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: send_note: {exception}", False)
             self.state_reports += 1
         return {'selected-user': username, 'mod-notes': "", 'user-profile': "", 'user-info': ""}
@@ -999,7 +1030,7 @@ def get_current_tournaments(non_mod):
                 if tourn.is_active(now_utc):
                     tournaments.append(tourn)
             except Exception as exception:
-                traceback.print_exception(type(exception), exception, exception.__traceback__)
+                log_exception(exception)
     # Broadcast
     url = f"https://lichess.org/api/broadcast?nb={NUM_RECENT_BROADCASTS_TO_FETCH}"
     broadcast_data = non_mod.api.get_ndjson(ApiType.ApiBroadcast, url, non_mod.token, Accept="application/nd-json")
@@ -1015,5 +1046,5 @@ def get_current_tournaments(non_mod):
                 if tourn.is_active(now_utc):
                     tournaments.append(tourn)
         except Exception as exception:
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
     return tournaments

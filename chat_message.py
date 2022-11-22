@@ -1,11 +1,10 @@
 import yaml
 import html
 from datetime import datetime
-import traceback
 from enum import IntFlag
 from elements import STYLE_WORD_BREAK
 from chat_re import list_res, list_res_variety, re_spaces, Lang
-from elements import Reason, deltaseconds, get_highlight_style, config_file
+from elements import Reason, deltaseconds, get_highlight_style, config_file, log, log_exception
 
 
 class AddButtons(IntFlag):
@@ -123,8 +122,8 @@ class Message:
                 if self.score > 60:
                     self.eval_text.replace('<span class="text-warning"', '<span class="text-danger bg-warning"')
         except Exception as exception:
-            print(f"ERROR when processing: {self}")
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log(f"ERROR when processing: {self}", to_print=True, to_save=True)
+            log_exception(exception)
             self.eval_text = self.text
             self.score = 0
 

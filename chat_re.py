@@ -1,8 +1,7 @@
 import html
 import re
-import traceback
 from enum import IntFlag
-from elements import Reason, TournType
+from elements import Reason, TournType, log_exception
 from elements import STYLE_WORD_BREAK
 
 
@@ -42,7 +41,7 @@ class EvalResult:
         except Exception as exception:
             print(f"ERROR when processing: {text}")
             self.element = text
-            traceback.print_exception(type(exception), exception, exception.__traceback__)
+            log_exception(exception)
 
     def __iadd__(self, o):
         for i in range(Reason.Size):
