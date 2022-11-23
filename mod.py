@@ -107,7 +107,7 @@ class Mod:
         if not self.id or not self.name:
             return ""
         try:
-            sessions = list(Mods.select().where(Mods.modId == self.id).order_by(Mods.seenAt.desc()))
+            sessions = list(Mods.select().where((Mods.modId == self.id) & Mods.enabled).order_by(Mods.seenAt.desc()))
             if not sessions:
                 return f'You do not have any active sessions (tokens) on this website.'
             now_tz = datetime.now(tz=tz.tzutc()).replace(tzinfo=None)

@@ -12,6 +12,7 @@ class Mods(Model):
     createdAt = DateTimeField()
     expiresAt = DateTimeField()
     seenAt = DateTimeField()
+    enabled = BooleanField(default=True)
 
     class Meta:
         database = db
