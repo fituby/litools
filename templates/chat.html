@@ -195,6 +195,7 @@
   var state_tournaments = 0;
   var state_reports = 0;
   var hidden_msgs = new Set();
+  var deleted_mmsgs = new Set();
   var last_update = new Date().getTime();
   var is_reviewed = false;
   var update_periods = [1, 5, 25, 60];
@@ -237,7 +238,8 @@
                 }
               }
             });
-          $("#tournament_settings").css("display","block");
+          if (data['state_tournaments'] != 0)
+            $("#tournament_settings").css("display","block");
           update_tournament_list(data);
         });
     }
@@ -275,6 +277,9 @@
       $(`#msgA${msg_id}`).css("display","none");
       $(`#msgB${msg_id}`).css("display","none");
     }
+    for (var msg_id of deleted_mmsgs)
+      $(`#mmsg${msg_id}`).css("display","none");
+    deleted_mmsgs.clear();
     return true;
   }
   function update_tournament_list(data) {
@@ -326,6 +331,7 @@
   function set_multi_ok(msg_id) {
     if (!is_clickable()) return;
     $(`#mmsg${msg_id}`).css("display","none");
+    deleted_mmsgs.add(msg_id);
     $.ajax({url: `/chat/set_multi_msg_ok/${msg_id}`, type: "post"});
   }
   function warn(username, subject) {
