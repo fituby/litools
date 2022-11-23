@@ -4,5 +4,4 @@ __pycache__/
 _install_/
 build/
 dist/
-log/
 venv/
