@@ -57,7 +57,7 @@ class Mod:
         num = 0
         try:
             data = read_notes("test", self)
-            num = sum([len(d) for d in data])
+            num = len(data)
         except:
             pass
         return num >= 2  # workaround
