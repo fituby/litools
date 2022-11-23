@@ -4,7 +4,8 @@ from datetime import datetime
 from enum import IntFlag
 from elements import STYLE_WORD_BREAK
 from chat_re import list_res, list_res_variety, re_spaces, Lang
-from elements import Reason, deltaseconds, get_highlight_style, config_file, log, log_exception
+from elements import Reason, deltaseconds, get_highlight_style, log, log_exception
+from consts import CONFIG_FILE
 
 
 class AddButtons(IntFlag):
@@ -15,7 +16,7 @@ class AddButtons(IntFlag):
 
 
 def load_res():
-    with open(config_file) as stream:
+    with open(CONFIG_FILE) as stream:
         config = yaml.safe_load(stream)
         timeouts = config.get('timeouts', "En Spam").lower()
         list_re = []
@@ -36,6 +37,10 @@ def load_res():
 class Message:
     global_id = 1  # starting from 1
     list_res, list_res_variety = load_res()
+
+    @staticmethod
+    def is_id_multi(id):
+        return id is not None and id < 0
 
     def __init__(self, data, tournament, now=None, delay=None):
         self.id: int = None

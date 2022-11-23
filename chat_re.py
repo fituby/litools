@@ -213,29 +213,31 @@ Lang.Spam: [
 list_res = {
 Lang.En: [
     # Critical
-    Re(r'cancers?', 50, max_score=-2,  # added "s?"
+    Re(r'cancers?', 50, max_score=-2,
        reason=Reason.Offensive, info="Critical: cancer"),
-    Re(r'(ho?pe ((yo)?[uy](r (famil[yi]|m[ou]m|mother))?( and )*)+ (die|burn)s?|((die|burn)s? irl))', 90,
+    Re(r'((ho?pe|wish)\s((yo)?[uy](r\s(famil[yi]|m[ou]m|mother))?(\sand\s)*)+\s(die|burn)s?|((die|burn)s?\sirl))', 90,
        reason=Reason.Offensive, ban=-1, info="Critical: Hope you die"),
-    Re(r'^kill ((yo)?[uy]r ?(self|famil[yi]|m[ou]m|mother)( and )?)+', 90, is_separate_word=False,
+    Re(r'^kill\s((yo)?[uy]r\s?(self|famil[yi]|m[ou]m|mother)(\sand\s)?)+', 90, is_separate_word=False,
        reason=Reason.Offensive, ban=-1, info="Critical: Kill yourself"),
-    Re(r'(hang|neck) ((yo)?[uy]r ?(self|family)( and )?)+', 90,
+    Re(r'(hang|neck)\s((yo)?[uy]r\s?(self|family)(\sand\s)?)+', 90,
        reason=Reason.Offensive, ban=-2, info="Critical: Hang yourself"),
-    Re(r"k+y+s+'?(e?d|)", 100,  # added several "+" and "'?(e?d|)"
+    Re(r"k+y+s+'?(e?d|)", 100,
        reason=Reason.Offensive, info="Critical: kys"),
     # En: suppress self-deprecating
-    Re(r"(me|i['`]?(\sa|)m(\snot|\sso|\ssuch|))\s(an?\s|)(idiot|stupid|no{2,10}b|gay|jerk|lo{1,10}ser|moron|retard(ed|)|trash|weak)", 5,  # added
+    Re(r"(me|i['`]?(\sa|)m(\snot|\sso|\ssuch|))\s(an?\s|)(idiot|stupid|no{2,10}b|gay|jerk|lo{1,10}ser|moron|retard(ed|)|trash|weak)", 5,
        reason=Reason.Spam, info="I'm idiot"),
     # En
-    Re(r'(f{1,20}|ph)(u|a|e){1,20}c?k{1,}\sme', 5,  # added
+    Re(r'(f{1,20}|ph)(u|a|e){1,20}c?k{1,}\sme', 5,
        reason=Reason.Offensive, info="fuck me"),
-    Re(r'(f{1,20}|ph)(u|a|e){1,20}c?kk?(ers?|rs?|u|t|ing?|ign|en|e?d|tard?s?|face|off?|)', 15,  #'+'-->'{1,20}' + changed (...){1,20}  # added several "s?" and "k?"
+    Re(r'(f{1,20}|ph)(u|a|e){1,20}c?kk?(ers?|rs?|u|t|ing?|ign|en|e?d|tard?s?|face|off?|)', 15,
        reason=Reason.Offensive, info="fuck"),
-    Re(r'(f|ph)agg?([oi]t|)s?', 30,  # added "s?"
+    Re(r'(f|ph)agg?([oi]t|)s?', 30,
        reason=Reason.Offensive, ban=80, info="faggot"),
-    Re(r'[ck]um(shots?|)',  # added "s?"
+    Re(r'(kill|hang|neck)\smy\s?self', 30,
+       reason=Reason.Other, info="kill myself"),
+    Re(r'[ck]um(shots?|)',
        reason=Reason.Offensive, info="cum"),
-    Re(r'[ck]unt(ing?|ign|s|)', 30,  # added "|s"
+    Re(r'[ck]unt(ing?|ign|s|)', 30,
        reason=Reason.Offensive, ban=80, info="cunt"),
     Re(r'abortion',
        reason=Reason.Other, info="abortion"),
@@ -247,7 +249,9 @@ Lang.En: [
        reason=Reason.Offensive, info="anal"),
     Re(r'anus',
        reason=Reason.Offensive, info="anus"),
-    Re(r'arse(holes?|wipe|)',  # added "s?"
+    Re(r'apes?',
+       reason=Reason.Offensive, info="ape"),
+    Re(r'arse(holes?|wipe|)',
        reason=Reason.Offensive, info="arse"),
     Re(r'autist(ic|)',
        reason=Reason.Offensive, info="autist"),
@@ -255,15 +259,15 @@ Lang.En: [
        reason=Reason.Offensive, info="dumb"),
     Re(r'(dumb|)ass',
        reason=Reason.Offensive, info="ass"),
-    Re(r'ass?(hole|fag)s?', 20,  # added "s?"
+    Re(r'ass?(hole|fag)s?', 20,
        reason=Reason.Offensive, info="asshole"),
     Re(r'aus?c?hwitz',
        reason=Reason.Offensive, info="auschwitz"),
-    Re(r'bastard?s?', 20,  # added "s?"
+    Re(r'bastard?s?', 20,
        reason=Reason.Offensive, ban=80, info="bastard"),
-    Re(r'be[ea]{1,20}ch(es|)', 5,  # '+'-->{1,20}  # added "(es|)"
+    Re(r'be[ea]{1,20}ch(es|)', 5,
        reason=Reason.Offensive, info="beach"),
-    Re(r'bit?ch(es|)', 20,  # added "(es|)"
+    Re(r'bit?ch(es|)', 20,
        reason=Reason.Offensive, info="bitch"),
     Re(r'blow(job|)',
        reason=Reason.Other, info="blow"),
@@ -273,69 +277,73 @@ Lang.En: [
        reason=Reason.Other, info="bollock"),
     Re(r'boner',
        reason=Reason.Other, info="boner"),
-    Re(r'boobs?',  # added "s?"
+    Re(r'boobs?',
        reason=Reason.Other, info="boob"),
-    Re(r'bozos?',  # added
+    Re(r'bozos?',
        reason=Reason.Other, info="bozo"),
-    Re(r'braindead',  # added
+    Re(r'braindead',
        reason=Reason.Offensive, info="braindead"),
-    Re(r'buggers?',  # added "s?"
+    Re(r'buggers?',
        reason=Reason.Offensive, info="bugger"),
     Re(r'buk?kake',
        reason=Reason.Other, info="bukkake"),
     Re(r'bull?shit',
        reason=Reason.Offensive, info="bullshit"),
     Re(r'ch(e{1,20}a?|i{1,20})tt?(ing?|ign|er{1,20}s?|e?d|s?)', exclude_tournaments=[TournType.Study],
-       reason=Reason.Shaming, info="cheater"),  # ea --> (e{1,20}a?|i{1,20}) added "s?", added "{1,20}"
+       reason=Reason.Shaming, info="cheater"),
     Re(r'chess(|-|_)bot(.?com)?', 50,
        reason=Reason.Spam, info="chess-bot.com"),
-    Re(r'chickens?', 5,  # added "s?"
+    Re(r'chickens?', 5,
        reason=Reason.Offensive, info="chicken"),
     Re(r'chink',
        reason=Reason.Offensive, info="chick"),
-    Re(r'clit(oris|ors?|)',  # added '|ors?'
+    Re(r'clit(oris|ors?|)',
        reason=Reason.Other, info="clitoris"),
-    Re(r'clowns?', 20,  # added "s?"
+    Re(r'clowns?', 20,
        reason=Reason.Offensive, info="clown"),
-    Re(r'cock(suc?k(ers?|ing?|ign|e?d)|)', 50,  # added "s?"
+    Re(r'cock(suc?k(ers?|ing?|ign|e?d)|)', 50,
        reason=Reason.Offensive, info="cocksucker"),
-    Re(r'condoms?',  # added "s?"
+    Re(r'condoms?',
        reason=Reason.Offensive, info="condom"),
-    Re(r'coons?', 15,  # added "s?"
+    Re(r'coons?', 15,
        reason=Reason.Offensive, info="coon"),
-    Re(r'coward?s?', 20,  # added "s?"
+    Re(r'coward?s?', 20,
        reason=Reason.Offensive, info="coward"),
+    Re(r'cripp?les?', 20,
+       reason=Reason.Offensive, info="cripple"),
     Re(r'cry(baby|ing|)',
        reason=Reason.Offensive, info="cry"),
-    Re(r'cunn?ilingus',  # added 's'
+    Re(r'cunn?ilingus',
        reason=Reason.Other, info="cunnilingus"),
-    Re(r'dic?k(head|face|suc?ker|)s?',  # added "s?"
+    Re(r'dic?k(head|face|suc?ker|)s?',
        reason=Reason.Offensive, info="dick"),
-    Re(r'dildos?',  # added "s?"
+    Re(r'dildos?',
        reason=Reason.Other, info="dildo"),
     Re(r'dogg?ystyle',
        reason=Reason.Other, info="doggystyle"),
     Re(r'douche(bag|)', 20,
        reason=Reason.Offensive, info="douchebag"),
-    Re(r'dykes?', 30,  # added "s?"
+    Re(r'downsie?', 40,
+       reason=Reason.Offensive, info="downsie"),
+    Re(r'dykes?', 30,
        reason=Reason.Offensive, info="dyke"),
     Re(r'engine', exclude_tournaments=[TournType.Study],
        reason=Reason.Shaming, info="engine"),
     Re(r'fck(er|r|u|k|t|ing?|ign|tard?|face|off?|e?d|)',
        reason=Reason.Offensive, info="fck"),
-    Re(r'f[oa]llow\s?(me|(4|for)\s?f[oa]llow)', 25,  # added
+    Re(r'f[oa]llow\s?(me|(4|for)\s?f[oa]llow)', 25,
        reason=Reason.Spam, info="follow"),
-    Re(r'fo{1,10}l{1,10}(s|e?d|ing?|ign|)',  # added
+    Re(r'fo{1,10}l{1,10}(s|e?d|ing?|ign|)',
        reason=Reason.Offensive, info="fool"),
     Re(r'foreskin',
        reason=Reason.Other, info="foreskin"),
     Re(r'gangbang',
        reason=Reason.Other, info="gangbang"),
-    Re(r'gaye?s?', 30,  # added "e?s?"
+    Re(r'gaye?s?', 30,
        reason=Reason.Offensive, info="gay"),
     Re(r'gobshite?',
        reason=Reason.Offensive, info="gobshite"),
-    Re(r'gooks?', 50,  # added "s?"
+    Re(r'gooks?', 50,
        reason=Reason.Offensive, info="gook"),
     Re(r'gypo', 15,
        reason=Reason.Offensive, info="gypo"),
@@ -343,9 +351,9 @@ Lang.En: [
        reason=Reason.Shaming, info="hacker"),
     Re(r'handjob',
        reason=Reason.Other, info="handjob"),
-    Re(r'hitler{1,20}', 20,  # '+'-->'{1,20}'
+    Re(r'hitler{1,20}', 20,
        reason=Reason.Offensive, info="hitler"),
-    Re(r'homm?o(sexual|)s?', 20,  # added "s?"
+    Re(r'homm?o(sexual|)s?', 20,
        reason=Reason.Offensive, info="homosexual"),
     Re(r'honkey',
        reason=Reason.Offensive, info="honkey"),
@@ -355,14 +363,16 @@ Lang.En: [
        reason=Reason.Other, info="horny"),
     Re(r'humping',
        reason=Reason.Other, info="humping"),
-    Re(r'idiota?s?', 30,  # corrected
+    Re(r'idiota?s?', 30,
        reason=Reason.Offensive, info="idiot"),
     Re(r'incest',
        reason=Reason.Other, info="incest"),
-    Re(r'jerks?', 20,  # added "s?"
+    Re(r'jerks?', 20,
        reason=Reason.Offensive, info="jerk"),
     Re(r'jizz?(um|)',
        reason=Reason.Other, info="jizz"),
+    Re(r'kill\s(you|u)',
+       reason=Reason.Offensive, info="kill you"),
     Re(r'labia',
        reason=Reason.Other, info="labia"),
     Re(r'lag{1,20}er{1,20}',
@@ -371,7 +381,7 @@ Lang.En: [
        reason=Reason.Offensive, info="lamer"),
     Re(r'lesbo', 30,
        reason=Reason.Offensive, info="lesbo"),
-    Re(r'lo{1,20}sers?', 30,  # '+'-->'{1,20}'  # added "s?"
+    Re(r'lo{1,20}sers?', 30,
        reason=Reason.Offensive, info="loser"),
     Re(r'masturbat(e|ion|ing?|ign|t?e?d)',
        reason=Reason.Other, info="masturbation"),
@@ -379,55 +389,57 @@ Lang.En: [
        reason=Reason.Other, info="milf"),
     Re(r'molest(er|)',
        reason=Reason.Offensive, info="molester"),
+    Re(r'mong',
+       reason=Reason.Offensive, info="mong"),
     Re(r'monkeys?',
        reason=Reason.Offensive, info="monkey"),
-    Re(r'morons?', 30,  # added "s?"
+    Re(r'morons?', 30,
        reason=Reason.Offensive, info="moron"),
-    Re(r'mother', 20,  # split
+    Re(r'mother', 20,
        reason=Reason.Offensive, info="motherfucker"),
-    Re(r'mother(fuc?k(ers?|))', 60,  # added "s?"
+    Re(r'mother(fuc?k(ers?|))', 60,
        reason=Reason.Offensive, info="motherfucker"),
-    Re(r'mthrfckrs?', 50,  # added "s?"
+    Re(r'mthrfckrs?', 50,
        reason=Reason.Offensive, info="mthrfckr"),
-    Re(r'naz(ie?|y)s?',  # added "(ie?|y)s?"
+    Re(r'naz(ie?|y)s?',
        reason=Reason.Offensive, info="nazi"),
     Re(r'niger', 40,
        reason=Reason.Offensive, info="niger"),
-    Re(r'n+i+g+(e+r+|a+|a+h+)s?', 80,  # added '+', '+'  # added "s?"
+    Re(r'n+i+g+(e+r+|a+|a+h+)s?', 80,
        ban=-2, reason=Reason.Offensive, info="nigger"),
     Re(r'nonce', 50,
        reason=Reason.Offensive, info="nonce"),
-    Re(r'no{2,25}bs?', 30,  # 'oo+'-->'o{1,25}'  # added "s?"
+    Re(r'no{2,25}bs?', 30,
        reason=Reason.Offensive, info="noob"),
     Re(r'nutsac?k',
        reason=Reason.Offensive, info="nutsack"),
     Re(r'p{1,10}a{1,10}i{1,10}r{1,10}\sme{1,10}', 5,
        reason=Reason.Spam, info="pair me"),
-    Re(r'pa?edo((f|ph)ile|)s?', 30,  # added "s?"
+    Re(r'pa?edo((f|ph)ile|)s?', 30,
        reason=Reason.Offensive, info="paedophile"),
     Re(r'paki', 30,
        reason=Reason.Offensive, info="paki"),
     Re(r'pathetic', 30,
        reason=Reason.Offensive, info="pathetic"),
-    Re(r'pa?ederasts?', 50,  # added "s?"
+    Re(r'pa?ederasts?', 50,
        ban=-2, reason=Reason.Offensive, info="pederast"),
     Re(r'penis',
        reason=Reason.Other, info="penis"),
-    Re(r'pigs?', 20,  # added "s?"
+    Re(r'pigs?', 20,
        reason=Reason.Offensive, info="pig"),
     Re(r'pimp',
        reason=Reason.Offensive, info="pimp"),
     Re(r'piss',
        reason=Reason.Offensive, info="piss"),
-    Re(r'poofs?', 30,  # added "s?"
+    Re(r'poofs?', 30,
        reason=Reason.Offensive, info="poof"),
     Re(r'poon',
        reason=Reason.Other, info="poon"),
-    Re(r'po{2,20}p(face|e?d|ing?|ign|)',  # 'oo+'-->'o{2,20}'
+    Re(r'po{2,20}p(face|e?d|ing?|ign|)',
        reason=Reason.Spam, info="poop"),
     Re(r'porn(hub|)',
        reason=Reason.Spam, info="porn"),
-    Re(r'pric?ks?',  # added "s?"
+    Re(r'pric?ks?',
        reason=Reason.Offensive, info="prick"),
     Re(r'prostitute', 15,
        reason=Reason.Offensive, info="prostitute"),
@@ -463,7 +475,7 @@ Lang.En: [
        reason=Reason.Other, info="scrotum"),
     Re(r'scumbag', 20,
        reason=Reason.Offensive, info="scumbag"),
-    Re(r'scum',  # split r'scum(bag|)'
+    Re(r'scum',
        reason=Reason.Offensive, info="scum"),
     Re(r'semen', 5,
        reason=Reason.Other, info="semen"),
@@ -473,35 +485,37 @@ Lang.En: [
        reason=Reason.Other, info="shag"),
     Re(r'shemale', 20,
        reason=Reason.Offensive, info="shemale"),
-    Re(r'shitt?(z|e|y|bag|ed|s|en|ing?|ign|)', 5,  # corrected
+    Re(r'shitt?(z|e|y|bag|ed|s|en|ing?|ign|)', 5,
        reason=Reason.Offensive, info="shit"),
-    Re(r'shat', 5,  # added
+    Re(r'shat', 5,
        reason=Reason.Other, info="shit"),
     Re(r'sissy', 20,
        reason=Reason.Offensive, info="sissy"),
-    Re(r'slags?', 20,  # added "s?"
+    Re(r'slags?', 20,
        reason=Reason.Offensive, info="slag"),
-    Re(r'slaves?',  # added '?'
+    Re(r'slaves?',
        reason=Reason.Offensive, info="slave"),
-    Re(r'sluts?', 20,  # added '?'
+    Re(r'sluts?', 20,
        reason=Reason.Offensive, info="slut"),
     Re(r'spastic', 15,
        reason=Reason.Offensive, info="spastic"),
-    Re(r'spaz{1,20}',  # added '{1,20}'
+    Re(r'spaz{1,20}',
        reason=Reason.Offensive, info="spaz"),
     Re(r'sperm', 30,
        reason=Reason.Other, info="sperm"),
-    Re(r'spick*', 20,  # added '*'
+    Re(r'spick*', 20,
        reason=Reason.Offensive, info="spick"),
     Re(r'spooge',
        reason=Reason.Other, info="spooge"),
     Re(r'spunk',
        reason=Reason.Other, info="spunk"),
-    Re(r'smurff?(er|ing?|ign|)s?', 30,  # added "s?"
+    Re(r'smurff?(er|ing?|ign|)s?', 30,
        reason=Reason.Shaming, info="smurf"),
     Re(r'stfu', 20,
        reason=Reason.Offensive, info="stfu"),
-    Re(r'stupids?',  # added "?"
+    Re(r'subhuman', 30,
+       reason=Reason.Offensive, info="subhuman"),
+    Re(r'stupids?',
        reason=Reason.Offensive, info="stupid"),
     Re(r'suicide\s(defen[sc]e|opening)', 0,
        reason=Reason.No, info="suicide defence"),
@@ -509,31 +523,31 @@ Lang.En: [
        reason=Reason.Offensive, info="suicide"),
     Re(r'suck m[ey]', 50,
        ban=-2, reason=Reason.Offensive, info="suck my"),
-    Re(r'suckers?', 50,
+    Re(r'suc?kers?', 50,
        reason=Reason.Offensive, info="sucker"),
     Re(r'terrorist',
        reason=Reason.Offensive, info="terrorist"),
     Re(r'tit(t?ies|ty|)(fuc?k|)',
        reason=Reason.Other, info="tit"),
-    Re(r'tossers?', 15,  # added "s?"
+    Re(r'tossers?', 15,
        reason=Reason.Offensive, info="tosser"),
-    Re(r'trann(y|ie)s?', 40,  # added "s?"
+    Re(r'trann(y|ie)s?', 40,
        reason=Reason.Offensive, info="tranny"),
     Re(r'trash',
        reason=Reason.Offensive, info="trash"),
     Re(r'turd',
        reason=Reason.Offensive, info="turd"),
-    Re(r'twats?', 20,  # added "s?"
+    Re(r'twats?', 20,
        reason=Reason.Offensive, info="twat"),
-    Re(r'vags?',  # added "s?"
+    Re(r'vags?',
        reason=Reason.Offensive, info="vag"),
     Re(r'vagin(a|al|)',
        reason=Reason.Other, info="vagina"),
-    Re(r'vibrators?',  # added "s?"
+    Re(r'vibrators?',
        reason=Reason.Other, info="vibrator"),
-    Re(r'vulvas?',  # added "s?"
+    Re(r'vulvas?',
        reason=Reason.Other, info="vulva"),
-    Re(r'w?hore?s?', 30,  # added "s?"
+    Re(r'w?hore?s?', 30,
        reason=Reason.Offensive, info="whore"),
     Re(r'wanc?k(er|)', 20,
        reason=Reason.Offensive, info="wanker"),
@@ -546,40 +560,40 @@ Lang.En: [
 ],
 Lang.Ru: [
     # Ru: suppress self-deprecating
-    Re(r"я\s(д[еи]бил|дурак|придурок|даун|лопух|лох|лошара|лузер|идиот|отморозок)", 2,  # added
+    Re(r"я\s(д[еи]бил|дурак|придурок|даун|лопух|лох|лошара|лузер|идиот|отморозок)", 2,
        reason=Reason.Spam, info="я дебил"),
     # Ru
-    Re(r'(|на|по|ни|до|недо)(х|к)у(й|ю|ям?|ем?|и|ев|ями?|ях|йня|йло|йла|йлу)', 40,  # added new elements
+    Re(r'(|на|по|ни|до|недо)(х|к)у(й|ю|ям?|ем?|и|ев|ями?|ях|йня|йло|йла|йлу)', 40,
        ban=-3, reason=Reason.Offensive, info="хуй"),
-    Re(r'(|от|на|об|по|у)хуяр(ить?|ю|ишь?|им|ите|ят)',  # added
+    Re(r'(|от|на|об|по|у)хуяр(ить?|ю|ишь?|им|ите|ят)',
        reason=Reason.Offensive, info="хуярить"),
-    Re(r'(|от)муд(охать|охал|охала|охали|аки?|акам|азвону?|ила)', 30,  # added '|ила'
+    Re(r'(|от)муд(охать|охал|охала|охали|аки?|акам|азвону?|ила)', 30,
        reason=Reason.Offensive, info="мудак"),
     Re(r'(|от|под?)cос(и|ать|ала?|)', 40,
        reason=Reason.Offensive, info="отсоси"),
-    Re(r'(|от|с)п[ие]зд(а|ы|е|у|ить?|ил?а?|или|ошить?|ошил?а?|ошили|охать|охала?|охали|юлить|юлил?а?|юлили|ярить?|ярила?|ярили|яхать|яхала?|яхали|ячить?|ячила?|ячили|якать|якала?|якали|ец|ецкий?|атый?)', 30,  # corrected
+    Re(r'(|от|с)п[ие]зд(а|ы|е|у|ить?|ил?а?|или|ошить?|ошил?а?|ошили|охать|охала?|охали|юлить|юлил?а?|юлили|ярить?|ярила?|ярили|яхать|яхала?|яхали|ячить?|ячила?|ячили|якать|якала?|якали|ец|ецкий?|атый?)', 30,
        reason=Reason.Offensive, info="пизда"),
-    Re(r'п[ие]зд[ао]бол(|а|ы|е|у|ом|ов|ав|ами?|ах)', 50,  # added
+    Re(r'п[ие]зд[ао]бол(|а|ы|е|у|ом|ов|ав|ами?|ах)', 50,
        reason=Reason.Offensive, info="пиздабол"),
-    Re(r'(|отъ?|вы|до|за|у|про|съ?)[её]ба(л|ла|ли|ло|лся|льник|ть|на|нул|нула|нулся|нулись?|нн?ый|нутый?|нутая|нутые)', 50,  # added '|нутый?|нутая|нутые', '(е|ё)'-->'[её]'
+    Re(r'(|отъ?|вы|до|за|у|про|съ?)[её]ба(л|ла|ли|ло|лся|льник|ть|на|нул|нула|нулся|нулись?|нн?ый|нутый?|нутая|нутые)', 50,
        reason=Reason.Offensive, info="заебал"),
-    Re(r'у?[её]бл(а|о|у|я|ю|е)', 40,  # added 'у?', '(е|ё)'-->'[её]', '|я|ю'
+    Re(r'у?[её]бл(а|о|у|я|ю|е)', 40,
        reason=Reason.Offensive, info="ёбля"),
-    Re(r'ебанат(|а|у|оми?|е|ы|ов|ав|ами?|ах)', 50,  # added
+    Re(r'ебанат(|а|у|оми?|е|ы|ов|ав|ами?|ах)', 50,
        reason=Reason.Offensive, info="ебанат"),
-    Re(r'у?ебл?ан(|чик|[ие][шщ])(|а|е|у|ами?|ы|ов|оми?|ах|и)', 50,  # added
+    Re(r'у?ебл?ан(|чик|[ие][шщ])(|а|е|у|ами?|ы|ов|оми?|ах|и)', 50,
        ban=-2, reason=Reason.Offensive, info="еблан"),
-    Re(r'([оа]сл[оа])?[её]б(ах?|е|ом?|у|ы|ов|ами?|)', 50,  # added 'у?', '(е|ё)'-->'[её]', etc.
+    Re(r'([оа]сл[оа])?[её]б(ах?|е|ом?|у|ы|ов|ами?|)', 50,
        ban=-2, reason=Reason.Offensive, info="ёб"),
-    Re(r'(|отъ?|вы|до|за|у|про)[её]б(нут|ан+)(ый?|ая|ые|ым|ого|ому?|ой|ую?|ых|ыми?|ых|учка|)', 50,  # added
+    Re(r'(|отъ?|вы|до|за|у|про)[её]б(нут|ан+)(ый?|ая|ые|ым|ого|ому?|ой|ую?|ых|ыми?|ых|учка|)', 50,
        ban=-3, reason=Reason.Offensive, info="ёбнутый"),
-    Re(r'(|от(|ъ|ь)|вы|до|за|у|про|с(|ъ|ь))(е|ё)б(аш)?(ут?|и|ите?|ишь?|им|ым|ыте?|ышь?|ать?|[её]шь?|[её]т|[её]м|[её]те)(|с(|ь|ъ))', 40,  # added
+    Re(r'(|от(|ъ|ь)|вы|до|за|у|про|с(|ъ|ь))(е|ё)б(аш)?(ут?|и|ите?|ишь?|им|ым|ыте?|ышь?|ать?|[её]шь?|[её]т|[её]м|[её]те)(|с(|ь|ъ))', 40,
        ban=-3, reason=Reason.Offensive, info="отъеби"),
     Re(r'(|за|отъ?|у|съ?)ебись',
        reason=Reason.Offensive, info="заебись"),
-    Re(r'ебуч(ий?|ая|ие|им|его|ему|ей|ую?|их|ими?|их|)', 50,  # added
+    Re(r'ебуч(ий?|ая|ие|им|его|ему|ей|ую?|их|ими?|их|)', 50,
        ban=-3, reason=Reason.Offensive, info="ебучий"),
-    Re(r'(|на|вы)[её]бнуть?ся',  # added (...|ё), '(е|ё)'-->'[её]'
+    Re(r'(|на|вы)[её]бнуть?ся',
        reason=Reason.Offensive, info="ебнуться"),
     Re(r'blyat',
        ban=-3, reason=Reason.Other, info="blyat"),
@@ -589,63 +603,63 @@ Lang.Ru: [
        reason=Reason.Other, info="анус"),
     Re(r'бля',
        reason=Reason.Other, info="бля"),
-    Re(r'(вы|)бля(дь|ди|де|динам?|дине|дство|ть|док)', 30,  # split r'бля(|дь|ди|де|динам?|дине|дство|ть|док)' and '(вы|)'
+    Re(r'(вы|)бля(дь|ди|де|динам?|дине|дство|ть|док)', 30,
        ban=-2, reason=Reason.Offensive, info="блядь"),
     Re(r'вы[её]бывае?(ть?ся|тесь)',
        reason=Reason.Offensive, info="выёбываться"),
-    Re(r'вступ(ай|айте|ить|аем|ете?)',  # added
+    Re(r'вступ(ай|айте|ить|аем|ете?)',
        reason=Reason.Spam, info="вступайте"),
     Re(r'г[ао]ндон(|у|ам?|ы|ов)', 50,
        ban=-2, reason=Reason.Offensive, info="гандон"),
-    Re(r'ген[оа]ц[иы]д(|а|е|у|ом)', 20,  # added
+    Re(r'ген[оа]ц[иы]д(|а|е|у|ом)', 20,
        reason=Reason.Other, info="геноцид"),
     Re(r'гнид(|ам?|е|у|ы)', 50,
        ban=-2, reason=Reason.Offensive, info="гнида"),
-    Re(r'г[оа]вн[оа]ед(|ам?|е|у|ом|ов|ами|ах|ы)', 50,  # added
+    Re(r'г[оа]вн[оа]ед(|ам?|е|у|ом|ов|ами|ах|ы)', 50,
        ban=-3, reason=Reason.Offensive, info="говноед"),
-    Re(r'г[оа]внюк(|ам?|е|у|ом|ов|ами|ах|и)', 50,  # added
+    Re(r'г[оа]внюк(|ам?|е|у|ом|ов|ами|ах|и)', 50,
        ban=-3, reason=Reason.Offensive, info="говнюк"),
-    Re(r'г[оа]вн(а|е|у|ом?)', 30,  # added
+    Re(r'г[оа]вн(а|е|у|ом?)', 30,
        reason=Reason.Offensive, info="говно"),
-    Re(r'д[ао]лб[ао][её]б(ам?|у|е|ом|ы|ов|ами?|ах|)', 50,  # corrected
+    Re(r'д[ао]лб[ао][её]б(ам?|у|е|ом|ы|ов|ами?|ах|)', 50,
        ban=-2, reason=Reason.Offensive, info="долбоёб"),
     Re(r'даун(|у|ам?|ы|ов)', 30,
        reason=Reason.Offensive, info="даун"),
     Re(r'д[еи]бил(|ам?|ы|у|ов)', 30,
        reason=Reason.Offensive, info="дебил"),
-    Re(r'дерьм(а|о|е|вый|вая|вое)',  # added '|е'
+    Re(r'дерьм(а|о|е|вый|вая|вое)',
        reason=Reason.Offensive, info="дерьмо"),
-    Re(r'задрот(ах?|у|ом|е|ы|ов|ами?|)', 30,  # added
+    Re(r'задрот(ах?|у|ом|е|ы|ов|ами?|)', 30,
        reason=Reason.Offensive, info="задрот"),
-    Re(r'залуп(а|ы|у|е|ой|и|ы|ами?|ах|)', 30,  # added
+    Re(r'залуп(а|ы|у|е|ой|и|ы|ами?|ах|)', 30,
        reason=Reason.Other, info="залупа"),
     Re(r'идиот(|ам?|ы|у|ов)', 20,
        reason=Reason.Offensive, info="идиот"),
     Re(r'йух', 40,
        reason=Reason.Offensive, info="хуй"),
-    Re(r'к[ао]з(|е|ё)л(ам?|у|ы|ина)',  # added '|ина'
+    Re(r'к[ао]з(|е|ё)л(ам?|у|ы|ина)',
        reason=Reason.Offensive, info="козёл"),
     Re(r'лопух', 15,
        reason=Reason.Offensive, info="лопух"),
-    Re(r'лох(|у|и|ам?|ушка)', 20,  # added '|ушка'
+    Re(r'лох(|у|и|ам?|ушка)', 20,
        reason=Reason.Offensive, info="лох"),
     Re(r'лошар(|ам?|е|у|ы)', 20,
        reason=Reason.Offensive, info="лошара"),
     Re(r'лузер(|ам?|у|ов|ы)', 30,
        reason=Reason.Offensive, info="лузер"),
-    Re(r'мраз(ью?|и|ей?|ями|ях)', 50,  # added
+    Re(r'мраз(ью?|и|ей?|ями|ях)', 50,
        reason=Reason.Offensive, info="мразь"),
-    Re(r'нац[иы]с[тц]с?(а?|у|ом|е|ы|ов|ами?|ах|кий|кого|кому|кими|ком|кие?|ких|кими?|ких)', 50,  # added
+    Re(r'нац[иы]с[тц]с?(а?|у|ом|е|ы|ов|ами?|ах|кий|кого|кому|кими|ком|кие?|ких|кими?|ких)', 50,
        reason=Reason.Offensive, info="нацист"),
-    Re(r'нац[иы]к(а?|у|ом|е|и|ов|ами?|ах)', 50,  # added
+    Re(r'нац[иы]к(а?|у|ом|е|и|ов|ами?|ах)', 50,
        reason=Reason.Offensive, info="нацик"),
     Re(r'[оа]хуе(|л|ла|ли|ть|нн?о)', 20,
        ban=-3, reason=Reason.Offensive, info="охуел"),
-    Re(r'отморозок', 20,  # added
+    Re(r'отморозок', 20,
        reason=Reason.Other, info="отморозок"),
-    Re(r'педераст(|ы|ры?)', 50,  # 'ы?'-->'(|ы|ры?)'
+    Re(r'педераст(|ы|ры?)', 50,
        ban=-2, reason=Reason.Offensive, info="педераст"),
-    Re(r'пид(о|а)р(а|ы|у|ам|асы?|асам?|ов|)', 50,  # added '|'
+    Re(r'пид(о|а)р(а|ы|у|ам|асы?|асам?|ов|)', 50,
        ban=-2, reason=Reason.Offensive, info="пидор"),
     Re(r'пидр', 50,
        reason=Reason.Offensive, info="пидр"),
@@ -653,23 +667,23 @@ Lang.Ru: [
        reason=Reason.Offensive, info="поебень"),
     Re(r'придур(ок|кам?|ков|ки)', 25,
        reason=Reason.Offensive, info="придурок"),
-    Re(r'[сc][уy][кk](а|a|ин?ы?|е|у|ам)', 40,  # added 'н?ы?'
+    Re(r'[сc][уy][кk](а|a|ин?ы?|е|у|ам)', 40,
        ban=-3, reason=Reason.Offensive, info="сука"),
-    Re(r'(с|з|по)дох(ни|ните?|нишь?|нут|)', 60,  # added
+    Re(r'(с|з|по)дох(ни|ните?|нишь?|нут|)', 60,
        ban=-3, reason=Reason.Offensive, info="сдохни"),
-    Re(r'(у|по)мр(и|ите?|ешь?|ёшь?|ут|ете?|ёте?)', 40,  # added
+    Re(r'(у|по)мр(и|ите?|ешь?|ёшь?|ут|ете?|ёте?)', 40,
        reason=Reason.Offensive, info="умри"),
-    Re(r'смерт(ь|и|ью|ей|ями?|ях)', 30,  # added
+    Re(r'смерт(ь|и|ью|ей|ями?|ях)', 30,
        reason=Reason.Offensive, info="смерть"),
-    Re(r'сос(и|ите|унок|унку|унке|унков|унками?|унках|унка)', 40,  # added
+    Re(r'сос(и|ите|унок|унку|унке|унков|унками?|унках|унка)', 40,
        reason=Reason.Offensive, info="соси"),
-    Re(r'сперм(а|у|ой|е)', 30,  # added
+    Re(r'сперм(а|у|ой|е)', 30,
        reason=Reason.Other, info="сперма"),
-    Re(r'сперм[оа]глот(|а|у|ом|е|ы|ов|ами?|ах|ка|ке|ки|ку|кой)', 50,  # added
+    Re(r'сперм[оа]глот(|а|у|ом|е|ы|ов|ами?|ах|ка|ке|ки|ку|кой)', 50,
        reason=Reason.Offensive, info="спермоглот"),
-    Re(r'сц?ыкун(ы|у|ам?|ом|е|ов|ами|ах|)', 40,  # added
+    Re(r'сц?ыкун(ы|у|ам?|ом|е|ов|ами|ах|)', 40,
        reason=Reason.Offensive, info="сыкун"),
-    Re(r'сц[ыи]клив(ая?|ой?|ую|ый|ого|[оа]му|ом|ые|ых|ым?и?|ых|ое|)', 40,  # added
+    Re(r'сц[ыи]клив(ая?|ой?|ую|ый|ого|[оа]му|ом|ые|ых|ым?и?|ых|ое|)', 40,
        reason=Reason.Offensive, info="сцыкливый"),
     Re(r'твар(ь|и|е|ина|ине|ину|ины)', 50,
        ban=-3, reason=Reason.Offensive, info="тварь"),
@@ -679,41 +693,41 @@ Lang.Ru: [
        ban=-2, reason=Reason.Offensive, info="ублюдок"),
     Re(r'у(ё|е)бищ(е|а|ам|у)', 80,
        ban=-2, reason=Reason.Offensive, info="уёбище"),
-    Re(r'урод(е|а|ами?|у|оми?|ы|ов|ах|)', 40,  #added
+    Re(r'урод(е|а|ами?|у|оми?|ы|ов|ах|)', 40,
        reason=Reason.Offensive, info="урод"),
-    Re(r'вырод(ок|ка|ку|коми?|ке|ки|ков|ками?|ках)', 40,  #added
+    Re(r'вырод(ок|ка|ку|коми?|ке|ки|ков|ками?|ках)', 40,
        reason=Reason.Offensive, info="выродок"),
-    Re(r'у(ё|е)б(ок|ка|ку|ком|ке|ки|ков|ками?|ках)', 60,  #added
+    Re(r'у(ё|е)б(ок|ка|ку|ком|ке|ки|ков|ками?|ках)', 60,
        ban=-2, reason=Reason.Offensive, info="уёбок"),
-    Re(r'фаш[иы]с[тц]с?(а?|у|ом|е|ы|ов|ами?|ах|кий|кого|кому|кими|ком|кие?|ких|кими?|ких)', 50,  # added
+    Re(r'фаш[иы]с[тц]с?(а?|у|ом|е|ы|ов|ами?|ах|кий|кого|кому|кими|ком|кие?|ких|кими?|ких)', 50,
        reason=Reason.Offensive, info="фашист"),
-    Re(r'хак{1,2}ер(|а|у|ом|е|ы|ов|ами?|ах)', 20,  #added
+    Re(r'хак{1,2}ер(|а|у|ом|е|ы|ов|ами?|ах)', 20,
        reason=Reason.Shaming, info="хакер"),
-    Re(r'хохл[яа]нди(я|и|ю|е|ей)', 50,  # added
+    Re(r'хохл[яа]нди(я|и|ю|е|ей)', 50,
        reason=Reason.Offensive, info="хохляндия"),
-    Re(r'хох(ол|лу|ла|лом|ле|лы|лов|лами?|лах)', 40,  # added
+    Re(r'хох(ол|лу|ла|лом|ле|лы|лов|лами?|лах)', 40,
        reason=Reason.Offensive, info="хохол"),
-    Re(r'\bхохл[ао]', 40, is_separate_word=False,  # added
+    Re(r'\bхохл[ао]', 40, is_separate_word=False,
        reason=Reason.Offensive, info="хохол"),
-    Re(r'ху[её]во',  # '(е|ё)'-->'[её]' split r'ху[её](во|сос)'
+    Re(r'ху[её]во',
        reason=Reason.Other, info="хуесос"),
-    Re(r'хуесос(ы?|ина)', 50,  # added (ы?|ина)
+    Re(r'хуесос(ы?|ина)', 50,
        ban=-2, reason=Reason.Offensive, info="хуесос"),
     Re(r'ху[еи]т(а|е|ы)',
        reason=Reason.Offensive, info="хуета"),
-    Re(r'читак(|и|ам?|у|ов)',  # added '|'
+    Re(r'читак(|и|ам?|у|ов)',
        reason=Reason.Shaming, info="читак"),
     Re(r'читер(|ила?|ить?|ишь?|ша|ы|ам?|у|ов)',
        reason=Reason.Shaming, info="читер"),
     Re(r'ч[её]рн[оа]жоп(ый?|ого|ому|ыми?|ая|ой|ую|ые|ых|)', 80,
        reason=Reason.Offensive, info="чёрножопый"),
-    Re(r'член[оа]сос(|а|у|ом|е|ы|ов|ами?|ах|ка|ке|ки|ку|кой)', 50,  # added
+    Re(r'член[оа]сос(|а|у|ом|е|ы|ов|ами?|ах|ка|ке|ки|ку|кой)', 50,
        ban=-2, reason=Reason.Offensive, info="членосос"),
-    Re(r'чмо(|шник|тнутый|тнутая|тнутые)', 50,  # added '|тнутый|тнутая|тнутые'
+    Re(r'чмо(|шник|тнутый|тнутая|тнутые)', 50,
        ban=-2, reason=Reason.Offensive, info="чмо"),
-    Re(r'ч[ую]р(ках?|ки|ке|ку|кой|ок|ками?)', 50,  # added
+    Re(r'ч[ую]р(ках?|ки|ке|ку|кой|ок|ками?)', 50,
        reason=Reason.Offensive, info="чурка"),
-    Re(r'шмар(|ам?|е|ы)', 30,  # added '|'
+    Re(r'шмар(|ам?|е|ы)', 30,
        reason=Reason.Offensive, info="шмара"),
     Re(r'шлюх(|ам?|е|и)', 30,
        reason=Reason.Offensive, info="шлюха"),
@@ -751,12 +765,16 @@ Lang.De: [
         reason=Reason.Offensive, info="dumbass"),
     Re(r'trottel',
         reason=Reason.Offensive, info="trottel"),
+    Re(r'uebok', 50,
+        reason=Reason.Offensive, info="уёбок"),
     Re(r'wichser',
         reason=Reason.Offensive, info="wichser"),
 ],
 Lang.Es: [
     Re(r'cabr[oó]na?',
         reason=Reason.Offensive, info="cabróna"),
+    Re(r'cag[oó]na?',
+        reason=Reason.Offensive, info="cagón"),
     Re(r'ching(ue|a)',
         reason=Reason.Offensive, info="chingue"),
     Re(r'chupame',
@@ -769,10 +787,16 @@ Lang.Es: [
         reason=Reason.Offensive, info="imbecil"),
     Re(r'madre',
         reason=Reason.Offensive, info="madre"),
-    Re(r'maric[oó]n',
+    Re(r'maric[oó]na?',
         reason=Reason.Offensive, info="maricón"),
+    Re(r'maric[ao]',
+        reason=Reason.Offensive, info="faggot"),
     Re(r'mierda',
         reason=Reason.Offensive, info="mierda"),
+    Re(r'moduler[ao]',
+        reason=Reason.Offensive, info="modulero"),
+    Re(r'payas[ao]',
+        reason=Reason.Offensive, info="clown"),
     Re(r'pendejo',
         reason=Reason.Offensive, info="pendejo"),
     Re(r'put[ao]',
@@ -811,9 +835,9 @@ Lang.It: [
         reason=Reason.Offensive, info="sparati"),
 ],
 Lang.Hi: [
-    Re(r'(madar|be?hen|beti)chod', 60,
+    Re(r'(mada?r|mother|be?hen|beti)chod', 60,
         reason=Reason.Offensive, info="motherfucker"),
-    Re(r'chutiya', 50,
+    Re(r'chut(iy[ae]|)', 50,
         reason=Reason.Offensive, info="fucker/bastard"),
     Re(r'chut',
         reason=Reason.Other, info="pussy"),
@@ -829,7 +853,7 @@ Lang.Hi: [
         reason=Reason.Offensive, info="ass"),
     Re(r'gaand\smardunga', 60,
         reason=Reason.Offensive, info="I'll fuck your ass"),
-    Re(r'gaa?ndu', 40,
+    Re(r'gaa?ndu?', 40,
         reason=Reason.Offensive, info="asshole"),
     Re(r'hijra',
         reason=Reason.Offensive, info="transgender"),
@@ -843,7 +867,9 @@ Lang.Hi: [
         reason=Reason.Offensive, info="meaning: different sexual/obscene connotations"),
 ],
 Lang.Fr: [
-    Re(r'connard',
+    Re(r'batard',
+        reason=Reason.Offensive, info="bastard"),
+    Re(r'conn?ard?',
         reason=Reason.Offensive, info="asshole"),
     Re(r'fdp',
         reason=Reason.Offensive, info="son of a bitch"),
@@ -898,7 +924,7 @@ Lang.Spam: [
        reason=Reason.Spam, info="[broadcast] blunder"),
     Re(r'^d+r+a+w+$', 60, exclude_tournaments=[TournType.Arena, TournType.Swiss],
        reason=Reason.Spam, info="[broadcast] draw"),
-    # Re(r"bl[ue]+nder+", 20,  # added
+    # Re(r"bl[ue]+nder+", 20,
     #    reason=Reason.Spam, info="blunder"),
     # Website links
     Re(r'https?:\/\/(www\.)?lichess\.org\/@\/blog\/', 40,

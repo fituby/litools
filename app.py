@@ -289,6 +289,10 @@ def chat_set_tournament_group(group, checked):
 
 @app.route('/chat/set_tournament_group/<group>', methods=['POST'])
 def chat_flip_tournament_group(group):
+    try:
+        get_mod(request.cookies, update_seenAt=True)  # can be omitted
+    except:
+        return Response(status=400)
     resp = make_response(chat.set_tournament_group(group, None))
     return resp
 

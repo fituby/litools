@@ -16,7 +16,6 @@ from api import ApiType
 from consts import *
 
 
-config_file = "config.yml"
 log_file: str = None
 db_file = ""
 host = "127.0.0.1"
@@ -108,7 +107,7 @@ def load_config():
     global log_file, db_file, host, port, num_threads, uri, embed_lichess
     if log_file is None:
         try:
-            with open(os.path.abspath(f"./{config_file}")) as stream:
+            with open(os.path.abspath(f"./{CONFIG_FILE}")) as stream:
                 config = yaml.safe_load(stream)
                 log_file = config.get('log', "")
                 db_file = config.get('db', "")
@@ -118,17 +117,17 @@ def load_config():
                 uri = config.get('url', "")
                 embed_lichess = config.get('embed_lichess', False)
         except Exception as e:
-            print(f"There appears to be a syntax problem with {config_file}: {e}")
+            print(f"There appears to be a syntax problem with {CONFIG_FILE}: {e}")
             log_file = ""
 
 
 def get_token():
     try:
-        with open(os.path.abspath(f"./{config_file}")) as stream:
+        with open(os.path.abspath(f"./{CONFIG_FILE}")) as stream:
             config = yaml.safe_load(stream)
             token = config.get('token', "")
     except Exception as e:
-        log(f"There appears to be a syntax problem with {config_file}: {e}", to_print=True, to_save=True)
+        log(f"There appears to be a syntax problem with {CONFIG_FILE}: {e}", to_print=True, to_save=True)
         token = ""
     return token
 
@@ -891,6 +890,7 @@ def log_exception(exception, to_print=True, to_save=True):
         traceback.print_exception(type(exception), exception, exception.__traceback__)
     text = f"EXCEPTION: {exception}"
     log(text, to_print=False, to_save=to_save)
+
 
 def get_user_link(username, no_name="Unknown User", class_a="text-info", max_len=10):
     if username:

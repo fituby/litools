@@ -91,12 +91,13 @@ class Mod:
 
     def status_info(self):
         if not self.id or not self.name:
-            return f'<p class="mb-2">You\'re logged in as an anonymous.</p>{Mod.login_button}'
+            return f'<p class="mb-2">You\'re logged in as an anonymous</p>{Mod.login_button}'
         try:
-            name = f'<p class="mb-2">You\'re logged in as <a href="https://lichess.org/@/{self.id}" target="_blank">' \
-                   f'{self.name}</a>.</p>'
-            logout = f'<a href="/logout" class="btn btn-lg btn-primary mb-2">Log out</a>' if self.current_session else ""
-            return f'{name}{logout}'
+            name = f'<p class="ml-2 mb-2">You\'re logged in as <a href="https://lichess.org/@/{self.id}" ' \
+                   f'target="_blank">{self.name}</a></p>'
+            logout = f'<a href="/logout" class="btn btn-lg btn-primary ml-3 mb-2">Log out</a>' \
+                if self.current_session else ""
+            return f'<div class="row align-items-baseline">{logout}{name}</div>'
         except Exception as exception:
             log_exception(exception)
             return f'<div class="col my-2"><h2 class="text-danger text-center">Error</h2>' \
@@ -130,9 +131,9 @@ class Mod:
                     is_revoke = True
                 row = f'{row}</tr>'
                 rows.append(row)
-            revoke_info = f'<p><small>* If you revoke tokens, they will become invalid for use on this website, ' \
-                          f'but will not be deleted from Lichess.<br>To remove them from Lichess, you have to log out ' \
-                          f'after logging in with the token you want to remove.<br>Alternatively, you can delete them ' \
+            revoke_info = f'<p><small>* If you revoke tokens, they will become invalid for use on this website, but will ' \
+                          f'not be deleted from Lichess.<br>To remove them from Lichess, you have to <b>log out</b> after ' \
+                          f'logging in with the token you want to remove.<br>Alternatively, you can delete them ' \
                           f'<a href="https://lichess.org/account/security" target="_blank">directly on lichess</a>.' \
                           f'</small></p>' if is_revoke else ""
             table = f'<table id="table-sessions" ' \
@@ -147,6 +148,9 @@ class Mod:
             log_exception(exception)
             return f'<div class="col my-2"><h2 class="text-danger text-center">Error</h2>' \
                    f'<h4>Failed to load sessions info: {exception}</h4></div>{Mod.login_button}'
+
+    def session_id(self):
+        return self.current_session[:8].replace("-", "&") if self.current_session else "-"
 
     def get_bar(self):
         if not self.name:

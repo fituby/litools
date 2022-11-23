@@ -1,4 +1,4 @@
-token: ""         # <-- "" if it's not a server, otherwise put your web:mod-enabled API token here, like:    token: "liSOMELETTERSnNUMBERSHERE"
+token: ""                                 # <-- "" if it's a server, otherwise (not in a production deployment!) put your web:mod-enabled API token here, like:    token: "liSOMELETTERSnNUMBERSHERE"
 host: "127.0.0.1"                         # <-- host, which is used here: http://127.0.0.1:5000/chat
 port: 5000                                # <-- port, which is used here: http://127.0.0.1:5000/chat
 num_threads: 2                            # <-- the number of threads used by waitress

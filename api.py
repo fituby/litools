@@ -4,8 +4,14 @@ from collections import defaultdict
 import time
 from datetime import datetime
 from dateutil import tz
+import yaml
+import traceback
+import os
 from threading import Lock
-from consts import API_TOURNEY_PAGE_DELAY
+from consts import API_TOURNEY_PAGE_DELAY, CONFIG_FILE
+
+
+log_file: str = None
 
 
 class Endpoint:
@@ -30,8 +36,6 @@ class ApiType:
     ApiSwiss = Endpoint('api/swiss')
     ApiTournament = Endpoint('api/tournament')
     TournamentId = Endpoint('tournament', API_TOURNEY_PAGE_DELAY)
-    #SwissId = Endpoint('swiss')
-    #BroadcastId = Endpoint('broadcast')
     PlayerTop = Endpoint('player/top')
     # Get ndjson
     ApiGamesUser = Endpoint('api/games/user')
@@ -99,31 +103,46 @@ class Api:
         with api.lock:
             headers = self.prepare(api, url, token, "GET", **kwargs)
             kwargs.pop('headers', None)
-            r = requests.get(url, headers=headers, **kwargs)
+            try:
+                r = requests.get(url, headers=headers, **kwargs)
+            except requests.exceptions.ChunkedEncodingError as exception:
+                log_exception(exception, to_print=False)
+                time.sleep(6)
+                raise exception
             if r.status_code == 429:
-                print(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
+                log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
                 time.sleep(60)
-        return r
+            return r
 
     def post(self, api: Endpoint, url, token=None, **kwargs):
         with api.lock:
             headers = self.prepare(api, url, token, "POST", **kwargs)
             kwargs.pop('headers', None)
-            r = requests.post(url, headers=headers, **kwargs)
+            try:
+                r = requests.post(url, headers=headers, **kwargs)
+            except requests.exceptions.ChunkedEncodingError as exception:
+                log_exception(exception, to_print=False)
+                time.sleep(6)
+                raise exception
             if r.status_code == 429:
-                print(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
+                log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
                 time.sleep(60)
-        return r
+            return r
 
     def delete(self, api: Endpoint, url, token=None, **kwargs):
         with api.lock:
             headers = self.prepare(api, url, token, "DELETE", **kwargs)
             kwargs.pop('headers', None)
-            r = requests.delete(url, headers=headers, **kwargs)
+            try:
+                r = requests.delete(url, headers=headers, **kwargs)
+            except requests.exceptions.ChunkedEncodingError as exception:
+                log_exception(exception, to_print=False)
+                time.sleep(6)
+                raise exception
             if r.status_code == 429:
-                print(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
+                log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
                 time.sleep(60)
-        return r
+            return r
 
     def get_ndjson(self, api, url, token, Accept="application/x-ndjson"):
         if Api.verbose:
@@ -133,10 +152,15 @@ class Api:
             headers = {'Accept': Accept,
                        'Authorization': f"Bearer {token}"}
             with Api.ndjson_lock:
-                r = requests.get(url, allow_redirects=True, headers=headers)
+                try:
+                    r = requests.get(url, allow_redirects=True, headers=headers)
+                except requests.exceptions.ChunkedEncodingError as exception:
+                    log_exception(exception, to_print=False)
+                    time.sleep(6)
+                    raise exception
                 if r.status_code == 429:
                     if Api.verbose:
-                        print(f"ERROR: Status 429: waiting 60s... {datetime.now():%H:%M:%S.%f} {url}")
+                        log(f"ERROR: Status 429: waiting 60s... {datetime.now():%H:%M:%S.%f} {url}")
                     time.sleep(60)
         if Api.verbose >= 2:
             print(f"finish {datetime.now(tz=tz.tzutc()):%H:%M:%S.%f}: {url}")
@@ -152,3 +176,33 @@ class Api:
         lines = content.split("\n")[:-1]
         data = [json.loads(line) for line in lines]
         return data
+
+
+def log(text, to_print=False, to_save=True):
+    global log_file
+    if log_file is None:
+        try:
+            with open(os.path.abspath(f"./{CONFIG_FILE}")) as stream:
+                config = yaml.safe_load(stream)
+                log_file = config.get('log', "")
+        except:
+            log_file = ""
+    now_utc = datetime.now(tz=tz.tzutc())
+    line = f"{now_utc: %Y-%m-%d %H:%M:%S} UTC: {text}"
+    if to_print:
+        print(line)
+    if not log_file or not to_save:
+        return
+    try:
+        with open(log_file, "a", encoding="utf-8") as file:
+            file.write(f"{line}\n")
+    except Exception as exception:
+        traceback.print_exception(type(exception), exception, exception.__traceback__)
+        log_file = ""
+
+
+def log_exception(exception, to_print=True, to_save=True):
+    if to_print:
+        traceback.print_exception(type(exception), exception, exception.__traceback__)
+    text = f"EXCEPTION: {exception}"
+    log(text, to_print=False, to_save=to_save)

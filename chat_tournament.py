@@ -171,8 +171,6 @@ class Tournament:
             delay = None if self.last_update is None else deltaseconds(now_utc, self.last_update)
             with msg_lock:
                 new_messages, deleted_messages = self.process_messages(r.text, now_utc, delay)
-            #self.process_usernames(r.text)  # doesn't work with token
-            self.reports = self.get_info(now_utc)
             self.last_update = now_utc
         except Exception as exception:
             log_exception(exception)
@@ -246,7 +244,7 @@ class Tournament:
         for d in data:
             self.user_names.add(d['name'])
 
-    def analyse(self):
+    def analyse(self, now_utc):
         self.max_score = 0
         self.total_score = 0
         to_timeout = {}
@@ -263,7 +261,15 @@ class Tournament:
                 if not msg.is_hidden():
                     if msg.best_ban_reason() != Reason.No:
                         add_timeout_msg(to_timeout, msg)
+        #self.process_usernames(r.text)  # doesn't work with token
+        self.reports = self.get_info(now_utc)
         return to_timeout
+
+    def has_sus_messages(self):
+        for msg in self.messages:
+            if msg.score and not msg.is_hidden():
+                return True
+        return False
 
     def get_link(self, short=True):
         name = shorten(self.name, MAX_LEN_TOURNEY_NAME_SHORT if short else MAX_LEN_TOURNEY_NAME_LONG)
@@ -368,6 +374,7 @@ class Tournament:
                 score_int = int(score_int * coef / coef_decrease)
             combined_text = " ".join([m.text for m in real_msgs])
             combined_msg = Message({'u': user_name, 't': combined_text}, real_msgs[-1].tournament, real_msgs[-1].time)
+            combined_msg.id = -msgs_id  # for recommended_timeouts
             max_score = max([(0 if m.score is None else m.score) for m in real_msgs])
             combined_msg.evaluate(self.re_usernames)
             best_ban_reason = combined_msg.best_ban_reason()
@@ -444,9 +451,8 @@ class Tournament:
                      f'{header_1}{header_2}</div>'
             msgs_info = [HR if m is None else m.get_info(tag, show_hidden=True, add_user=False, rename_dismiss="Exclude",
                                                          add_reason=Reason.Spam) for m in msgs]
-            info = f'<div id="mmsg{tag}{msgs_id}" data-mscore={score_int} data-langs={combined_msg.languages} ' \
-                   f'class="col rounded m-1 px-0 pb-1" style="background-color:rgba(128,128,128,0.2);min-width:350px;">' \
-                   f'{header}{"".join(msgs_info)}</div>'
+            info = f'<div id="mmsg{tag}{msgs_id}" data-mscore={score_int} class="col rounded m-1 px-0 pb-1" ' \
+                   f'style="background-color:rgba(128,128,128,0.2);min-width:350px;">{header}{"".join(msgs_info)}</div>'
             output.append((score_int, info))
             multi_messages[msgs_id] = [m for m in real_msgs]
 

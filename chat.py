@@ -156,7 +156,7 @@ class ChatAnalysis:
             self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in chat.run")
         self.update_count += 1
         self.state_reports += 1
-        self.get_all(non_mod)
+        self.prepare_reports()
         self.get_tournaments()
 
     def update_chat(self, tourn_id, non_mod, auto_mod=None, now_utc=None):
@@ -167,8 +167,7 @@ class ChatAnalysis:
             tourn.is_just_added = False
         new_messages, deleted_messages = tourn.download(self.msg_lock, now_utc, non_mod)
         with self.msg_lock:
-            if not new_messages and tourn.is_error_404_too_long(now_utc) \
-                    and not [msg for msg in tourn.messages if msg.score and not msg.is_hidden()]:
+            if not new_messages and tourn.is_error_404_too_long(now_utc) and not tourn.has_sus_messages():
                 del self.tournaments[tourn_id]
                 return
             self.tournament_messages.update({msg.id: tourn_id for msg in new_messages})
@@ -176,7 +175,7 @@ class ChatAnalysis:
             for del_msg in deleted_messages:
                 del self.tournament_messages[del_msg.id]
                 del self.all_messages[del_msg.id]
-            to_timeout_i = tourn.analyse()
+            to_timeout_i = tourn.analyse(now_utc)
             for m in to_timeout_i.values():
                 add_timeout_msg(self.to_timeout, m)
             # Process multiline messages and do timeouts
@@ -297,12 +296,13 @@ class ChatAnalysis:
                                f"<u>RoomId</u>: {msg.tournament.id} <u>Channel</u>: {chan} <u>Text</u>: {text}", False)
         else:
             if msg.id not in self.recommended_timeouts:
-                print(f"Recommended to time out: {data}")
+                #print(f"Recommended to time out #{msg.id}/{len(self.recommended_timeouts)}: {data}")
                 now = datetime.now()
                 max_time = timedelta(minutes=int(1.5 * CHAT_TOURNAMENT_FINISHED_AGO))
                 self.recommended_timeouts[msg.id] = now
                 for msg_id in list(self.recommended_timeouts.keys()):
-                    if (msg_id not in self.all_messages.keys()) or (now - max_time > self.recommended_timeouts[msg_id]):
+                    if (not Message.is_id_multi(msg_id) and msg_id not in self.all_messages.keys()) \
+                            or (now - max_time > self.recommended_timeouts[msg_id]):
                         self.recommended_timeouts.pop(msg_id, None)
 
     def timeout(self, msg_id, reason, mod):
@@ -770,7 +770,7 @@ class ChatAnalysis:
         if group in self.tournament_groups:
             if checked is None:
                 checked = not self.tournament_groups[group]
-            self.tournament_groups[group] = checked
+            self.tournament_groups[group] = True if group == "monitored" else checked
             if group == "monitored":
                 for tourney in active_tournaments:
                     if tourney.is_monitored:
@@ -862,6 +862,14 @@ class ChatAnalysis:
         return self.get_all(mod)
 
     def get_all(self, mod):
+        self.prepare_reports()
+        with self.reports_lock:
+            self.update_selected_data(mod)
+            ret_data = self.cache_reports.copy()
+            ret_data.update(self.cache_selected_data[mod.id])
+            return ret_data
+
+    def prepare_reports(self):
         with self.reports_lock:
             if self.state_reports != self.cache_reports['state_reports']:
                 # Main content
@@ -886,10 +894,6 @@ class ChatAnalysis:
                 str_time = f"{now:%H:%M}"
                 self.cache_reports = {'reports': info, 'multiline-reports': info_frequent,
                                       'time': str_time, 'state_reports': self.state_reports}
-            self.update_selected_data(mod)
-            ret_data = self.cache_reports.copy()
-            ret_data.update(self.cache_selected_data[mod.id])
-            return ret_data
 
     def get_tournaments_data(self, state):
         try:
