@@ -104,7 +104,10 @@
           <div id="selection_header" class="d-none user-select-none justify-content-between py-1" style="background-color:rgba(128,128,128,0.2);">
             <span>
               <button id="btn_filter_msgs" class="btn btn-outline-success align-baseline py-0 px-1 mr-1" type="button" onclick="filter_toggle()">Process</button>
-              <b>Messages</b> in <span id="selected_tournament">Tournament</span>:
+              <button id="btn_refresh_selected" class="btn btn-outline-secondary align-baseline px-1 py-0" type="button" style="border-color:transparent;" onclick="refresh_selected()">
+                <abbr id="selected_tournament_update" title="reload" class="user-select-none" style="text-decoration:none;"><i class="fas fa-redo-alt"></i></abbr>
+              </button>
+              <span id="selected_tournament">Tournament</span>:
             </span>
             <button class="btn btn-primary align-baseline flex-grow-0 py-0" onclick="select_message(event,'--')">Close</button>
           </div>
@@ -150,7 +153,7 @@
       <span class="ml-3 text-secondary">Downloading chats&hellip;</span>
     </div>
     <div id="clean_messages" class="col d-none justify-content-center mt-5">
-      <h5 class="text-success">Everything is clean as of <span id="chat_clean">now</span>.<br>Thank you for your great work! <i class="far fa-heart"></i></h5>
+      <h5 class="text-success">Everything is clean as of <span id="update_time">now</span>.<br>Thank you for your great work! <i class="far fa-heart"></i></h5>
     </div>
     <div id="dubious_messages" class="col">
       <h6 class="text-center mb-1">Dubious messages</h6>
@@ -262,7 +265,7 @@
     }
     $('#chat_reports').html(data_chats["reports"]);
     $('#multiline_chat_reports').html(data_chats["multiline-reports"]);
-    $('#chat_clean').html(data_chats["time"]);
+    $('#update_time').html(data_chats["time"]);
     if (!$('#filter_score_0').is('.active')) {
       const filter_values = [20, 40, 60];
       for (const i of filter_values) {
@@ -378,6 +381,8 @@
     $('#selected_messages').html(data_chats["selected-messages"]);
     $('#filtered_messages').html(data_chats["filtered-messages"]);
     $('#selected_tournament').html(data_chats["selected-tournament"]);
+    str_update = data_chats["selected-tournament-update"] ? `updated at ${data_chats["selected-tournament-update"]}` : "reload";
+    $('#selected_tournament_update').prop('title', str_update);
     var username = data_chats["selected-user"];
     update_user_button(username);
     user_link = username ? `<a class="text-success" href="https://lichess.org/@/${username.toLowerCase()}?mod" target="_blank">${username}</a>` : "the user";
@@ -549,6 +554,19 @@
     else
       $('#btn_filter_msgs').removeClass("btn-outline-success").addClass("btn-success");
     filter_messages();
+  }
+  function refresh_selected() {
+    $('#btn_refresh_selected').removeClass("btn-outline-secondary").addClass("btn-outline-info");
+    $.ajax({url: `/chat/refresh_selected`, type: "post"})
+      .done(function(data, textStatus, jqXHR) {
+        $('#btn_refresh_selected').removeClass("btn-outline-info").addClass("btn-outline-secondary");
+        set_selection(data);
+        var active_element = $('#selected_messages .selectee-center');
+        if (active_element.length) {
+          active_element[0].scrollIntoView({block: "center"});
+          window.scrollTo(0, 0);
+        }
+      });
   }
   function check_collapse(val) {
     const collapse = ["tournaments", "started", "created", "finished"];

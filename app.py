@@ -234,6 +234,16 @@ def chat_select_message(msg_id):
     return resp
 
 
+@app.route('/chat/refresh_selected', methods=['POST'])
+def chat_refresh_selected():
+    try:
+        mod = get_mod(request.cookies, update_seenAt=True)
+    except:
+        return Response(status=400)
+    resp = make_response(chat.refresh_selected(mod, non_mod, auto_mod))
+    return resp
+
+
 @app.route('/chat/clear_errors/<tourn_id>', methods=['POST'])
 def chat_clear_errors(tourn_id):
     try:

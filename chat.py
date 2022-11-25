@@ -517,11 +517,26 @@ class ChatAnalysis:
         except Exception as exception:
             log_exception(exception)
 
-    def select_message(self, msg_id, mod):
+    def refresh_selected(self, mod, non_mod, auto_mod):
+        now_utc = datetime.now(tz=tz.tzutc())
+        msg_id = self.selected_msg_id[mod.id]
+        if msg_id:
+            tourn_id = self.tournament_messages.get(msg_id)
+            if tourn_id:
+                self.update_chat(tourn_id, non_mod, auto_mod, now_utc)
+                self.state_reports += 1
+                #self.get_tournaments()  # -- uncomment out to update #messages in the tounaments list
+        # Uncomment out to update only the selected tournament:
+        #msg_id = f"C{msg_id}" if self.selected_msg_id[mod.id] else "--"
+        #return self.select_message(msg_id, mod, update_selected_user=False)
+        return self.get_all(mod)
+
+    def select_message(self, msg_id, mod, update_selected_user=True):
         def create_info(info):
             state_all = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
             return {'selected-messages': info, 'filtered-messages': info, 'selected-tournament': "", 'selected-user': "",
-                    'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': "", 'state_reports': state_all}
+                    'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': "", 'selected-tournament-update': "",
+                    'state_reports': state_all}
 
         try:
             self.state_selected_msg[mod.id] += 1
@@ -529,7 +544,8 @@ class ChatAnalysis:
                 self.selected_msg_id[mod.id] = 0
                 return create_info("")
             self.selected_msg_id[mod.id] = int(msg_id[1:])
-            self.update_selected_user(mod)
+            if update_selected_user:
+                self.update_selected_user(mod)
             return self.get_messages_nearby(self.selected_msg_id[mod.id], mod)
         except Exception as exception:
             self.selected_msg_id[mod.id] = 0
@@ -566,7 +582,7 @@ class ChatAnalysis:
                     add_info = f'{add_info}{" + " if add_info else ""}<span class="{text_theme}">' \
                                f'<b>{self.selected_user_num_recent_timeouts[mod.id]}</b> ' \
                                f'timeout{"" if self.selected_user_num_recent_timeouts[mod.id] == 1 else "s"}</span>'
-            if mod.is_mod() and user_msgs:
+            if mod.is_mod() and user_msgs and not user_msgs[-1].is_official:
                 user_name = user_data.name
                 is_timed_out = False
                 is_banable = False
@@ -651,9 +667,10 @@ class ChatAnalysis:
                                f'<span>{add_info}</span><span>{button_warn}</span></div>'
             return add_info
 
-        def create_output(info, tournament, user_data, filtered_info=None, user_msgs=None):
+        def create_output(info, tournament, user_data, update_time, filtered_info=None, user_msgs=None):
+            str_update = f'{update_time:%H:%M:%S} UTC' if update_time else ""
             data = {'selected-messages': info, 'filtered-messages': filtered_info or info,
-                    'selected-tournament': tournament}
+                    'selected-tournament': tournament, 'selected-tournament-update': str_update}
             if user_data:
                 user_info = user_data.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES)
                 add_info = add_comm_info(user_data, user_msgs)
@@ -671,11 +688,14 @@ class ChatAnalysis:
             return f'<div class="border border-success rounded" style="{get_highlight_style(0.3)}">{msg_selected}</div>'
 
         tournament_name = ""
+        tournament_update = ""
         try:
             tourn_id = self.tournament_messages.get(msg_id)
-            tournament_name = self.tournaments[tourn_id].get_link(short=False) if tourn_id in self.tournaments else ""
+            if tourn_id in self.tournaments:
+                tournament_name = self.tournaments[tourn_id].get_link(short=False)
+                tournament_update = self.tournaments[tourn_id].last_update
             if not msg_id:
-                return create_output("", tournament_name, None)
+                return create_output("", tournament_name, None, tournament_update)
             with self.msg_lock:
                 i: int = None
                 if tourn_id in self.tournaments:
@@ -685,7 +705,7 @@ class ChatAnalysis:
                             break
                 if i is None:
                     return create_output(f'<p class="text-warning">Warning: Message has been removed</p>',
-                                         tournament_name, None)
+                                         tournament_name, None, tournament_update)
                 i_start = 0
                 i_end = len(self.tournaments[tourn_id].messages)
                 msg_i = self.tournaments[tourn_id].messages[i]
@@ -714,12 +734,14 @@ class ChatAnalysis:
             user = self.users[mod.id].get(username)
             info_selected = f'{list_start}{"".join(msgs_before)} {msg} {"".join(msgs_after)}{list_end}'
             info_filtered = "".join(msgs_user)
-            return create_output(info_selected, tournament_name, user, filtered_info=info_filtered, user_msgs=user_msgs)
+            return create_output(info_selected, tournament_name, user, tournament_update,
+                                 filtered_info=info_filtered, user_msgs=user_msgs)
         except Exception as exception:
             log_exception(exception)
-            return create_output(f'<p class="text-danger">Error: {exception}</p>', tournament_name, None)
+            return create_output(f'<p class="text-danger">Error: {exception}</p>', tournament_name, None, tournament_update)
         except:
-            return create_output(f'<p class="text-danger">Error: get_messages_near()</p>', tournament_name, None)
+            return create_output(f'<p class="text-danger">Error: get_messages_near()</p>', tournament_name, None,
+                                 tournament_update)
 
     def update_selected_data(self, mod):
         state_all = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
@@ -874,7 +896,6 @@ class ChatAnalysis:
             if self.state_reports != self.cache_reports['state_reports']:
                 # Main content
                 now_utc = datetime.now(tz=tz.tzutc())
-                now = datetime.now()
                 active_tournaments = self.get_score_sorted_tournaments(now_utc)
                 info = "".join([tourn.reports for tourn in active_tournaments])  # TODO: update time status in the header
                 output = []
@@ -891,7 +912,7 @@ class ChatAnalysis:
                     info = f'<div class="text-warning text-break">{"<b>Errors</b>: " if len(all_errors) > 1 else ""}' \
                            f'<div>{"</div><div>".join(all_errors)}</div>{btn_clear}' \
                            f'<div class="text-danger">ABORTED</div></div>{info}'
-                str_time = f"{now:%H:%M}"
+                str_time = f"{now_utc:%H:%M} UTC"
                 self.cache_reports = {'reports': info, 'multiline-reports': info_frequent,
                                       'time': str_time, 'state_reports': self.state_reports}
 
