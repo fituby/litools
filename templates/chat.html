@@ -72,7 +72,7 @@
                 <div class="d-flex flex-row">
                   <label for="tournament_link" class="m-0 mr-1">Link:</label>
                   <input id="tournament_link" type="text" class="flex-grow-1 py-0 mr-1">
-                  <button class="btn btn-primary flex-grow-0 py-0" onclick="add_tournament()">Add</button>
+                  <button id="btn_add_tournament" class="btn btn-primary flex-grow-0 py-0" onclick="add_tournament()">Add</button>
                 </div>
                 <fieldset id="tournaments_tournaments">
                 </fieldset>
@@ -598,6 +598,7 @@
   function add_tournament() {
     var tournament_link = $("#tournament_link")[0].value;
     $("#tournament_link")[0].value = "";
+    $('#btn_add_tournament').removeClass("btn-primary").addClass("btn-info");
     $.ajax({
       url: "/chat/add_tournament",
       type: "post",
@@ -605,6 +606,8 @@
         .done(function(data, textStatus, jqXHR) {
           update_tournament_list(data);
           update_data(data);
+        }).always(function() {
+          $('#btn_add_tournament').removeClass("btn-info").addClass("btn-primary");
         });
   }
   function update_notes() {

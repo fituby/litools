@@ -186,6 +186,7 @@ class ChatAnalysis:
             for msg in self.to_timeout.values():
                 self.api_timeout(msg, msg.best_ban_reason(), False, auto_mod, is_auto=DO_AUTO_TIMEOUTS)
             self.to_timeout.clear()
+            tourn.set_reports(now_utc)
 
     def set_msg_ok(self, msg_id):
         try:
@@ -251,6 +252,9 @@ class ChatAnalysis:
         reason_tag = Reason.to_tag(reason)
         if reason_tag is None:
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: Unknown reason", False)
+            return
+        if msg.is_official:
+            self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: official account timeout", False)
             return
         if msg.tournament.id not in self.tournaments:
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "

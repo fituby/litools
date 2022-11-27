@@ -262,8 +262,10 @@ class Tournament:
                     if msg.best_ban_reason() != Reason.No:
                         add_timeout_msg(to_timeout, msg)
         #self.process_usernames(r.text)  # doesn't work with token
-        self.reports = self.get_info(now_utc)
         return to_timeout
+
+    def set_reports(self, now_utc):
+        self.reports = self.get_info(now_utc)
 
     def has_sus_messages(self):
         for msg in self.messages:
