@@ -45,7 +45,7 @@ class ChatAnalysis:
         self.last_tournaments_update: datetime = None
         self.errors = []
         self.warnings = []
-        self.i_update_frequency = 2  # len(API_CHAT_REFRESH_PERIOD) - 1
+        self.i_update_frequency = 1  # len(API_CHAT_REFRESH_PERIOD) - 1
         self.reset_multi_messages = set()
         self.update_count = 0
         self.tournament_groups = {"monitored": True, "started": True, "created": True, "finished": True}
@@ -175,7 +175,7 @@ class ChatAnalysis:
             for del_msg in deleted_messages:
                 del self.tournament_messages[del_msg.id]
                 del self.all_messages[del_msg.id]
-            to_timeout_i = tourn.analyse(now_utc)
+            to_timeout_i = tourn.analyse()
             for m in to_timeout_i.values():
                 add_timeout_msg(self.to_timeout, m)
             # Process multiline messages and do timeouts
@@ -911,7 +911,7 @@ class ChatAnalysis:
                 # Main content
                 now_utc = datetime.now(tz=tz.tzutc())
                 active_tournaments = self.get_score_sorted_tournaments(now_utc)
-                info = "".join([tourn.reports for tourn in active_tournaments])  # TODO: update time status in the header
+                info = "".join([tourn.reports for tourn in active_tournaments])
                 output = []
                 for tourn in active_tournaments:
                     if tourn.multiline_reports:

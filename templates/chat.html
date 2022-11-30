@@ -560,6 +560,7 @@
     $.ajax({url: `/chat/refresh_selected`, type: "post"})
       .done(function(data, textStatus, jqXHR) {
         $('#btn_refresh_selected').removeClass("btn-outline-info").addClass("btn-outline-secondary");
+        update_data(data);
         set_selection(data);
         var active_element = $('#selected_messages .selectee-center');
         if (active_element.length) {

@@ -244,13 +244,14 @@ class Tournament:
         for d in data:
             self.user_names.add(d['name'])
 
-    def analyse(self, now_utc):
+    def analyse(self):
         self.max_score = 0
         self.total_score = 0
         to_timeout = {}
         for msg in self.messages:
-            if msg.score is None:
-                msg.evaluate(self.re_usernames)
+            if msg.score is not None:
+                continue
+            msg.evaluate(self.re_usernames)
             is_msg_visible = not msg.is_reset and not msg.is_removed \
                 and not msg.is_disabled and not msg.is_official  # if not msg.is_hidden(): # w/o is_timed_out
             #   and not msg.is_deleted
