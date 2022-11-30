@@ -7,7 +7,7 @@ from pygal.style import DefaultStyle, DarkStyle, BlueStyle, DarkGreenBlueStyle
 from enum import Enum
 from threading import Thread
 from api import ApiType
-from elements import UserData, Games, Variants, ModActionType
+from elements import UserData, Games, Variants, ModActionType, PerfType
 from elements import get_tc, delta_s, deltainterval, datetime_to_ago, get_user_ids, log
 from elements import load_mod_log, get_mod_log, get_notes
 from consts import *
@@ -63,6 +63,7 @@ def download_openings(user_id, color, opening_stage, mod, to_refresh=False):
 
 class Alt:
     team_cache = {}  # TODO: based on `alt_cache`s, clear to prevent memory leak?
+    refresh_openings_times = {}
 
     def __init__(self, username, num_games, mod):
         if not num_games:
@@ -74,7 +75,7 @@ class Alt:
                 num_games = MAX_NUM_GAMES_TO_DOWNLOAD
         self.user = UserData(username, mod)
         self.games = Games(self.user.id, min(MAX_NUM_GAMES_TO_DOWNLOAD, num_games), ALT_MAX_PERIOD_FOR_GAMES,
-                           STATUSES_TO_DISCARD_ALT, download_moves=False, only_rated=False, use_correspondence_games=False)
+                           STATUSES_TO_DISCARD_ALT, download_moves=False, only_rated=False)
         self.mutual_games = defaultdict(list)
         self.datetime_first_game: datetime = None
         self.datetime_last_move: datetime = None
@@ -101,7 +102,7 @@ class Alt:
             return
         now = datetime.now()
         if not self.time_step2 or delta_s(now, self.time_step2) >= ALT_UPDATE_PERIOD:
-            self.games.download(mod)
+            self.games.download(mod, perf_type=PerfType.all_but_correspondence())
             self.time_step2 = now
         self.mutual_games.clear()
         self.hist_hours = [0.0] * 12
@@ -135,31 +136,31 @@ class Alt:
             for tc in self.hist_tcs.keys():
                 self.hist_tcs[tc] = self.hist_tcs[tc] * 100 / num_games
 
-    def needs_to_refresh_openings(self, now, mod):
-        return self.user.id not in mod.refresh_openings_times \
-               or delta_s(now, mod.refresh_openings_times[self.user.id]) > ALT_REFRESH_OPENINGS_PERIOD
+    def needs_to_refresh_openings(self, now):
+        return self.user.id not in Alt.refresh_openings_times \
+               or delta_s(now, Alt.refresh_openings_times[self.user.id]) > ALT_REFRESH_OPENINGS_PERIOD
 
     def download_openings(self, refresh_openings, mod):
         if self.user.is_error:
             return
         now = datetime.now()
         if self.time_step1 and delta_s(now, self.time_step1) < ALT_UPDATE_PERIOD \
-                and (not refresh_openings or not self.needs_to_refresh_openings(now, mod)):
+                and (not refresh_openings or not self.needs_to_refresh_openings(now)):
             return
         for color in Color:
             for opening_stage in OpeningStage:
-                to_refresh = self.needs_to_refresh_openings(now, mod)
+                to_refresh = self.needs_to_refresh_openings(now)
                 if to_refresh and not refresh_openings:
                     wait_s = mod.api.get_waiting_time(ApiType.InsightsRefresh)
                     to_refresh = (wait_s <= 0)
                 self.hist_openings[color][opening_stage] = download_openings(self.user.id, color, opening_stage, mod,
                                                                              to_refresh)
                 if to_refresh:
-                    user_ids = mod.refresh_openings_times.keys()
+                    user_ids = Alt.refresh_openings_times.keys()
                     for user_id in user_ids:
-                        if delta_s(now, mod.refresh_openings_times[user_id]) >= ALT_REFRESH_OPENINGS_PERIOD:
-                            del mod.refresh_openings_times[user_id]
-                    mod.refresh_openings_times[self.user.id] = now
+                        if delta_s(now, Alt.refresh_openings_times[user_id]) >= ALT_REFRESH_OPENINGS_PERIOD:
+                            del Alt.refresh_openings_times[user_id]
+                    Alt.refresh_openings_times[self.user.id] = now
         self.time_step1 = now
 
     def download_teams(self, mod):
@@ -350,7 +351,7 @@ class Alts:
                     alts.is_step2 = False
                     Thread(name="alts_process", target=alts.process, args=(step, force_refresh_openings, mod)).start()
                 return NOT_READY
-        return alts.get_output(mod)
+        return alts.get_output()
 
     def __init__(self, theme_color):
         self.players = []
@@ -607,7 +608,7 @@ class Alts:
                     </div>'''
         return f'{table}{"".join(info)}'
 
-    def get_info_1(self, mod):
+    def get_info_1(self):
         # User table
         rows = []
         now_utc = datetime.now(tz=tz.tzutc())
@@ -662,7 +663,7 @@ class Alts:
         # Refresh openings button
         if self.is_step2:
             now = datetime.now()
-            refresh_players = [player.user.name for player in self.players if player.needs_to_refresh_openings(now, mod)]
+            refresh_players = [player.user.name for player in self.players if player.needs_to_refresh_openings(now)]
             if refresh_players:
                 if len(refresh_players) == 2:
                     player_list = " and ".join(refresh_players)
@@ -706,10 +707,10 @@ class Alts:
                 openings.append(f'<div class="mt-3">{openings_ij}</div>' if openings_ij else "")
         return f'{overlapping_games}{header}{self.get_mutual_games()}{mutual_teams}{"".join(openings)}'
 
-    def get_output(self, mod):
+    def get_output(self):
         if not self.is_step0:
             return {'part-1': "", 'part-2': "", 'part-3': ""}
-        return {'part-1': self.get_info_1(mod), 'part-2': self.get_info_2(), 'part-3': self.get_info_3()}
+        return {'part-1': self.get_info_1(), 'part-2': self.get_info_2(), 'part-3': self.get_info_3()}
 
     def get_errors(self):
         if not self.errors:

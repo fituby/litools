@@ -3,6 +3,7 @@ from dateutil import tz
 from enum import IntEnum
 from threading import Lock
 from elements import decode_string, read_notes, datetime_to_abbr_ago, datetime_to_abbr_in, log_exception
+from elements import load_mod_log, get_mod_log
 from database import Mods
 from api import Api, ApiType
 from consts import BOOST_RING_TOOL
@@ -26,29 +27,53 @@ class Mod:
         self.current_session = current_session
         self.mod_db = mod_db
         self.api = Api()
+        self.id = ""
+        self.name = ""
         self.alt_cache = {}
         self.alt_group_cache = {}
-        self.refresh_openings_times = {}
         self.boost_cache = {}
         self.boost_ring_tool = ""
         self.is_admin = False
+        self.is_timeout = False
+        self.is_hunter = False
         self.to_read_mod_log = False
         self.to_read_notes = False
-        if check_perms and token:
-            self.check_perms()
         self.last_mod_log_error = None
         self.last_notes_error = None
-        self.id = ""
-        self.name = ""
+        self.view = View()
         if get_public_data and token:
             self.set_public_data()
-        self.view = View()
+        if check_perms and token:
+            self.check_perms()
 
     def check_perms(self):
-        self.boost_ring_tool = decode_string(BOOST_RING_TOOL, self)  # returns "" (not None) if not available
-        self.is_admin = self.check_admin()
+        self.is_timeout = True
+        self.boost_ring_tool = decode_string(BOOST_RING_TOOL, self) if self.is_timeout else ""
+        # decode_string() returns "" (not None) if not available
+        self.is_admin = self.check_admin() if self.boost_ring_tool else False
         self.to_read_mod_log = self.is_mod()
         self.to_read_notes = self.is_mod()
+        if self.is_admin:
+            self.is_hunter = True
+        elif not self.boost_ring_tool:
+            self.is_hunter = False
+        else:
+            self.is_hunter = False
+            mod_log_data = load_mod_log(self.name, self)
+            mod_log, actions = get_mod_log(mod_log_data, self)
+            for action in actions:
+                if action.action == 'permissions':
+                    perms = action.details.lower()
+                    if perms.startswith("-") or perms.startswith("+"):
+                        if perms.find("+hunter") >= 0 or perms.find("+boosthunter") >= 0:
+                            self.is_hunter = True
+                            break
+                        if perms.find("-hunter") >= 0 or perms.find("-boosthunter") >= 0:
+                            self.is_hunter = False
+                            break
+                    else:
+                        self.is_hunter = perms.find("hunter") >= 0
+                        break
 
     def is_mod(self):
         return not not self.boost_ring_tool  # workaround
@@ -157,8 +182,8 @@ class Mod:
             return ""
         field_class = "" if self.current_session else " disabled"
         field = f'<a href="/" class="btn btn-secondary{field_class} ml-2 py-0">{self.name}</a>'
-        return f'<div class="d-flex flex-row align-items-baseline p-2" style="position:absolute;top:0px;right:0px">' \
-               f'{field}</div>'
+        return f'<div class="d-flex flex-row align-items-baseline z-index-1 p-2" ' \
+               f'style="position:absolute;top:0px;right:0px;z-index:1">{field}</div>'
 
     def update_theme(self, cookies):
         mode = cookies.get('theme_mode', '-1')
@@ -168,7 +193,7 @@ class Mod:
         return not not self.token
 
     def is_boost(self):
-        return self.is_mod()
+        return self.is_hunter
 
     def is_alt(self):
         return self.is_admin

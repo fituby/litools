@@ -1,5 +1,5 @@
 import statistics
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import tz
 import time
 from collections import defaultdict
@@ -8,7 +8,7 @@ from threading import Thread
 from api import ApiType
 from elements import get_user, shorten, delta_s, log, log_exception
 from elements import get_notes, add_note, load_mod_log, get_mod_log, add_variant_rating
-from elements import ModActionType, WarningStats, User, Games, Variants
+from elements import ModActionType, WarningStats, User, Games, Variants, PerfType
 from elements import warn_sandbagging, warn_boosting, mark_booster
 from consts import *
 
@@ -167,8 +167,9 @@ class GameAnalysis:
             self.score /= 2
         num_moves = 1 if self.max_num_moves == 0 else self.max_num_moves
         winner_loser = "loser" if self.is_sandbagging else "winner"
-        link = f'https://lichess.org/@/{{username}}/search?turnsMax={num_moves}&mode=1&players.a={{user_id}}' \
-               f'&players.{winner_loser}={{user_id}}&sort.field=d&sort.order=desc'
+        max_date = datetime.now(tz=tz.tzutc()) + timedelta(days=1)
+        link = f'https://lichess.org/@/{{username}}/search?dateMax={max_date:%Y-%m-%d}&turnsMax={num_moves}{{perf_index}}' \
+               f'&mode=1&players.a={{user_id}}&players.{winner_loser}={{user_id}}&sort.field=d&sort.order=desc'
         link_open = f'<a class="ml-2" href="{link}" target="_blank">open</a>'
         add_info = []
         if self.resign.num >= BOOST_NUM_RESIGN_REPORTABLE:
@@ -477,9 +478,10 @@ class BoostGames(Games):
 
 
 class Boost:
-    def __init__(self, username, num_games, before):
+    def __init__(self, username, num_games, before, perf_type):
         self.user = User(username)
         self.before = before
+        self.perf_type = perf_type
         self.errors = []
         self.variants = Variants(add_note_links=True)
         self.games = BoostGames(self.user.id, num_games)
@@ -556,7 +558,7 @@ class Boost:
     def analyse_games(self, mod):
         exc: Exception = None
         try:
-            self.games.download(mod, self.mod_log.time_last_manual_warning, self.before)
+            self.games.download(mod, self.mod_log.time_last_manual_warning, self.before, self.perf_type)
             if self.games.until and delta_s(datetime.now(tz=tz.tzutc()), self.games.until) > 30*60:
                 self.info_games_played = f' played before {self.games.until:%Y-%m-%d %H:%M} UTC'
             else:
@@ -656,12 +658,13 @@ class Boost:
         self.output_tournaments = output
 
     def get_analysis(self):
+        perf_index = f"&perf={PerfType.to_index(self.perf_type)}" if bin(self.perf_type).count("1") == 1 else ""
         tables = [("Sandbagging", self.sandbagging), ("Boosting", self.boosting)]
         output = []
         for table_name, analyses in tables:
             rows = [analysis.row for analysis in analyses if not analysis.is_empty()]
             str_rows = "".join(rows).format(username=self.user.name, user_id=self.user.id,
-                                            info_games_played=self.info_games_played)
+                                            info_games_played=self.info_games_played, perf_index=perf_index)
             opponents = [analysis.get_frequent_opponents() for analysis in analyses]
             str_opps = "".join(opponents).format(username=self.user.name, user_id=self.user.id)
             if rows:
@@ -792,19 +795,21 @@ class Boost:
         self.output = output
 
 
-def get_boost_data(username, mod, num_games=None, before=None):
+def get_boost_data(username, mod, num_games=None, before=None, perf_type=None):
     now = datetime.now()
     user_id = username.lower()
     boost, last_update = mod.boost_cache.get(user_id, (None, None))
     if num_games:
         num_games = int(num_games)
-    if boost and (boost.before == before or not before) \
+    if perf_type:
+        perf_type = int(perf_type)
+    if boost and (boost.before == before or not before) and (boost.perf_type == perf_type or not perf_type) \
             and (boost.games.max_num_games == num_games or num_games is None):
         if delta_s(now, last_update) < BOOST_UPDATE_PERIOD:
             return boost
     if not num_games:
         num_games = BOOST_NUM_GAMES[0]
-    boost = Boost(username, num_games, before)
+    boost = Boost(username, num_games, before, perf_type)
     Thread(name="set_boost", target=set_boost, args=(boost, username, mod)).start()
     mod.boost_cache[user_id] = boost, now
     for user_id in list(mod.boost_cache.keys()):

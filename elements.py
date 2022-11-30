@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from dateutil import tz
 from dateutil.relativedelta import relativedelta
-from enum import IntEnum, Enum
+from enum import IntEnum, Enum, IntFlag
 import yaml
 import traceback
 import os
@@ -588,9 +588,52 @@ def get_user_ids(game):
     return white_id, black_id
 
 
+class PerfType(IntFlag):
+    ultraBullet = 2 ** 0
+    bullet = 2 ** 1
+    blitz = 2 ** 2
+    rapid = 2 ** 3
+    classical = 2 ** 4
+    correspondence = 2 ** 5
+    crazyhouse = 2 ** 6
+    chess960 = 2 ** 7
+    kingOfTheHill = 2 ** 8
+    threeCheck = 2 ** 9
+    antichess = 2 ** 10
+    atomic = 2 ** 11
+    horde = 2 ** 12
+    racingKings = 2 ** 13
+
+    @staticmethod
+    def all():
+        return 0b11111111111111
+
+    @staticmethod
+    def all_but_correspondence():
+        return 0b11111111011111
+
+    @staticmethod
+    def to_index(perf_type):
+        return 0 if perf_type == PerfType.ultraBullet \
+            else 1 if perf_type == PerfType.bullet \
+            else 2 if perf_type == PerfType.blitz \
+            else 6 if perf_type == PerfType.rapid \
+            else 3 if perf_type == PerfType.classical \
+            else 4 if perf_type == PerfType.correspondence \
+            else 18 if perf_type == PerfType.crazyhouse \
+            else 11 if perf_type == PerfType.chess960 \
+            else 12 if perf_type == PerfType.kingOfTheHill \
+            else 15 if perf_type == PerfType.threeCheck \
+            else 13 if perf_type == PerfType.antichess \
+            else 14 if perf_type == PerfType.atomic \
+            else 16 if perf_type == PerfType.horde \
+            else 17 if perf_type == PerfType.racingKings \
+            else -1
+
+
 class Games:
     def __init__(self, user_id, max_num_games, max_num_days, statuses_to_discard,
-                 percent_extra_games_to_download=0, download_moves=True, only_rated=True, use_correspondence_games=True):
+                 percent_extra_games_to_download=0, download_moves=True, only_rated=True):
         self.user_id = user_id
         self.games = []
         self.since: int = None
@@ -600,11 +643,10 @@ class Games:
         self.percent_extra_games_to_download = percent_extra_games_to_download
         self.download_moves = download_moves
         self.only_rated = only_rated
-        self.use_correspondence_games = use_correspondence_games
         self.statuses_to_discard = statuses_to_discard
         self.all_user_ratings = {}
 
-    def download(self, mod, since=None, before=None):
+    def download(self, mod, since=None, before=None, perf_type=None):
         now_utc = datetime.now(tz=tz.tzutc())
         self.until = None
         if before:
@@ -626,9 +668,13 @@ class Games:
         max_num_games = int(round(self.max_num_games * (1 + self.percent_extra_games_to_download / 100)))
         moves = "" if self.download_moves else "&moves=false"
         rated = "rated=true&" if self.only_rated else ""
-        perfType = "perfType=ultraBullet,bullet,blitz,rapid,classical,chess960,crazyhouse,antichess,atomic,horde," \
-                   "kingOfTheHill,racingKings,threeCheck" if not self.use_correspondence_games else ""
-        url = f"https://lichess.org/api/games/user/{self.user_id}?{rated}{perfType}finished=true&max={max_num_games}" \
+        perfs = []
+        if perf_type:
+            for pt in PerfType:
+                if perf_type & pt.value:
+                    perfs.append(pt.name)
+        str_perfType = f'perfType={",".join(perfs)}&' if perfs else ""
+        url = f"https://lichess.org/api/games/user/{self.user_id}?{rated}{str_perfType}finished=true&max={max_num_games}" \
               f"{moves}&since={since}{str_until}"
         self.since = None if since == ts_Xmonths_ago else since
         games = mod.api.get_ndjson(ApiType.ApiGamesUser, url, mod.token)
@@ -645,7 +691,7 @@ class Games:
         else:
             self.games = games
         # Delete correspondence games in variants
-        if not self.use_correspondence_games:
+        if not (perf_type & PerfType.correspondence):
             for i in range(len(self.games) - 1, -1, -1):
                 if self.games[i]['speed'] == "correspondence":
                     del self.games[i]
@@ -658,10 +704,8 @@ class Games:
         for game in self.games:
             white_id, black_id = get_user_ids(game)
             if white_id == self.user_id:
-                opp_color = 'black'
                 user_color = 'white'
             elif black_id == self.user_id:
-                opp_color = 'white'
                 user_color = 'black'
             else:
                 raise Exception("Error games: no player")
@@ -1428,7 +1472,7 @@ class Error500:
     def __init__(self, start, status_code):
         self.start = start
         self.end = None
-        self.description = f"Lichess internal problem {status_code} (server restarting?)"
+        self.description = f"Lichess internal problem {status_code} (server restart?)"
 
     def is_ongoing(self):
         return self.end is None

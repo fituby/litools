@@ -241,7 +241,9 @@ class ChatAnalysis:
         updated_user = self.users[mod.id].get(name)
         if not updated_user:
             return True
-        is_up_to_date = (not updated_user.actions) or (updated_user.actions[0].date <= last_action_time)
+        if not updated_user.actions:
+            return True
+        is_up_to_date = (last_action_time is not None) and (updated_user.actions[0].date <= last_action_time)
         if not is_up_to_date:
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: Failed to apply your action "
                            f"to @{name}. There are new entries in the mod log. Please check them first.", False)
@@ -259,6 +261,14 @@ class ChatAnalysis:
         if msg.tournament.id not in self.tournaments:
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
                            f"Tournament {msg.tournament.id} deleted", False)
+            return
+        if msg.is_timed_out or msg.is_disabled:
+            self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
+                           f"@{msg.username}'s message is already timed out", False)
+            return
+        if msg.is_removed:
+            self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
+                           f"@{msg.username}'s message is already hidden (SB'ed)", False)
             return
         if mod and not self.is_user_up_to_date(msg.username, mod):
             return

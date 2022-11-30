@@ -8,6 +8,22 @@
 {% endif %}
   <div class="row justify-content-center my-2">
     <div class="col" style="width:420px;min-width:370px;max-width:500px;">
+      <div class="btn-group btn-group-toggle">
+        <button id="perf_type_0" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(0);"><abbr title="Ultra Bullet" style="text-decoration:none;cursor:inherit;">UB</abbr></button>
+        <button id="perf_type_1" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(1);"><abbr title="Bullet" style="text-decoration:none;cursor:inherit;">Bu</abbr></button>
+        <button id="perf_type_2" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(2);"><abbr title="Blitz" style="text-decoration:none;cursor:inherit;">Bl</abbr></button>
+        <button id="perf_type_3" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(3);"><abbr title="Rapid" style="text-decoration:none;cursor:inherit;">Ra</abbr></button>
+        <button id="perf_type_4" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(4);"><abbr title="Classical" style="text-decoration:none;cursor:inherit;">Cl</abbr></button>
+        <button id="perf_type_5" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(5);"><abbr title="Correspondence" style="text-decoration:none;cursor:inherit;">Co</abbr></button>
+        <button id="perf_type_7" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(7);"><abbr title="Chess 960" style="text-decoration:none;cursor:inherit;">C9</abbr></button>
+        <button id="perf_type_6" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(6);"><abbr title="Crazyhouse" style="text-decoration:none;cursor:inherit;">Zh</abbr></button>
+        <button id="perf_type_8" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(8);"><abbr title="King Of The Hill" style="text-decoration:none;cursor:inherit;">KH</abbr></button>
+        <button id="perf_type_9" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(9);"><abbr title="Three Check" style="text-decoration:none;cursor:inherit;">3+</abbr></button>
+        <button id="perf_type_10" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(10);"><abbr title="Antichess" style="text-decoration:none;cursor:inherit;">AC</abbr></button>
+        <button id="perf_type_11" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(11);"><abbr title="Atomic" style="text-decoration:none;cursor:inherit;">At</abbr></button>
+        <button id="perf_type_12" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(12);"><abbr title="Horde" style="text-decoration:none;cursor:inherit;">Ho</abbr></button>
+        <button id="perf_type_13" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(13);"><abbr title="Racing Kings" style="text-decoration:none;cursor:inherit;">RK</abbr></button>
+      </div>
       <table class="w-100 mt-2"><tbody>
         <tr class="align-items-baseline">
           <td><label for="userlink" class="text-nowrap m-0 mr-1">User / #games:</label></td>
@@ -98,6 +114,7 @@
     $("#userlink").on('change input', username_changed);
     $("#userlink").on('keypress', username_entered);
     $('#datetime-before').val("");
+    reset_perf_types();
     {% if boost_user %}
     set_user('{{boost_user}}');
     {% else %}
@@ -146,7 +163,7 @@
       $.ajax({
         url: `/boost/${username}/`,
         type: "post",
-        data: {before: $('#datetime-before').val(), num_games: $('#num-games').val()}})
+        data: {before: $('#datetime-before').val(), num_games: $('#num-games').val(), perf_type: get_flags()}})
         .done(function(data, textStatus, jqXHR) {
           if ("not ready" in data)
             return;
@@ -318,6 +335,28 @@
             enable_buttons(data);
           }
         });
+  }
+  function get_flags() {
+    var flags = 0;
+    for (var i = 0; i < 14; i++)
+      if ($(`#perf_type_${i}`).is('.btn-success'))
+        flags |= 2 ** i;
+    return flags;
+  }
+  function perf_types(val) {
+    if ($(`#perf_type_${val}`).is('.btn-success'))
+      $(`#perf_type_${val}`).removeClass("btn-success").addClass("btn-secondary");
+    else
+      $(`#perf_type_${val}`).removeClass("btn-secondary").addClass("btn-success");
+    setCookie('perf_types', get_flags());
+  }
+  function reset_perf_types() {
+    var flags = getCookie("perf_types");
+    if (flags == null)
+      return;
+    for (var i = 0; i < 14; i++)
+      if ((flags & (2 ** i)) == 0)
+        $(`#perf_type_${i}`).removeClass("btn-success").addClass("btn-secondary");
   }
   </script>
 {% endblock %}

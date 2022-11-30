@@ -59,7 +59,8 @@ def get_boost_user(user):
         return Response(status=400)
     before = request.form.get("before", None)
     num_games = request.form.get("num_games", None)
-    boost = get_boost_data(user.lower(), mod, num_games, before)
+    perf_type = request.form.get("perf_type", None)
+    boost = get_boost_data(user.lower(), mod, num_games, before, perf_type)
     resp = make_response(boost.get_output(mod))
     return resp
 
@@ -435,6 +436,8 @@ def get_mod(cookies, update_theme=False, update_seenAt=False, print_exception=Fa
     if not mod_info or delta_s(now_tz, mod_info.last_updated) > UPDATE_INTERVAL_MOD_PERMS:
         token, current_session, mod_db = get_mod_token(token1, print_exception)
         mod = Mod(token, current_session, mod_db=mod_db)
+        if not mod.is_timeout:
+            raise Exception(f"@{mod.name} does not have proper permissions.")
         mod_info = ModInfo(mod, now_tz, now_tz)
         mod_cache[token1] = mod_info
     if update_seenAt and delta_s(now_tz, mod_info.last_seenAt) > UPDATE_INTERVAL_MODS_SEEN_AT:
