@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 from dateutil import tz
 import json
-from fake_useragent import UserAgent
 from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, shorten, add_timeout_msg, Error500
 from elements import log, log_exception
 from chat_re import ReUser, Lang
@@ -147,8 +146,8 @@ class Tournament:
         if self.errors or self.is_error_404_recently(now_utc):
             return new_messages, deleted_messages
         try:
-            ua = UserAgent()
-            headers = {'User-Agent': str(ua.chrome)}
+            headers = {'User-Agent': "Mozilla/5.0 (X11; U; Linux i686; en-US) AppleWebKit/532.0 (KHTML, like Gecko) "
+                                     "Chrome/4.0.212.0 Safari/532.0"}
             #if not self.is_arena:
             #    token = mod.token  # otherwise it doesn't load messages
             token = None
