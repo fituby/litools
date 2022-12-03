@@ -960,6 +960,8 @@ Lang.Spam: [
            reason=Reason.Spam, info="[link] racer"),
     ReLink(r'https?:\/\/(www\.)?lichess\.org\/streamer\/[-a-zA-Z0-9@:%._\+~#=]{5,8}', 40,
            reason=Reason.Spam, info="[link] streamer"),
+    ReLink(r'https?:\/\/(www\.)?lichess\.org\/team\/[-a-zA-Z0-9@:%._\+~#=]{5,}', 60,
+           reason=Reason.Spam, info="[link] team"),
     ReLink(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)dQw4w9WgXcQ', 60,
            ban=-1, reason=Reason.Spam, info="[link] Rickrolling"),
     ReLink(r'(https?:\/\/|)(www\.)?youtu(be\.com\/watch\?v=|\.be\/)55DLs_7VJNE', 60,

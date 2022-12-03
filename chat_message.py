@@ -198,8 +198,8 @@ class Message:
             if best_ban_reason != Reason.No or (best_reason != Reason.No and self.score and self.score >= 50):
                 button_ban = f'<button class="btn btn-danger align-baseline flex-grow-0 py-0 px-1" ' \
                              f'onclick="timeout(\'{tag}{self.id}\');">{Reason.to_Tag(best_reason)}</button>{button_ban}'
-        class_name = "text-muted" if self.is_deleted or self.is_reset \
-            else "text-secondary" if self.is_removed or self.is_disabled or self.is_timed_out or self.is_official else ""
+        class_name = "text-muted" if self.is_deleted or self.is_reset or self.is_disabled or self.is_timed_out \
+                     or self.is_official else "text-secondary" if self.is_removed else ""
         text = f'<s style="text-decoration-style:double;">{self.eval_text}</s>' if self.is_removed \
             else f'<s style="text-decoration-style:dotted;"><u style="text-decoration-style:wavy;">' \
                  f'{self.eval_text}</u></s>' if self.is_timed_out \

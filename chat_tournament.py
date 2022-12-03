@@ -510,7 +510,8 @@ class Tournament:
         if len(self.messages) > 0:
             tag = 'T'
             i = max(0, len(self.messages) - NUM_MSGS_BEFORE)
-            num_messages = f'<button class="brt btn-secondary align-baseline flex-grow-0 px-1 py-0"  ' \
+            num_class = "btn-secondary" if len(self.messages) < 100 else "btn-primary"
+            num_messages = f'<button class="brt {num_class} align-baseline flex-grow-0 px-1 py-0"  ' \
                            f'onclick="select_message(event,\'{tag}{self.messages[i].id}\')">{num_messages}</button>'
         else:
             num_messages = f'<span class="px-1">{num_messages}</span>'
