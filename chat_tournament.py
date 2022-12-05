@@ -6,6 +6,7 @@ from elements import log, log_exception
 from chat_re import ReUser, Lang
 from chat_message import Message
 from api import ApiType
+from database import Messages, db
 from consts import *
 
 
@@ -52,6 +53,8 @@ class Tournament:
         self.is_just_added = False
         self.reports = ""
         self.multiline_reports = ""
+        self.is_sync_with_db = False
+        self.keep_max_messages = False
 
     def update(self, tourn):
         self.startsAt = tourn.startsAt
@@ -146,6 +149,19 @@ class Tournament:
         if self.errors or self.is_error_404_recently(now_utc):
             return new_messages, deleted_messages
         try:
+            db_messages = []
+            if not self.is_sync_with_db:
+                for msg in Messages.select().where(Messages.tournament == self.id).order_by(-Messages.time, -Messages.id). \
+                            limit(CHAT_MAX_NUM_MSGS):
+                    data = {'u': msg.username, 't': msg.text, 'r': msg.removed, 'd': msg.disabled}
+                    msg_time = msg.time.replace(tzinfo=tz.tzutc())
+                    db_messages.append(Message(data, self, msg_time, msg.delay, msg.id, msg.timeout))
+                if db_messages:
+                    db_messages.reverse()
+                    if not self.last_update:
+                        self.last_update = db_messages[-1].time
+                    new_messages = self.add_messages(db_messages, can_be_old=bool(self.messages))
+                self.is_sync_with_db = True
             headers = {'User-Agent': "Mozilla/5.0 (X11; U; Linux i686; en-US) AppleWebKit/532.0 (KHTML, like Gecko) "
                                      "Chrome/4.0.212.0 Safari/532.0"}
             #if not self.is_arena:
@@ -169,7 +185,9 @@ class Tournament:
                 self.errors_500[-1].complete(now_utc)
             delay = None if self.last_update is None else deltaseconds(now_utc, self.last_update)
             with msg_lock:
-                new_messages, deleted_messages = self.process_messages(r.text, now_utc, delay)
+                newest_messages, deleted_messages = self.process_messages(r.text, now_utc, delay)
+                Tournament.update_db(newest_messages)
+            new_messages.extend(newest_messages)
             self.last_update = now_utc
         except Exception as exception:
             log_exception(exception)
@@ -187,27 +205,34 @@ class Tournament:
         self.process_frequent_data(now_utc, reset_multi_messages)
 
     def process_messages(self, text, now_utc, delay):
-        new_messages = []
-        deleted_messages = []
         i1 = text.find(CHAT_BEGINNING_MESSAGES_TEXT)
         if i1 < 0:
-            return new_messages, deleted_messages
+            return [], []
         i1 = i1 + len(CHAT_BEGINNING_MESSAGES_TEXT) - 1
         i2 = text.find(CHAT_END_MESSAGES_TEXT, i1)
         if i2 < 0:
             raise Exception("ERROR /tournament messages: No ']'")
-        if len(self.messages) > CHAT_MAX_NUM_MSGS:
-            i_cut = len(self.messages) - CHAT_MAX_NUM_MSGS
-            deleted_messages = self.messages[:i_cut]
-            self.messages = self.messages[i_cut:]
+        deleted_messages = self.delete_old_messages(CHAT_MAX_NUM_OLD_MSGS if self.keep_max_messages else CHAT_MAX_NUM_MSGS)
         text_json = text[i1:i2 + 1]
         data = json.loads(text_json)
-        do_detect_deleted = (len(data) < CHAT_NUM_VISIBLE_MSGS)
+        messages = [Message(d, self, now_utc, delay) for d in data]
+        new_messages = self.add_messages(messages, can_be_old=True)
+        return new_messages, deleted_messages
+
+    def delete_old_messages(self, max_num_msgs=CHAT_MAX_NUM_MSGS):
+        deleted_messages = []
+        if len(self.messages) > max_num_msgs:
+            i_cut = len(self.messages) - max_num_msgs
+            deleted_messages = self.messages[:i_cut]
+            self.messages = self.messages[i_cut:]
+        return deleted_messages
+
+    def add_messages(self, messages, can_be_old=True):
+        new_messages = []
+        do_detect_deleted = True
         i_msg = 0
-        can_be_old = True
         is_new = True
-        for d in data:
-            msg = Message(d, self, now_utc, delay)
+        for msg in messages:
             if can_be_old:
                 is_new = True
                 for i in range(i_msg, len(self.messages)):
@@ -216,7 +241,9 @@ class Tournament:
                         is_new = False
                         self.messages[i].update(msg)
                         if do_detect_deleted:
-                            for j in range(max(0, i - 1 - CHAT_NUM_VISIBLE_MSGS + len(data)), i - 1):
+                            for j in range(i - 1, -1, -1):
+                                if self.messages[j].is_deleted:
+                                    break
                                 self.messages[j].is_deleted = True
                             do_detect_deleted = False
                         break
@@ -228,7 +255,53 @@ class Tournament:
                 if not msg.is_official:
                     self.user_names.add(msg.username)
                 can_be_old = False
-        return new_messages, deleted_messages
+        return new_messages
+
+    @staticmethod
+    def update_db(new_messages):
+        with db.atomic():
+            for msg in new_messages:
+                msg_db = Messages.create(time=msg.time.replace(tzinfo=None), delay=msg.delay, username=msg.username,
+                                         text=msg.text, removed=msg.is_removed, disabled=msg.is_disabled,
+                                         timeout=msg.is_timed_out, tournament=msg.tournament.id)
+                msg.db_id = msg_db.id
+
+    def set_max_messages(self, flag, chat):
+        old_flag = self.keep_max_messages
+        self.keep_max_messages = flag
+        if flag:
+            if not self.messages or self.messages[0].db_id is None:
+                raise Exception(f"No messages to load. Tournament ID: {self.id}")
+            db_messages = []
+            for msg in Messages.select().where((Messages.tournament == self.id) & (Messages.id < self.messages[0].db_id)). \
+                    order_by(-Messages.time, -Messages.id).limit(CHAT_MAX_NUM_OLD_MSGS):
+                data = {'u': msg.username, 't': msg.text, 'r': msg.removed, 'd': msg.disabled}
+                old_msg = Message(data, self, msg.time.replace(tzinfo=tz.tzutc()), msg.delay, msg.id, msg.timeout)
+                old_msg.is_deleted = True
+                db_messages.append(old_msg)
+            new_messages = []
+            with chat.msg_lock:
+                for msg in db_messages:
+                    msg.id = Message.global_id
+                    Message.global_id += 1
+                    self.messages.insert(0, msg)
+                    msg.dont_evaluate()
+                    new_messages.append(msg)
+                    if not msg.is_official:
+                        self.user_names.add(msg.username)
+            chat.sync_messages(self.id, new_messages, [])
+        elif old_flag:
+            with chat.msg_lock:
+                deleted_messages = self.delete_old_messages()
+            chat.sync_messages(self.id, [], deleted_messages)
+
+    def set_enabled(self, flag, chat):
+        self.is_enabled = flag
+        if not flag:
+            self.set_max_messages(False, chat)
+
+    def is_more(self):
+        return (not self.keep_max_messages) and len(self.messages) >= CHAT_MAX_NUM_MSGS
 
     def process_usernames(self, text):
         i1 = text.find(TOURNEY_STANDING_BEGINNING_TEXT)
@@ -247,7 +320,9 @@ class Tournament:
         self.max_score = 0
         self.total_score = 0
         to_timeout = {}
-        for msg in self.messages:
+        for msg in self.messages[:-CHAT_MAX_NUM_MSGS]:
+            msg.dont_evaluate()
+        for msg in self.messages[-CHAT_MAX_NUM_MSGS:]:
             if msg.score is not None:
                 continue
             msg.evaluate(self.re_usernames)

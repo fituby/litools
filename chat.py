@@ -11,6 +11,7 @@ from elements import get_notes, add_note, load_mod_log, get_mod_log, get_highlig
 from elements import ModActionType, ModAction, UserData
 from chat_message import Message
 from chat_tournament import Tournament
+from database import Messages, db
 from consts import *
 
 
@@ -170,11 +171,7 @@ class ChatAnalysis:
             if not new_messages and tourn.is_error_404_too_long(now_utc) and not tourn.has_sus_messages():
                 del self.tournaments[tourn_id]
                 return
-            self.tournament_messages.update({msg.id: tourn_id for msg in new_messages})
-            self.all_messages.update({msg.id: msg for msg in new_messages})
-            for del_msg in deleted_messages:
-                del self.tournament_messages[del_msg.id]
-                del self.all_messages[del_msg.id]
+            self.sync_messages(tourn_id, new_messages, deleted_messages)
             to_timeout_i = tourn.analyse()
             for m in to_timeout_i.values():
                 add_timeout_msg(self.to_timeout, m)
@@ -187,6 +184,13 @@ class ChatAnalysis:
                 self.api_timeout(msg, msg.best_ban_reason(), False, auto_mod, is_auto=DO_AUTO_TIMEOUTS)
             self.to_timeout.clear()
             tourn.set_reports(now_utc)
+
+    def sync_messages(self, tourn_id, new_messages, deleted_messages):
+            self.tournament_messages.update({msg.id: tourn_id for msg in new_messages})
+            self.all_messages.update({msg.id: msg for msg in new_messages})
+            for del_msg in deleted_messages:
+                del self.tournament_messages[del_msg.id]
+                del self.all_messages[del_msg.id]
 
     def set_msg_ok(self, msg_id):
         try:
@@ -295,11 +299,11 @@ class ChatAnalysis:
                 end_time = msg.time + timedelta(minutes=TIMEOUT_RANGE[1])
                 for m in self.all_messages.values():
                     if m.username == msg.username and start_time < m.time < end_time:
-                        m.is_timed_out = True
+                        m.set_timed_out()
                         m.is_reset = False
                 for m in msg.tournament.messages:
                     if m.username == msg.username:
-                        m.is_timed_out = True
+                        m.set_timed_out()
                         m.is_reset = False
                 self.update_selected_user(mod)
                 self.recommended_timeouts.pop(msg.id, None)
@@ -701,6 +705,12 @@ class ChatAnalysis:
         def make_selected(msg_selected):
             return f'<div class="border border-success rounded" style="{get_highlight_style(0.3)}">{msg_selected}</div>'
 
+        def load_more_btn(tournament_id, index):
+            return f'<div class="d-flex"><button id="btn-load-more-{index}" class="btn btn-success flex-grow-1 py-0 px-1" ' \
+                   f'onclick="load_more(\'{tourn_id}\');"><i class="fas fa-long-arrow-alt-up"></i>' \
+                   f'<span class="mx-2">Load more</span><i class="fas fa-long-arrow-alt-up"></i></button></div>' \
+                   if self.tournaments[tournament_id].is_more() else ""
+
         tournament_name = ""
         tournament_update = ""
         try:
@@ -738,7 +748,8 @@ class ChatAnalysis:
                              for msg_user in self.tournaments[tourn_id].messages if msg_user.username == msg_i.username]
                 user_msgs = [(msg_i if msg_user.id == msg_id else msg_user)
                              for msg_user in self.tournaments[tourn_id].messages if msg_user.username == msg_i.username]
-                list_start = '<hr class="text-primary my-1" style="border:1px solid;">' if i_start == 0 else ""
+                list_start = '<hr class="text-primary my-1" style="border:1px solid;">' \
+                    if i_start == 0 and not self.tournaments[tourn_id].is_more() else ""
                 list_end = '<hr class="text-primary mt-1 mb-0" style="border:1px solid;">'\
                            if i_end == len(self.tournaments[tourn_id].messages) else ""
                 username = msg_i.username
@@ -746,8 +757,9 @@ class ChatAnalysis:
             if not u or not u.is_up_to_date():
                 self.update_selected_user(mod)
             user = self.users[mod.id].get(username)
-            info_selected = f'{list_start}{"".join(msgs_before)} {msg} {"".join(msgs_after)}{list_end}'
-            info_filtered = "".join(msgs_user)
+            info_selected = f'{load_more_btn(tourn_id, 1)}{list_start}{"".join(msgs_before)} {msg} {"".join(msgs_after)}' \
+                            f'{list_end}'
+            info_filtered = f'{load_more_btn(tourn_id, 2)}{"".join(msgs_user)}'
             return create_output(info_selected, tournament_name, user, tournament_update,
                                  filtered_info=info_filtered, user_msgs=user_msgs)
         except Exception as exception:
@@ -787,7 +799,8 @@ class ChatAnalysis:
             self.add_error(f"ERROR: No tournament \"{tourn_id}\" to set {checked}", False)
             self.state_reports += 1
             return
-        tournament.is_enabled = (not tournament.is_enabled) if checked is None else checked
+        is_enabled = (not tournament.is_enabled) if checked is None else checked
+        tournament.set_enabled(is_enabled, self)
 
     def delete_tournament(self, tourn_id):
         tournament = self.tournaments.get(tourn_id)
@@ -814,15 +827,15 @@ class ChatAnalysis:
             if group == "created":
                 for tourney in active_tournaments:
                     if tourney.is_created(now_utc):
-                        tourney.is_enabled = checked
+                        tourney.set_enabled(checked, self)
             elif group == "started":
                 for tourney in active_tournaments:
                     if tourney.is_ongoing(now_utc):
-                        tourney.is_enabled = checked or tourney.is_monitored
+                        tourney.set_enabled(checked or tourney.is_monitored, self)
             elif group == "finished":
                 for tourney in active_tournaments:
                     if tourney.is_finished(now_utc):
-                        tourney.is_enabled = checked
+                        tourney.set_enabled(checked, self)
         self.state_tournaments += 1
         return self.get_tournaments(active_tournaments)
 
@@ -875,6 +888,17 @@ class ChatAnalysis:
                 self.state_tournaments += 1
                 self.state_reports += 1
         return self.get_tournaments()
+
+    def load_more(self, tourn_id, mod):
+        tournament = self.tournaments.get(tourn_id)
+        if tournament:
+            tournament.set_max_messages(True, self)
+        else:
+            self.add_error(f"ERROR: No tournament \"{tourn_id}\" to load more messages", False)
+        self.state_reports += 1
+        data = self.get_tournaments()
+        data.update(self.get_all(mod))
+        return data
 
     def get_score_sorted_tournaments(self, now_utc, active_only=True):
         active_tournaments = [tourn for tourn in self.tournaments.values() if not active_only or tourn.is_active(now_utc)]
@@ -1037,6 +1061,12 @@ class ChatAnalysis:
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: send_note: {exception}", False)
             self.state_reports += 1
         return {'selected-user': username, 'mod-notes': "", 'user-profile': "", 'user-info': ""}
+
+    def clear_messages_database(self):
+        old_dt = datetime.now(tz=tz.tzutc()).replace(tzinfo=None) - timedelta(days=CHAT_MSGS_LIFETIME)
+        with db.atomic():
+            with self.msg_lock:
+                Messages.delete().where(Messages.time < old_dt).execute()
 
 
 def get_current_tournaments(non_mod):

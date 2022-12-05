@@ -27,5 +27,20 @@ class Authentication(Model):
         database = db
 
 
+class Messages(Model):
+    id = AutoField()
+    time = DateTimeField()
+    delay = IntegerField(null=True)
+    username = CharField(max_length=20+4)
+    text = CharField()
+    removed = BooleanField(default=False)
+    disabled = BooleanField(default=False)
+    timeout = BooleanField(default=False)
+    tournament = CharField()
+
+    class Meta:
+        database = db
+
+
 db.connect()
-db.create_tables([Mods, Authentication], safe=True)
+db.create_tables([Mods, Authentication, Messages], safe=True)

@@ -4,6 +4,7 @@ from datetime import datetime
 from enum import IntFlag
 from elements import STYLE_WORD_BREAK
 from chat_re import list_res, list_res_variety, re_spaces, Lang
+from database import Messages
 from elements import Reason, deltaseconds, get_highlight_style, log, log_exception
 from consts import CONFIG_FILE
 
@@ -42,9 +43,10 @@ class Message:
     def is_id_multi(id):
         return id is not None and id < 0
 
-    def __init__(self, data, tournament, now=None, delay=None):
+    def __init__(self, data, tournament, time=None, delay=None, db_id=None, is_timed_out=False):
         self.id: int = None
-        self.time: datetime = now
+        self.db_id = db_id
+        self.time: datetime = time
         self.delay: int = delay
         self.username = data['u']
         self.text = data['t']
@@ -54,7 +56,7 @@ class Message:
         self.is_removed = data.get('r', False)  # SB'ed, was never visible
         self.is_disabled = data.get('d', False)  # deleted by mods
         self.is_reset = False  # processed as good
-        self.is_timed_out = False  # processed as bad
+        self.is_timed_out = is_timed_out  # processed as bad
         self.tournament = tournament
         self.score: int = None
         self.reasons = [0] * Reason.Size
@@ -88,8 +90,24 @@ class Message:
         return f'<b>{text}</b>'
 
     def update(self, msg):
+        if self.is_removed == msg.is_removed and self.is_disabled == msg.is_disabled:
+            return
         self.is_removed = msg.is_removed
         self.is_disabled = msg.is_disabled
+        msg_db = Messages.get_or_none(id=self.db_id)
+        if msg_db:
+            msg_db.removed = self.is_removed
+            msg_db.disabled = self.is_disabled
+            msg_db.save()
+
+    def set_timed_out(self, flag=True):
+        if self.is_timed_out == flag:
+            return
+        self.is_timed_out = flag
+        msg_db = Messages.get_or_none(id=self.db_id)
+        if msg_db:
+            msg_db.timeout = self.is_timed_out
+            msg_db.save()
 
     def __eq__(self, other):
         return self.username.lower() == other.username.lower() and self.text == other.text \
@@ -98,10 +116,13 @@ class Message:
     def __repr__(self):
         return f"[{self.username}]: {self.text}"
 
-    def evaluate(self, re_usernames):
-        if self.is_official:
+    def dont_evaluate(self):
             self.eval_text = self.text
             self.score = 0
+
+    def evaluate(self, re_usernames):
+        if self.is_official:
+            self.dont_evaluate()
             return
         try:
             # Remove multiple spaces

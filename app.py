@@ -321,6 +321,16 @@ def chat_add_tournament():
     return resp
 
 
+@app.route('/chat/load_more/<tourn_id>', methods=['POST'])
+def chat_load_more(tourn_id):
+    try:
+        mod = get_mod(request.cookies, update_seenAt=True)
+    except:
+        return Response(status=400)
+    resp = make_response(chat.load_more(tourn_id, mod))
+    return resp
+
+
 @app.route('/chat/send_note', methods=['POST'])
 def chat_send_note():
     try:
@@ -366,11 +376,15 @@ def set_mode(mode):
 
 def chat_loop():
     global chat
+    last_update_count = 0
     while True:
         if chat.wait_refresh_tournaments():
             chat.update_tournaments(non_mod)
         chat.wait_refresh_chats()
         chat.update_chats(non_mod, auto_mod)
+        if chat.update_count >= last_update_count + 100:
+            last_update_count = chat.update_count
+            chat.clear_messages_database()
 
 
 def encode_base64(b):

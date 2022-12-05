@@ -611,6 +611,15 @@
           $('#btn_add_tournament').removeClass("btn-info").addClass("btn-primary");
         });
   }
+  function load_more(tourn_id) {
+    $('#btn-load-more-1').attr("disabled", "");
+    $('#btn-load-more-2').attr("disabled", "");
+    $.ajax({url: `/chat/load_more/${tourn_id}`, type: "post"})
+      .done(function(data, textStatus, jqXHR) {
+        update_tournament_list(data);
+        update_data(data);
+      });
+  }
   function update_notes() {
     $("#notes")[0].style.height = "50px";
     $("#notes")[0].style.height = (Math.max(40, $("#notes")[0].scrollHeight + 5)) + "px";
