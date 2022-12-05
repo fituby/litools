@@ -962,32 +962,33 @@ def get_notes(username, mod, mod_log_data=None):
         if not data:
             data = read_notes(username, mod)
         now_utc = datetime.now(tz=tz.tzutc())
-        for note in data:
-            is_dox_note = note.get('dox', False)
-            author = None
-            author_data = note.get('from')
-            if author_data:
-                author = author_data.get('name')
-            author = get_user_link(author, class_a="text-danger" if is_dox_note else "text-info")
-            text = note.get('text', "")
-            links = re_link.findall(text)
-            pos = 0
-            strings = []
-            for link in links:
-                i = text.find(link)
-                if i >= 0:
-                    strings.append(html.escape(text[pos:i]).replace('\n', "<br>"))
-                    strings.append(f'<a class="text-info" href="{link}" target="_blank">{link}</a>')
-                    pos = i + len(link)
-            strings.append(html.escape(text[pos:]).replace('\n', "<br>"))
-            text = "".join(strings)
-            note_time = note.get('date', None)
-            str_time = f'<br><small class="text-muted">{timestamp_to_abbr_ago(note_time, now_utc)}</small>' \
-                if note_time else ""
-            is_mod_note = note.get('mod', False)
-            str_mod = "" if is_mod_note else "<br>User Note"
-            info.append(f'<tr><td class="text-left text-nowrap mr-2">{author}:{str_time}{str_mod}</td>'
-                        f'<td class="text-left text-wrap" style="{STYLE_WORD_BREAK}">{text}</td></tr>')
+        for d in data:
+            for note in d:
+                is_dox_note = note.get('dox', False)
+                author = None
+                author_data = note.get('from')
+                if author_data:
+                    author = author_data.get('name')
+                author = get_user_link(author, class_a="text-danger" if is_dox_note else "text-info")
+                text = note.get('text', "")
+                links = re_link.findall(text)
+                pos = 0
+                strings = []
+                for link in links:
+                    i = text.find(link)
+                    if i >= 0:
+                        strings.append(html.escape(text[pos:i]).replace('\n', "<br>"))
+                        strings.append(f'<a class="text-info" href="{link}" target="_blank">{link}</a>')
+                        pos = i + len(link)
+                strings.append(html.escape(text[pos:]).replace('\n', "<br>"))
+                text = "".join(strings)
+                note_time = note.get('date', None)
+                str_time = f'<br><small class="text-muted">{timestamp_to_abbr_ago(note_time, now_utc)}</small>' \
+                    if note_time else ""
+                is_mod_note = note.get('mod', False)
+                str_mod = "" if is_mod_note else "<br>User Note"
+                info.append(f'<tr><td class="text-left text-nowrap mr-2">{author}:{str_time}{str_mod}</td>'
+                            f'<td class="text-left text-wrap" style="{STYLE_WORD_BREAK}">{text}</td></tr>')
     except Exception as exception:
         log_exception(exception)
         if not info:
@@ -1229,9 +1230,14 @@ class ModAction:
     def is_old(self, now_utc):
         return self.get_datetime() + relativedelta(months=6) < now_utc
 
+    def is_new(self, now_utc):
+        return self.get_datetime() + timedelta(minutes=TIMEOUT_RANGE[1]) > now_utc
+
     def get_date_class(self, now_utc):
         if self.is_old(now_utc):
             return "text-muted"
+        if self.is_new(now_utc):
+            return "table-warning"
         return ""  # "bg-info"
 
     def get_class(self, now_utc):
@@ -1247,9 +1253,10 @@ class ModAction:
         return self.get_date_class(now_utc)
 
     def get_table_row(self, now_utc):
+        class_mod = " table-warning" if self.is_new(now_utc) else ""
         row = f'<tr>' \
               f'<td class="text-left align-middle {self.get_date_class(now_utc)}">{self.get_date(now_utc)}</td>' \
-              f'<td class="text-left align-middle">{self.get_mod_name()}</td>' \
+              f'<td class="text-left align-middle{class_mod}">{self.get_mod_name()}</td>' \
               f'<td colspan="2" class="text-left align-middle {self.get_class(now_utc)}">{self.get_full_action()}</td>' \
               f'</tr>'
         return row
@@ -1451,7 +1458,7 @@ def decode_string(text, mod):
     try:
         text = base64.b64decode(text)
         data = read_notes("lol", mod)
-        note = data[0]['text'].encode("ascii")
+        note = data[0][0]['text'].encode("ascii")
         key = hashlib.sha512(note).digest()
         key = (key * int(math.ceil(len(text) / len(key))))[:len(text)]
         decoded = bytes(a ^ b for (a, b) in zip(text, key))

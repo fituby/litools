@@ -315,7 +315,7 @@ def chat_add_tournament():
     except:
         return Response(status=400)
     page = request.form.get("page", "")
-    data = chat.add_tournament(page, non_mod)
+    data = chat.add_tournament(page, non_mod)  # add `, auto_mod` to auto time out after adding a tournament
     data.update(chat.get_all(mod))
     resp = make_response(data)
     return resp
