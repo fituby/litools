@@ -377,9 +377,10 @@ class Tournament:
         header = f'<div class="d-flex user-select-none justify-content-between px-1 mb-1" ' \
                  f'style="background-color:rgba(128,128,128,0.2);">' \
                  f'{self.get_link(short=False)}{self.get_status(now_utc)}</div>'
-        btn_clear = f'<div><button class="btn btn-info align-baseline flex-grow-1 py-0 px-1" ' \
+        btn_clear = f'<div><button class="btn btn-info text-nowrap align-baseline flex-grow-1 py-0 px-1" ' \
                     f'onclick="clear_errors(\'{self.id}\');">Clear errors</button></div>' if errors else ""
-        errors = f'<div class="text-warning px-1"><div>{"</div><div>".join(errors)}</div>{btn_clear}</div>' if errors else ""
+        errors = f'<div class="d-flex text-warning justify-content-between px-1"><div>{"<br>".join(errors)}</div>' \
+                 f'{btn_clear}</div>' if errors else ""
         return f'<div class="col rounded m-1 px-0" style="background-color:rgba(128,128,128,0.2);min-width:350px">' \
                f'{header}{errors}{"".join(msgs)}</div>'
 
