@@ -54,6 +54,8 @@
       </div>
       <div id="part-1">
       </div>
+      <div id="performance">
+      </div>
       <div class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2">
         <p class="pr-2 m-0">Mode</p>
         <div class="btn-group btn-group-toggle">
@@ -195,6 +197,7 @@
                 $('#tournaments_downloading').removeClass("d-flex").addClass("d-none");
                 $('#tournaments').css("display","block");
                 $('#tournaments').html(data["tournaments"]);
+                $('#performance').html(data["performance"]);
                 enable_buttons(data);
               });
           }, 1000)
@@ -213,6 +216,7 @@
     $('#tournaments_downloading').removeClass("d-flex").addClass("d-none");
     $('#tournaments').css("display","none");
     $('#tournaments').html("");
+    $('#performance').html("");
     $('#notes-header').html("");
     $('#notes-header').removeClass("d-flex").addClass("d-none");
     $('#mod-notes').html("");

@@ -5,11 +5,14 @@ import time
 from collections import defaultdict
 import math
 from threading import Thread
+import pygal
+from pygal.style import DarkGreenBlueStyle, BlueStyle
 from api import ApiType
 from elements import get_user, shorten, delta_s, log, log_exception
 from elements import get_notes, add_note, load_mod_log, get_mod_log, add_variant_rating
 from elements import ModActionType, WarningStats, User, Games, Variants, PerfType
 from elements import warn_sandbagging, warn_boosting, mark_booster
+from elements import needs_to_refresh_insights, set_insights_refreshed, render
 from consts import *
 
 
@@ -492,6 +495,8 @@ class Boost:
         self.enable_sandbagging = False
         self.enable_boosting = False
         self.prefer_marking = False
+        self.perf_charts = ""
+        self.perf_thread = None
         self.mod_log: ModLogData = None
         self.mod_log_out = ""
         self.info_games_played = ""
@@ -554,6 +559,7 @@ class Boost:
             self.variants.set(perfs)
         self.update_mod_log(mod)
         self.analyse_games(mod)
+        self.analyse_perf(mod)
 
     def analyse_games(self, mod):
         exc: Exception = None
@@ -577,6 +583,88 @@ class Boost:
             sandbag.check_variants(self.variants)
         if exc:
             raise exc
+
+    def analyse_perf(self, mod):
+        if self.perf_thread is None:
+            self.perf_thread = Thread(name="fetch_performance", target=self.fetch_performance, args=(mod,))
+            self.perf_thread.start()
+
+    def fetch_performance(self, mod):
+        self.perf_charts = ""
+        try:
+            now = datetime.now()
+            variant, num_games = self.variants.get_most_played_variant()
+            if not variant:
+                raise Exception("Performance error: No games")
+            if needs_to_refresh_insights(self.user.id, now):
+                url_refresh = f'https://lichess.org/insights/refresh/{self.user.id}'
+                r = mod.api.post(ApiType.InsightsRefresh, url_refresh, token=mod.token)
+                if r.status_code != 200:
+                    raise Exception("Performance error: Failed to refresh insights")
+                set_insights_refreshed(self.user.id, now)
+            url = f'https://lichess.org/insights/data/{self.user.id}'
+            headers = {'Content-Type': "application/json"}
+            data = {'metric': "performance", 'dimension': "date", 'filters': {'variant': [variant]}}
+            r = mod.api.post(ApiType.InsightsData, url, token=mod.token, json=data, headers=headers)
+            if r.status_code != 200:
+                raise Exception("Performance error: Failed to fetch insights")
+            chart, sizes, dates = Boost.plot_chart(r.json(), mod)
+            title = f"Performance in {variant[0].upper()}{variant[1:]}"
+            link = f"https://lichess.org/insights/{self.user.id}/performance/date/variant:{variant}"
+            button = f'<button class="btn btn-primary mt-3 py-0" onclick="add_to_notes(this)" ' \
+                     f'data-selection=\'{link}\'>{title}</button>'
+            self.perf_charts = f'<div class="d-flex align-items-baseline justify-content-center">{button}' \
+                               f'<a class="ml-2" href="{link}" target="_blank">open</a></div>{chart}'
+            if num_games >= 20 and sum(sizes) > 3 * num_games:
+                n = 0
+                cumulative_size = 0
+                for i in range(len(sizes) - 1, -1, -1):
+                    n += 1
+                    cumulative_size += sizes[i]
+                    if cumulative_size >= num_games:
+                        break
+                if n < 0.6 * len(sizes):
+                    period = (now - datetime.fromtimestamp(dates[-n])).days
+                    period = min(int(1.2 * period), period + 14)
+                    if 300 < period < 400:
+                        period = 365
+                    elif 150 < period < 200:
+                        period = 182
+                    elif period > 60:
+                        period = int(math.ceil(period / 30)) * 30
+                    elif period > 30:
+                        period = int(math.ceil(period / 10)) * 10
+                    data['filters']['period'] = [str(period)]
+                    r = mod.api.post(ApiType.InsightsData, url, token=mod.token, json=data, headers=headers)
+                    if r.status_code != 200:
+                        raise Exception("Performance error: Failed to fetch insights with a period")
+                    chart, _, _ = Boost.plot_chart(r.json(), mod)
+                    link = f"https://lichess.org/insights/{self.user.id}/performance/date/" \
+                           f"variant:{variant}/period:{period}"
+                    button = f'<button class="btn btn-primary mt-2 py-0" onclick="add_to_notes(this)" ' \
+                             f'data-selection=\'{link}\'>The last {period} day{"" if period == 1 else "s"}</button>'
+                    self.perf_charts = f'{self.perf_charts}<div class="d-flex align-items-baseline justify-content-center">'\
+                                       f'{button}<a class="ml-2" href="{link}" target="_blank">open</a></div>{chart}'
+        except:
+            pass
+
+    @staticmethod
+    def plot_chart(res, mod, title=None):
+        sizes = res['sizeSerie']['data']
+        dates = res['xAxis']['categories']
+        perfs = res['series'][0]['data']
+        max_perf = int(math.ceil(max(perfs) / 100)) * 100
+        coef = 1.2 * max(sizes) / max_perf
+        scaled_sizes = [{'value': s / coef, 'style': f'fill: grey; stroke: grey;'} for s in sizes]
+        chart = pygal.Bar(title=title, width=CHART_WIDTH_BOOST, x_label_rotation=315, range=(600, max_perf))
+        chart.add("Performance", [int(p) for p in perfs])
+        chart.add("Number of games", scaled_sizes, formatter=lambda x: f'{x * coef:0.0f}')
+        chart.x_labels = [f"{datetime.fromtimestamp(d, tz=tz.tzutc()):%Y-%m-%d}" for d in dates]
+        chart.show_legend = False
+        is_dark_mode = not mod.view.theme_color.upper().startswith("#FFF")
+        style = DarkGreenBlueStyle if is_dark_mode else BlueStyle
+        perf_charts = render(chart, style, mod.view.theme_color)
+        return perf_charts, sizes, dates
 
     def update_mod_log(self, mod):
         mod_log_data = load_mod_log(self.user.name, mod) if mod.is_mod() else None
@@ -653,6 +741,9 @@ class Boost:
             output['tournaments'] = table
         else:
             output['tournaments'] = '<p class="mt-3">No tournaments</p>'
+        if self.perf_thread:
+            self.perf_thread.join()
+        output['performance'] = self.perf_charts
         if self.user.is_error:
             mod.boost_cache.pop(self.user.id, None)
         self.output_tournaments = output
@@ -714,6 +805,9 @@ class Boost:
             self.prefer_marking = True
             self.disable_buttons()
             return
+        if self.user.createdAt is None:
+            self.disable_buttons()
+            return  # account closed
         self.enable_sandbagging = False
         now_utc = datetime.now(tz=tz.tzutc())
         if self.user.is_error:

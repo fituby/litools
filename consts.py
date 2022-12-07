@@ -72,6 +72,7 @@ API_TOURNEY_DELAY = 0.5  # [s]
 BOOST_RING_TOOL = b'iSfVR3ICd3lHqSQf2ucEkLvyvCf0'
 STATUSES_TO_DISCARD_BOOST = ["created", "started", "aborted", "unknownFinish", "draw", "cheat"]
 PERCENT_EXTRA_GAMES_TO_DOWNLOAD = 10
+CHART_WIDTH_BOOST = 500
 
 # Alt
 MAX_NUM_GAMES_TO_DOWNLOAD = 99999
@@ -85,7 +86,6 @@ ALT_MAX_LEN_NAME = 8
 CHART_WIDTH = 1000
 BAR_DANGER = 'rgba(231, 76, 60, 1)'
 ALT_UPDATE_PERIOD = 30 * 60  # seconds
-ALT_REFRESH_OPENINGS_PERIOD = 24 * 60 * 60  # seconds
 ALT_MAX_PERIOD_FOR_GAMES = 2*365  # days
 
 # Authentication
@@ -96,3 +96,4 @@ UPDATE_INTERVAL_MOD_PERMS = 24 * 60 * 60  # [s]
 
 CONFIG_FILE = "config.yml"
 NOT_READY = {'not ready': True}
+REFRESH_OPENINGS_PERIOD = 24 * 60 * 60  # seconds

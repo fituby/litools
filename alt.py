@@ -10,14 +10,8 @@ from api import ApiType
 from elements import UserData, Games, Variants, ModActionType, PerfType
 from elements import get_tc, delta_s, deltainterval, datetime_to_ago, get_user_ids, log
 from elements import load_mod_log, get_mod_log, get_notes
+from elements import needs_to_refresh_insights, set_insights_refreshed, render
 from consts import *
-
-
-def render(chart, style=DarkStyle, theme_color="#222222"):
-    style = style(major_label_font_size=16, label_font_size=16,  # value_label_font_size=18, value_font_size=18,
-                  title_font_size=24, legend_font_size=18, tooltip_font_size=20,
-                  background=theme_color, plot_background=theme_color)  # background='transparent')
-    return f'<embed type="image/svg+xml" src={chart.render_data_uri(style=style)} />'
 
 
 class Color(Enum):
@@ -63,7 +57,6 @@ def download_openings(user_id, color, opening_stage, mod, to_refresh=False):
 
 class Alt:
     team_cache = {}  # TODO: based on `alt_cache`s, clear to prevent memory leak?
-    refresh_openings_times = {}
 
     def __init__(self, username, num_games, mod):
         if not num_games:
@@ -136,31 +129,23 @@ class Alt:
             for tc in self.hist_tcs.keys():
                 self.hist_tcs[tc] = self.hist_tcs[tc] * 100 / num_games
 
-    def needs_to_refresh_openings(self, now):
-        return self.user.id not in Alt.refresh_openings_times \
-               or delta_s(now, Alt.refresh_openings_times[self.user.id]) > ALT_REFRESH_OPENINGS_PERIOD
-
     def download_openings(self, refresh_openings, mod):
         if self.user.is_error:
             return
         now = datetime.now()
         if self.time_step1 and delta_s(now, self.time_step1) < ALT_UPDATE_PERIOD \
-                and (not refresh_openings or not self.needs_to_refresh_openings(now)):
+                and (not refresh_openings or not needs_to_refresh_insights(self.user.id, now)):
             return
         for color in Color:
             for opening_stage in OpeningStage:
-                to_refresh = self.needs_to_refresh_openings(now)
+                to_refresh = needs_to_refresh_insights(self.user.id, now)
                 if to_refresh and not refresh_openings:
                     wait_s = mod.api.get_waiting_time(ApiType.InsightsRefresh)
                     to_refresh = (wait_s <= 0)
                 self.hist_openings[color][opening_stage] = download_openings(self.user.id, color, opening_stage, mod,
                                                                              to_refresh)
                 if to_refresh:
-                    user_ids = Alt.refresh_openings_times.keys()
-                    for user_id in user_ids:
-                        if delta_s(now, Alt.refresh_openings_times[user_id]) >= ALT_REFRESH_OPENINGS_PERIOD:
-                            del Alt.refresh_openings_times[user_id]
-                    Alt.refresh_openings_times[self.user.id] = now
+                    set_insights_refreshed(self.user.id, now)
         self.time_step1 = now
 
     def download_teams(self, mod):
@@ -662,8 +647,7 @@ class Alts:
                     </div>'''
         # Refresh openings button
         if self.is_step2:
-            now = datetime.now()
-            refresh_players = [player.user.name for player in self.players if player.needs_to_refresh_openings(now)]
+            refresh_players = [player.user.name for player in self.players if needs_to_refresh_insights(player.user.id)]
             if refresh_players:
                 if len(refresh_players) == 2:
                     player_list = " and ".join(refresh_players)

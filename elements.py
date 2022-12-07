@@ -13,6 +13,7 @@ import base64
 import random
 import struct
 from itertools import chain
+from pygal.style import DarkStyle
 from api import ApiType
 from consts import *
 
@@ -24,6 +25,7 @@ port = 5000
 num_threads = 2
 uri = ""
 embed_lichess = False
+refresh_insights_times = {}
 
 STYLE_WORD_BREAK = "word-break:break-word;"  # "word-break:break-all;"
 re_link = re.compile(r'\bhttps?:\/\/(?:www\.)?[-_a-zA-Z0-9]*\.?lichess\.(?:ovh|org)\/[-a-zA-Z0-9@:%&\?\$\.,_\+~#=\/]+\b', re.IGNORECASE)
@@ -161,6 +163,29 @@ def get_uri():
 def get_embed_lichess():
     load_config()
     return embed_lichess
+
+
+def needs_to_refresh_insights(user_id, now=None):
+    if now is None:
+        now = datetime.now()
+    return user_id not in refresh_insights_times \
+        or delta_s(now, refresh_insights_times[user_id]) > REFRESH_OPENINGS_PERIOD
+
+
+def set_insights_refreshed(user_id, now=None):
+    if now is None:
+        now = datetime.now()
+    for u_id in list(refresh_insights_times.keys()):
+        if delta_s(now, refresh_insights_times[u_id]) >= REFRESH_OPENINGS_PERIOD:
+            del refresh_insights_times[u_id]
+    refresh_insights_times[user_id] = now
+
+
+def render(chart, style=DarkStyle, theme_color="#222222"):
+    style = style(major_label_font_size=16, label_font_size=16,  # value_label_font_size=18, value_font_size=18,
+                  title_font_size=24, legend_font_size=18, tooltip_font_size=20,
+                  background=theme_color, plot_background=theme_color)  # background='transparent')
+    return f'<embed type="image/svg+xml" src={chart.render_data_uri(style=style)} />'
 
 
 class TournType(Enum):
@@ -561,6 +586,15 @@ class Variants:
                     stable_ratings = ratings[:i_end] if i_end > 0 else [ratings[0]]
                     v.stable_rating_range = [min(stable_ratings), max(stable_ratings)]
         self.are_recent_games = True
+
+    def get_most_played_variant(self):
+        max_num_recent_games = 0
+        variant = ""
+        for v in self.variants:
+            if v.num_recent_games and (v.num_recent_games > max_num_recent_games):
+                max_num_recent_games = v.num_recent_games
+                variant = v.name
+        return variant, max_num_recent_games
 
     def __iter__(self):
         return iter(self.variants)

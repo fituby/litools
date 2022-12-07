@@ -1,6 +1,6 @@
 import yaml
 import html
-from datetime import datetime
+from datetime import datetime, timedelta
 from enum import IntFlag
 from elements import STYLE_WORD_BREAK
 from chat_re import list_res, list_res_variety, re_spaces, Lang
@@ -183,7 +183,10 @@ class Message:
                 else f"{abs(ds) // 60}m{abs(ds) % 60:02d}s" if abs(ds) < 300 \
                 else f"{int(round(abs(ds) / 60))}m"
             str_time = f"&minus;{dt} " if ds < 0 else f'+{dt} ' if ds > 0 else "== "
-            str_time = f'<abbr title="{self.time.astimezone(tz=None):%H:%M:%S}" class="user-select-none" ' \
+            time_tz = self.time.replace(tzinfo=None)
+            time_interval = f"{time_tz:%H:%M:%S} or before" if self.delay is None \
+                else f"{time_tz - timedelta(seconds=self.delay):%H:%M:%S}…{time_tz:%H:%M:%S}"
+            str_time = f'<abbr title="{time_interval}" class="user-select-none" ' \
                        f'style="text-decoration:none;">{str_time}</abbr>'
         score_theme = "" if self.score is None else ' text-danger' if self.score > 50 \
             else ' text-warning' if self.score > 10 else ""
