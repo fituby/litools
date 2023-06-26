@@ -533,7 +533,7 @@ class Alts:
                     </table>
                     </div>'''
         info = [alt.get_mutual_games(self.alt_names) for alt in self.players]
-        return f'{table}{"".join(info)}'
+        return f'{table}<div class="d-flex flex-column align-content-center flex-wrap">{"".join(info)}</div>'
 
     def get_overlapping_games(self):
         if not self.is_step2 or len(self.players) <= 1:
@@ -591,7 +591,7 @@ class Alts:
                       {"".join(rows)}
                     </table>
                     </div>'''
-        return f'{table}{"".join(info)}'
+        return f'{table}<div class="d-flex flex-column align-content-center flex-wrap">{"".join(info)}</div>'
 
     def get_info_1(self):
         # User table
@@ -655,10 +655,11 @@ class Alts:
                     player_list = f'{", ".join(refresh_players[:-1])}, and {refresh_players[-1]}'
                 else:
                     player_list = ", ".join(refresh_players)
-                refresh_openings = f'<div id="refresh-openings" class="d-flex align-items-baseline mt-3">' \
+                refresh_openings = f'<div id="refresh-openings" class="d-flex align-items-center mt-3">' \
                                    f'<button class="btn btn-warning py-0 px-2 mr-2"' \
                                    f' onclick="refresh_openings()">Refresh openings</button>' \
-                                   f'<span>for {player_list}</span></div>'
+                                   f'<span>for {player_list} after 5 min as Lichess doesn\'t allow too frequent requests' \
+                                   f' via API :(</span></div>'
             else:
                 refresh_openings = ""
         else:

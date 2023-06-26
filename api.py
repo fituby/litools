@@ -1,4 +1,5 @@
 import requests
+from requests.adapters import HTTPAdapter, Retry
 import json
 from collections import defaultdict
 import time
@@ -63,6 +64,10 @@ class Api:
     ndjson_lock = Lock()
     verbose = 0  # 0, 1, 2
 
+    requests_session = requests.Session()
+    retries = Retry(total=5, backoff_factor=0.1)
+    requests_session.mount('https://lichess.org/', HTTPAdapter(max_retries=retries))
+
     def __init__(self):
         self.api_times = defaultdict(list)
 
@@ -104,10 +109,15 @@ class Api:
             headers = self.prepare(api, url, token, "GET", **kwargs)
             kwargs.pop('headers', None)
             try:
-                r = requests.get(url, headers=headers, **kwargs)
+                r = Api.requests_session.get(url, headers=headers, **kwargs)
             except requests.exceptions.ChunkedEncodingError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
+                raise exception
+            except Exception as exception:
+                print(f"Error for {url}")
+                print("Waiting 5s...")
+                time.sleep(5)
                 raise exception
             if r.status_code == 429:
                 log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
@@ -119,10 +129,15 @@ class Api:
             headers = self.prepare(api, url, token, "POST", **kwargs)
             kwargs.pop('headers', None)
             try:
-                r = requests.post(url, headers=headers, **kwargs)
+                r = Api.requests_session.post(url, headers=headers, **kwargs)
             except requests.exceptions.ChunkedEncodingError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
+                raise exception
+            except Exception as exception:
+                print(f"Error for {url}")
+                print("Waiting 5s...")
+                time.sleep(5)
                 raise exception
             if r.status_code == 429:
                 log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
@@ -134,10 +149,15 @@ class Api:
             headers = self.prepare(api, url, token, "DELETE", **kwargs)
             kwargs.pop('headers', None)
             try:
-                r = requests.delete(url, headers=headers, **kwargs)
+                r = Api.requests_session.delete(url, headers=headers, **kwargs)
             except requests.exceptions.ChunkedEncodingError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
+                raise exception
+            except Exception as exception:
+                print(f"Error for {url}")
+                print("Waiting 5s...")
+                time.sleep(5)
                 raise exception
             if r.status_code == 429:
                 log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
@@ -153,10 +173,15 @@ class Api:
                        'Authorization': f"Bearer {token}"}
             with Api.ndjson_lock:
                 try:
-                    r = requests.get(url, allow_redirects=True, headers=headers)
+                    r = Api.requests_session.get(url, allow_redirects=True, headers=headers)
                 except requests.exceptions.ChunkedEncodingError as exception:
                     log_exception(exception, to_print=False)
                     time.sleep(6)
+                    raise exception
+                except Exception as exception:
+                    print(f"Error for {url}")
+                    print("Waiting 5s...")
+                    time.sleep(5)
                     raise exception
                 if r.status_code == 429:
                     if Api.verbose:

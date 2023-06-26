@@ -209,7 +209,12 @@ class Profile:
     def set(self, data):
         self.country = data.get('country', "")
         self.location = data.get('location', "")
-        self.bio = data.get('bio', "")
+        bio = data.get('bio', "")
+        try:
+            self.bio = html.escape(bio)
+        except Exception as exception:
+            print(f"ERROR when processing bio: {bio}")
+            self.bio = "<ERROR>"
         self.firstName = data.get('firstName', "")
         self.lastName = data.get('lastName', "")
         self.fideRating = data.get('fideRating', 0)
@@ -390,12 +395,22 @@ class UserData(User):
         self.mod_log = ""
         self.actions = []
         self.notes = ""
+        self.bio_add = ""
         self.errors = [api_error] if api_error else []
         self.is_error = not not api_error
         self.time_update = datetime.now(tz=tz.tzutc())
 
     def is_up_to_date(self):
         return delta_s(datetime.now(tz=tz.tzutc()), self.time_update) <= LIFETIME_USER_CACHE
+
+    def get_profile(self):
+        if self.bio_add:
+            old_bio = self.profile.bio
+            self.profile.bio = f'<span>{self.profile.bio} {self.bio_add}</span>'
+            str_profile = super().get_profile()
+            self.profile.bio = old_bio
+            return str_profile
+        return super().get_profile()
 
 
 def get_user(username, mod):
@@ -1237,7 +1252,7 @@ class ModAction:
                 action = self.details  # "warning"
         elif self.action == 'chatTimeout':
             if self.details.startswith('shaming'):
-                action = "Timeout: Shaming"
+                action = "Timeout: Accusations"
             elif self.details.startswith('insult'):
                 action = "Timeout: Insult"
             elif self.details.startswith('spam'):
@@ -1359,8 +1374,8 @@ class ChatModAction(ModAction):
 
     def get_class(self, now_utc):
         if self.is_warning():
-            if self.details in [ModAction.warnings['shaming'], ModAction.warnings['insult'],
-                                ModAction.warnings['trolling'], ModAction.warnings['spam']]:
+            if self.details in [ModAction.warnings['shaming'], ModAction.warnings['insult'], ModAction.warnings['trolling'],
+                                ModAction.warnings['spam'], ModAction.warnings['ad'], ModAction.warnings['team_ad']]:
                 return "table-secondary" if self.is_old(now_utc) else "table-warning"
             return "table-muted" if self.is_old(now_utc) else "table-info"
         if self.action in ['engine', 'booster', 'troll', 'alt', 'closeAccount']:

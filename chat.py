@@ -3,6 +3,7 @@ from dateutil import tz
 import time
 from threading import Lock
 import re
+import sys
 from collections import defaultdict
 from typing import DefaultDict, Dict
 from api import ApiType
@@ -13,6 +14,9 @@ from chat_message import Message
 from chat_tournament import Tournament
 from database import Messages, db
 from consts import *
+
+
+sys.setrecursionlimit(9999)
 
 
 official_teams = [
@@ -268,7 +272,7 @@ class ChatAnalysis:
             return
         if msg.is_timed_out or msg.is_disabled:
             self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
-                           f"@{msg.username}'s message is already timed out", False)
+                           f"Someone else just timed out @{msg.username}'s message", False)
             return
         if msg.is_removed:
             self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
@@ -292,7 +296,7 @@ class ChatAnalysis:
             timeout_tag = ('' if is_timeout_manual else '[AUTO] ') if is_auto else ""
             if len(msg.text) > MAX_LEN_TEXT:
                 text = f'{text}{msg.text[MAX_LEN_TEXT-1:]}'
-            if r.status_code == 200 and r.text == "ok":
+            if 200 <= r.status_code <= 299:
                 log(f"{timeout_tag}{reason_tag.upper()} @{msg.username} score={msg.score} "
                     f"{chan.upper()}={msg.tournament.id}: {text}", True)
                 start_time = msg.time - timedelta(minutes=TIMEOUT_RANGE[0])
@@ -411,6 +415,10 @@ class ChatAnalysis:
             if subject_tag == "SB":
                 self.api_SB(username, mod)
             else:
+                to_add_note = False
+                if subject_tag.endswith('_Note'):
+                    to_add_note = True
+                    subject_tag = subject_tag[:-5]
                 warning = ModAction.warnings.get(subject_tag)
                 if warning:
                     if subject_tag == "kidMode":
@@ -418,6 +426,12 @@ class ChatAnalysis:
                         is_set = self.api_kidMode(username, mod, False)
                         if is_set:
                             self.api_warn(username, warning, mod, check_updates=False)
+                        if to_add_note:
+                            user = self.users[mod.id].get(username)
+                            if user:
+                                bio = user.profile.bio
+                                if bio:
+                                    self.send_note(f'Bio: {bio}', username, mod)
                     elif subject_tag in ModAction.warnings:
                         self.api_warn(username, warning, mod)
                     else:
@@ -651,14 +665,14 @@ class ChatAnalysis:
                     reasons[last_timeout_reason] += 1
                 buttons = []
                 if is_timed_out or is_recent_timeout:
-                    buttons.append(get_warn_btn('spam', "Warn: Spam", reasons[Reason.Spam], user_name,
-                                                is_disabled=is_recent(last_time, 'spam', now_utc)))
+                    buttons.append(get_warn_btn('shaming', "Warn: Accusations", reasons[Reason.Shaming], user_name,
+                                                is_disabled=is_recent(last_time, 'shaming', now_utc)))
                     buttons.append(get_warn_btn('insult', "Warn: Insult", reasons[Reason.Offensive], user_name,
                                                 is_disabled=is_recent(last_time, 'insult', now_utc)))
+                    buttons.append(get_warn_btn('spam', "Warn: Spam", reasons[Reason.Spam], user_name,
+                                                is_disabled=is_recent(last_time, 'spam', now_utc)))
                     buttons.append(get_warn_btn('trolling', "Warn: Trolling", reasons[Reason.Other], user_name,
                                                 is_disabled=is_recent(last_time, 'trolling', now_utc)))
-                    buttons.append(get_warn_btn('shaming', "Warn: Shaming", reasons[Reason.Shaming], user_name,
-                                                is_disabled=is_recent(last_time, 'shaming', now_utc)))
                     buttons.append(get_warn_btn('ad', "Warn: Ads", False, user_name,
                                                 is_disabled=is_recent(last_time, 'ad', now_utc)))
                     buttons.append(get_warn_btn('team_ad', "Warn: Team Ad", False, user_name,
@@ -672,6 +686,10 @@ class ChatAnalysis:
                 if kid_sus:
                     add_info = f'{add_info}{" + " if add_info else ""}<span class="text-warning">' \
                                f'kid?</span>'
+                    if not is_kid and not is_SBed:
+                        user_data.bio_add = f'<button class="btn btn-warning text-nowrap align-baseline flex-grow-0 py-0 ' \
+                                            f'px-1 ml-1" onclick="warn(\'{user_name}\',\'kidMode_Note\');">' \
+                                            f'Kid+Note</button>'
                 if buttons or (not is_kid and not is_SBed):
                     buttons.append(get_warn_btn('kidMode', "Kid Mode", kid_sus, user_name, txt_class="text-warning",
                                                 is_disabled=is_kid))

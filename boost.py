@@ -743,6 +743,7 @@ class Boost:
             output['tournaments'] = '<p class="mt-3">No tournaments</p>'
         if self.perf_thread:
             self.perf_thread.join()
+        self.perf_thread = None
         output['performance'] = self.perf_charts
         if self.user.is_error:
             mod.boost_cache.pop(self.user.id, None)

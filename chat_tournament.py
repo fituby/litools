@@ -20,12 +20,13 @@ class Tournament:
         if startsAt is None:
             self.startsAt = datetime.now(tz=tz.tzutc())
         elif isinstance(startsAt, str):
-            i = startsAt.rfind('.')
-            if i < 0:
+            i1 = startsAt.rfind('.')
+            i2 = startsAt.rfind('Z')
+            if i1 < 0 and i2 < 0:
                 log(f"Error Tournament 'startsAt' {t_type}={self.id}: {tourney}", to_print=True, to_save=True)
                 self.startsAt = datetime.now(tz=tz.tzutc())
             else:
-                self.startsAt = datetime.strptime(startsAt[:i], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=tz.tzutc())
+                self.startsAt = datetime.strptime(startsAt[:max(i1, i2)], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=tz.tzutc())
         else:
             self.startsAt = datetime.fromtimestamp(startsAt // 1000, tz=tz.tzutc())
         if t_type == TournType.Arena:
@@ -372,7 +373,7 @@ class Tournament:
         errors = self.errors.copy()
         errors.extend([str(err) for err in self.errors_500])
         if self.last_error_404 and (msgs or errors):
-            errors.extend(f"Tournament removed at {self.last_error_404:%Y-%m-%d %H:%M} UTC"
+            errors.append(f"Tournament removed at {self.last_error_404:%Y-%m-%d %H:%M} UTC"
                           f" (Failed to download: Status Code 404).")
         header = f'<div class="d-flex user-select-none justify-content-between px-1 mb-1" ' \
                  f'style="background-color:rgba(128,128,128,0.2);">' \
