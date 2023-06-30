@@ -35,6 +35,7 @@ TOURNEY_STANDING_ENDING_TEXT = ']},"socketVersion":'
 HR = '<hr class="my-0" style="border-top:dotted 2px;"/>'
 CHAT_UPDATE_SWISS = False  # loading messages from swiss tourneys doesn't work at the moment anyway
 DO_AUTO_TIMEOUTS = False
+LOG_RESET_MSGS = False
 MULTI_MSG_MIN_TIMEOUT_SCORE = 300
 MAX_LEN_TEXT = 140
 CHAT_NUM_PLAYED_GAMES = [100, 250]

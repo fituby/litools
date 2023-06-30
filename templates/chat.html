@@ -4,9 +4,15 @@
 <div class="container-fluid m-0 px-2" style="max-width:96vw">
   <div class="row justify-content-center my-2">
     <div class="col" style="width:420px;min-height:97vh;">
-      <button class="btn p-0 mb-1" type="button" data-toggle="collapse" data-target="#collapse_settings" aria-expanded="false" aria-controls="collapse_settings">
-        <i class="fas fa-cog text-secondary" style="font-size:23px"></i>
-      </button>
+      <div class="d-flex flex-row justify-content-between align-items-baseline mb-1" style="max-width:500px;">
+        <button class="btn p-0 mb-1 collapsed" type="button" data-toggle="collapse" data-target="#collapse_settings" aria-expanded="false" aria-controls="collapse_settings" onclick="show_settings($(this).is('.collapsed'));">
+          <i class="fas fa-cog text-secondary" style="font-size:23px"></i>
+        </button>
+        <div id="autoselect_setting" class="custom-control custom-switch d-none">
+          <input class="custom-control-input" type="checkbox" role="switch" id="switchAutoSelect" checked="" onchange="update_autoselect(event)">
+          <label class="custom-control-label" for="switchAutoSelect">Auto select on Dismiss</label>
+        </div>
+      </div>
       <div id="settings" style="max-width:500px;">
         <div class="card border-0">
           <div id="collapse_settings" class="collapse" aria-labelledby="set_settings" data-parent="#settings">
@@ -187,6 +193,7 @@
     update_frequency({{update_frequency}}, false);
     filter_score(0, false);
     reset_langs();
+    $("#switchAutoSelect").prop('checked', is_autoselect());
     $("#tournament_settings").css("display","none");
     $("#dubious_messages").css("display","none");
     $("#multiline_messages").css("display","none");
@@ -305,6 +312,7 @@
   }
   function set_ok(msg_id) {
     //if (!is_clickable()) return;
+    var next_id = is_autoselect() ? get_next_report_id(msg_id) : null;
     if (!msg_id.startsWith('C') && !msg_id.startsWith('F'))
       $(`#msg${msg_id}`).css("display","none");
     hide_msg(msg_id, true);
@@ -312,12 +320,17 @@
         .done(function(data_chats, textStatus, jqXHR) {
           hide_msg(msg_id, false);
           update_data(data_chats);
+          if (next_id)
+            select_msg(next_id);
         });
   }
   function timeout(msg_id, reason=0) {
     if (reason == 0 && !is_clickable()) return;
+    //var next_id = null;
     if (msg_id.startsWith('A') || msg_id.startsWith('C') || msg_id.startsWith('F')) {
-      m_id = msg_id.substring(1);
+      //if (is_autoselect())
+      //  next_id = get_next_report_id(msg_id);
+      var m_id = msg_id.substring(1);
       $(`#msgA${m_id}`).css("display","none");
       $(`#msgC${m_id} .btn`).css("display","none");
       $(`#msgF${m_id} .btn`).css("display","none");
@@ -327,6 +340,8 @@
       .done(function(data_chats, textStatus, jqXHR) {
         hide_msg(msg_id, false);
         update_data(data_chats);
+        //if (next_id)
+        //  select_msg(next_id);
       });
   }
   function timeout_multi(msg_id, reason=0) {
@@ -382,6 +397,36 @@
     if (to_request)
       $.ajax({url: `/chat/set_update/${val}`, type: "post"});#}
   }
+  function is_autoselect() {
+    var autoselect = getCookie("msg_autoselect");
+    if (autoselect == null)
+      return false;
+    return autoselect;
+  }
+  function update_autoselect(e) {
+    setCookie('msg_autoselect', event.target.checked);
+  }
+  function get_next_report_id(msg_id) {
+    var m_id = null;
+    if (msg_id.startsWith('A') || msg_id.startsWith('C') || msg_id.startsWith('F'))
+      m_id = msg_id.substring(1);
+    else
+      return null;
+    var reports = $("#chat_reports").find("div").filter(
+      function() {
+        return parseInt($(this).attr("data-mscore")) > 0 && this.style.display == 'block';
+      }
+    );
+    if (reports.length <= 1)
+      return null;
+    var i = reports.index($(`#msgA${m_id}`));
+    if (i < 0)
+      return null;
+    next_id = (i == reports.length - 1) ? reports[0].id : reports[i + 1].id;
+    if (next_id.length <= 4)
+      return null;
+    return next_id.substring(3);
+  }
   function set_selection(data_chats) {
     $('#selected_messages').html(data_chats["selected-messages"]);
     $('#filtered_messages').html(data_chats["filtered-messages"]);
@@ -400,6 +445,12 @@
     update_user_info(data_chats);
     update_mod_notes(data_chats);
     update_mod_log(data_chats);
+    var sel_id = $("#selected_messages .selectee-center").attr('id');
+    var classes = "selected-msgA border border-success rounded";
+    $("#chat_reports .selected-msgA").removeClass(classes);
+    if (sel_id && sel_id.length > 4) {
+      $(`#msgA${sel_id.substring(4)}`).addClass(classes);
+    }
   }
   function update_user_info(data) {
     $('#user-info').html(data["user-info"]);
@@ -448,6 +499,9 @@
     event = event || window.event;
     if (event && (event.target.tagName == "BUTTON" || event.target.tagName == "A") && msg_id != "--" && !msg_id.startsWith('T'))
       return;
+    select_msg(msg_id);
+  }
+  function select_msg(msg_id) {
     username = (msg_id == "--" || msg_id.startsWith('T') || $(`#msg${msg_id} a`).length == 0) ? "" : $(`#msg${msg_id} a`)[0].text;
     update_user_button(username);
     if (notes_user != username) {
@@ -678,6 +732,12 @@
         .done(function(data_chats, textStatus, jqXHR) {
           update_data(data_chats);
         });
+  }
+  function show_settings(flag) {
+    if (flag)
+      $('#autoselect_setting').removeClass("d-none").addClass("d-block");
+    else
+      $('#autoselect_setting').removeClass("d-block").addClass("d-none");
   }
   </script>
 {% endblock %}

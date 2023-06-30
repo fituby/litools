@@ -138,10 +138,8 @@ class Alt:
             return
         for color in Color:
             for opening_stage in OpeningStage:
-                to_refresh = needs_to_refresh_insights(self.user.id, now)
-                if to_refresh and not refresh_openings:
-                    wait_s = mod.api.get_waiting_time(ApiType.InsightsRefresh)
-                    to_refresh = (wait_s <= 0)
+                wait_s = mod.api.get_waiting_time(ApiType.InsightsRefresh)
+                to_refresh = needs_to_refresh_insights(self.user.id, now) and (wait_s <= 0)
                 self.hist_openings[color][opening_stage] = download_openings(self.user.id, color, opening_stage, mod,
                                                                              to_refresh)
                 if to_refresh:
@@ -326,9 +324,10 @@ class Alts:
         except:
             step = 0
         if step >= 1:
-            if step == 1 and not alts.is_step1:
-                if alts.is_step1 is None:
-                    alts.is_step1 = False
+            if step == 1 and (force_refresh_openings or not alts.is_step1):
+                if (alts.is_step1 is None) or (force_refresh_openings and alts.is_step1 is not False):
+                    if alts.is_step1 is not True:
+                        alts.is_step1 = False
                     Thread(name="alts_process", target=alts.process, args=(step, force_refresh_openings, mod)).start()
                 return NOT_READY
             if step == 2 and not alts.is_step2:
@@ -350,6 +349,7 @@ class Alts:
         self.is_step2 = None
         self.is_mod_log = True
         self.errors = []
+        self.wait_insights_refresh_s = 0
 
     def set(self, names, num_games, mod):
         self.players = [get_alt(username, num_games, mod) for username in names]
@@ -359,7 +359,8 @@ class Alts:
 
     def process(self, step, force_refresh_openings, mod):
         try:
-            force_refresh_openings = False if step < 2 else force_refresh_openings
+            if step != 1:
+                force_refresh_openings = False
             self.process_step1(force_refresh_openings, mod)
             if step >= 2:
                 self.process_step2(mod)
@@ -369,11 +370,13 @@ class Alts:
 
     def process_step1(self, force_refresh_openings, mod):
         for alt in self.players:
-            alt.download_teams(mod)
-            #alt.download_following()
+            if not self.is_step1:
+                alt.download_teams(mod)
+                #alt.download_following()
+                if self.is_mod_log:
+                    self.is_mod_log = alt.download_mod_log(mod)
             alt.download_openings(force_refresh_openings, mod)
-            if self.is_mod_log:
-                self.is_mod_log = alt.download_mod_log(mod)
+        self.wait_insights_refresh_s = mod.api.get_waiting_time(ApiType.InsightsRefresh)
         self.is_step1 = True
 
     def process_step2(self, mod):
@@ -649,17 +652,20 @@ class Alts:
         if self.is_step2:
             refresh_players = [player.user.name for player in self.players if needs_to_refresh_insights(player.user.id)]
             if refresh_players:
-                if len(refresh_players) == 2:
-                    player_list = " and ".join(refresh_players)
-                elif len(refresh_players) > 2:
-                    player_list = f'{", ".join(refresh_players[:-1])}, and {refresh_players[-1]}'
+                links = [f'<a href="https://lichess.org/insights/{player_name}/opponentRating/openingFamily/color:black" '
+                         f'target="_blank">{player_name}</a>' for player_name in refresh_players]
+                if len(links) == 2:
+                    player_list = " and ".join(links)
+                elif len(links) > 2:
+                    player_list = f'{", ".join(links[:-1])}, and {links[-1]}'
                 else:
-                    player_list = ", ".join(refresh_players)
+                    player_list = ", ".join(links)
+                wait_s = deltainterval(max(1, self.wait_insights_refresh_s), True, True)
                 refresh_openings = f'<div id="refresh-openings" class="d-flex align-items-center mt-3">' \
                                    f'<button class="btn btn-warning py-0 px-2 mr-2"' \
                                    f' onclick="refresh_openings()">Refresh openings</button>' \
-                                   f'<span>for {player_list} after 5 min as Lichess doesn\'t allow too frequent requests' \
-                                   f' via API :(</span></div>'
+                                   f'<span>for {player_list} after {wait_s} as Lichess doesn\'t allow' \
+                                   f' too frequent requests via API :(</span></div>'
             else:
                 refresh_openings = ""
         else:

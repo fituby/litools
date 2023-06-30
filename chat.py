@@ -201,7 +201,7 @@ class ChatAnalysis:
             msg = self.all_messages.get(int(msg_id[1:]))
             if msg is not None:
                 msg.is_reset = True
-                if msg.score > 20:
+                if LOG_RESET_MSGS and msg.score > 20:
                     reason_tag = Reason.to_tag(msg.best_reason())
                     chan = "tournament" if msg.tournament.t_type == TournType.Arena \
                         else "swiss" if msg.tournament.t_type == TournType.Swiss \
@@ -720,8 +720,10 @@ class ChatAnalysis:
             self.cache_selected_data[mod.id] = data
             return data
 
-        def make_selected(msg_selected):
-            return f'<div class="border border-success rounded" style="{get_highlight_style(0.3)}">{msg_selected}</div>'
+        def make_selected(msg_selected, to_highlight=False):
+            style = f"{get_highlight_style(0.3, True)}border-width:3px !important;" if to_highlight \
+                else get_highlight_style(0.3)
+            return f'<div class="border border-success rounded" style="{style}">{msg_selected}</div>'
 
         def load_more_btn(tournament_id, index):
             return f'<div class="d-flex"><button id="btn-load-more-{index}" class="btn btn-success flex-grow-1 py-0 px-1" ' \
@@ -751,18 +753,26 @@ class ChatAnalysis:
                 i_start = 0
                 i_end = len(self.tournaments[tourn_id].messages)
                 msg_i = self.tournaments[tourn_id].messages[i]
+                username = msg_i.username
+                u = self.users[mod.id].get(username)
+                if not u or not u.is_up_to_date():
+                    self.update_selected_user(mod)
+                user = self.users[mod.id].get(username)
+                is_diff = any([a.action == "permissions" for a in user.actions])
                 msg = make_selected(msg_i.get_info('C', show_hidden=True, highlight_user=True,
-                                                   is_selected=True, is_centered=True))
-                msg_f = make_selected(msg_i.get_info('F', show_hidden=True, highlight_user=True,
-                                                     is_selected=False, is_centered=True, add_selection=True))
+                                                   is_diff_highlight=is_diff, is_selected=True, is_centered=True),
+                                    is_diff)
+                msg_f = make_selected(msg_i.get_info('F', show_hidden=True, highlight_user=True, add_selection=True,
+                                                     is_diff_highlight=is_diff, is_selected=False, is_centered=True),
+                                      is_diff)
                 # msg_f is not selected to allow copying to the notes.
                 # However, this prevents text from being selected with the mouse
-                msgs_before = [self.tournaments[tourn_id].messages[j].get_info('C',
-                               base_time=msg_i.time, highlight_user=msg_i.username) for j in range(i_start, i)]
-                msgs_after = [self.tournaments[tourn_id].messages[j].get_info('C',
-                              base_time=msg_i.time, highlight_user=msg_i.username) for j in range(i + 1, i_end)]
-                msgs_user = [(msg_f if msg_user.id == msg_id else msg_user.get_info(
-                                'F', base_time=msg_i.time, highlight_user=msg_i.username, add_selection=True))
+                msgs_before = [self.tournaments[tourn_id].messages[j].get_info('C', base_time=msg_i.time,
+                               highlight_user=msg_i.username, is_diff_highlight=is_diff) for j in range(i_start, i)]
+                msgs_after = [self.tournaments[tourn_id].messages[j].get_info('C', base_time=msg_i.time,
+                              highlight_user=msg_i.username, is_diff_highlight=is_diff) for j in range(i + 1, i_end)]
+                msgs_user = [(msg_f if msg_user.id == msg_id else msg_user.get_info('F', base_time=msg_i.time,
+                                highlight_user=msg_i.username, is_diff_highlight=is_diff, add_selection=True))
                              for msg_user in self.tournaments[tourn_id].messages if msg_user.username == msg_i.username]
                 user_msgs = [(msg_i if msg_user.id == msg_id else msg_user)
                              for msg_user in self.tournaments[tourn_id].messages if msg_user.username == msg_i.username]
@@ -770,11 +780,6 @@ class ChatAnalysis:
                     if i_start == 0 and not self.tournaments[tourn_id].is_more() else ""
                 list_end = '<hr class="text-primary mt-1 mb-0" style="border:1px solid;">'\
                            if i_end == len(self.tournaments[tourn_id].messages) else ""
-                username = msg_i.username
-            u = self.users[mod.id].get(username)
-            if not u or not u.is_up_to_date():
-                self.update_selected_user(mod)
-            user = self.users[mod.id].get(username)
             info_selected = f'{load_more_btn(tourn_id, 1)}{list_start}{"".join(msgs_before)} {msg} {"".join(msgs_after)}' \
                             f'{list_end}'
             info_filtered = f'{load_more_btn(tourn_id, 2)}{"".join(msgs_user)}'

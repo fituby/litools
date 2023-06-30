@@ -26,7 +26,8 @@ class Tournament:
                 log(f"Error Tournament 'startsAt' {t_type}={self.id}: {tourney}", to_print=True, to_save=True)
                 self.startsAt = datetime.now(tz=tz.tzutc())
             else:
-                self.startsAt = datetime.strptime(startsAt[:max(i1, i2)], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=tz.tzutc())
+                i_start = i1 if i2 < 0 else i2 if i1 < 0 else min(i1, i2)
+                self.startsAt = datetime.strptime(startsAt[:i_start], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=tz.tzutc())
         else:
             self.startsAt = datetime.fromtimestamp(startsAt // 1000, tz=tz.tzutc())
         if t_type == TournType.Arena:

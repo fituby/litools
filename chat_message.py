@@ -163,16 +163,17 @@ class Message:
         return self.best_score_reason() != Reason.No and self.score and self.score >= 50
 
     def get_info(self, tag, show_hidden=None, add_buttons=None, base_time=None, rename_dismiss=None, add_user=True,
-                 add_mscore=False, add_reason=None, highlight_user=None, is_selected=False, is_centered=False,
-                 add_selection=False):
+                 add_mscore=False, add_reason=None, highlight_user=None, is_diff_highlight=False,
+                 is_selected=False, is_centered=False, add_selection=False):
         if show_hidden is None:
             show_hidden = (base_time is not None)
-        if add_buttons is None:
-            add_buttons = AddButtons.BanAndDismiss if base_time is None else AddButtons.No
-        if self.is_official or self.is_disabled or self.is_removed:
+        if self.is_official or self.is_disabled or self.is_removed or self.is_timed_out:
             add_buttons = AddButtons.No
-        elif (self.score == 0 and not rename_dismiss) or self.is_reset or self.is_timed_out:
-            add_buttons &= ~AddButtons.Dismiss
+        else:
+            if add_buttons is None:
+                add_buttons = AddButtons.BanAndDismiss if base_time is None else AddButtons.No
+            if (self.score == 0 and not rename_dismiss) or self.is_reset:
+                add_buttons &= ~AddButtons.Dismiss
         if not show_hidden and (self.is_hidden() or not self.score):
             return ""
         if base_time is None:
@@ -193,9 +194,10 @@ class Message:
         score = f'<span class="user-select-none{score_theme}">{self.score}</span>' if self.score and self.score > 0 else ""
         username = f"<b><u>{self.username}</u></b>" if highlight_user is True or highlight_user == self.username \
             else self.username
-        user = f'<a class="text-info user-select-none" href="https://lichess.org/@/{self.username.lower()}" target="_blank" ' \
-               f'onclick="prevent_click(event)">{username}</a>' if add_user else ""
-        highlight_style = "" if not highlight_user or highlight_user != self.username else get_highlight_style(0.2)
+        user = f'<a class="text-info user-select-none" href="https://lichess.org/@/{self.username.lower()}" ' \
+               f'target="_blank" onclick="prevent_click(event)">{username}</a>' if add_user else ""
+        highlight_style = "" if not highlight_user or highlight_user != self.username \
+            else get_highlight_style(0.2, is_diff_highlight)
         name_dismiss = rename_dismiss if rename_dismiss else "Dismiss"
         class_dismiss = "btn-secondary" if rename_dismiss else "btn-primary"
         button_dismiss = f'<button class="btn {class_dismiss} text-nowrap align-baseline flex-grow-0 py-0 px-1 ml-1" ' \

@@ -96,8 +96,8 @@ country_names = {'GB-WLS': 'Wales󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-SCT': 'Scotland�
          "_united-nations": "United Nations", '_earth': 'Earth', "_lichess": "Lichess Flag", "_russia-wbw": "Russia BWB"}
 
 
-def get_highlight_style(opacity):
-    return f"background-color:rgba(0,160,119,{opacity});"
+def get_highlight_style(opacity, is_diff=False):
+    return f"background-color:rgba(160,119,0,{opacity});" if is_diff else f"background-color:rgba(0,160,119,{opacity});"
 
 
 def add_timeout_msg(timeouts, msg):
