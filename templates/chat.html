@@ -40,15 +40,15 @@
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
                 <span class="pr-2 m-0">Languages</span>
                 <div class="btn-group btn-group-toggle">
-                  <button id="filter_lang_1" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(1);">En</button>
-                  <button id="filter_lang_2" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(2);">Ru</button>
-                  <button id="filter_lang_3" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(3);">De</button>
-                  <button id="filter_lang_4" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(4);">Es</button>
-                  <button id="filter_lang_5" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(5);">It</button>
-                  <button id="filter_lang_6" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(6);">Hi</button>
-                  <button id="filter_lang_7" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(7);">Fr</button>
-                  <button id="filter_lang_8" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(8);">Tr</button>
-                  <button id="filter_lang_0" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(0);">Spam</button>
+                  <button id="filter_lang_1" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(1);"><abbr title="English" style="text-decoration:none;cursor:inherit;">En</abbr></button>
+                  <button id="filter_lang_2" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(2);"><abbr title="Russian" style="text-decoration:none;cursor:inherit;">Ru</abbr></button>
+                  <button id="filter_lang_3" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(3);"><abbr title="German" style="text-decoration:none;cursor:inherit;">De</abbr></button>
+                  <button id="filter_lang_4" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(4);"><abbr title="Spanish" style="text-decoration:none;cursor:inherit;">Es</abbr></button>
+                  <button id="filter_lang_5" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(5);"><abbr title="Italian" style="text-decoration:none;cursor:inherit;">It</abbr></button>
+                  <button id="filter_lang_6" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(6);"><abbr title="Hindi" style="text-decoration:none;cursor:inherit;">Hi</abbr></button>
+                  <button id="filter_lang_7" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(7);"><abbr title="French" style="text-decoration:none;cursor:inherit;">Fr</abbr></button>
+                  <button id="filter_lang_8" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(8);"><abbr title="Turkish" style="text-decoration:none;cursor:inherit;">Tr</abbr></button>
+                  <button id="filter_lang_0" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(0);"><abbr title="Spam, links, etc." style="text-decoration:none;cursor:inherit;">Spam</abbr></button>
                 </div>
               </div>
             </div>
@@ -103,7 +103,9 @@
         <div class="col align-content-start px-1" style="min-width:350px;max-width:500px;">
           <div id="selection_header" class="d-none user-select-none justify-content-between py-1" style="background-color:rgba(128,128,128,0.2);">
             <span>
-              <button id="btn_filter_msgs" class="btn btn-outline-success align-baseline py-0 px-1 mr-1" type="button" onclick="filter_toggle()">Process</button>
+              <button id="btn_filter_msgs" class="btn btn-outline-success align-baseline py-0 px-1 mr-1" type="button" onclick="filter_toggle()">
+                <abbr id="abbr_filter_msgs" title="Show only the selected user's messages" class="user-select-none" style="text-decoration:none;">Process</abbr>
+              </button>
               <button id="btn_refresh_selected" class="btn btn-outline-secondary align-baseline px-1 py-0" type="button" style="border-color:transparent;" onclick="refresh_selected()">
                 <abbr id="selected_tournament_update" title="reload" class="user-select-none" style="text-decoration:none;"><i class="fas fa-redo-alt"></i></abbr>
               </button>
@@ -150,7 +152,7 @@
     </div>
     <div id="chat_downloading" class="col d-flex justify-content-center mt-5">
       <div class="spinner-border spinner-blue-only text-secondary" role="status"></div>
-      <span class="ml-3 text-secondary">Downloading chats&hellip;</span>
+      <span class="ml-3 text-secondary">Checking chats&hellip;</span>
     </div>
     <div id="clean_messages" class="col d-none justify-content-center mt-5">
       <h5 class="text-success">Everything is clean as of <span id="update_time">now</span>.<br>Thank you for your great work! <i class="far fa-heart"></i></h5>
@@ -198,7 +200,7 @@
   var state_tournaments = 0;
   var state_reports = 0;
   var hidden_msgs = new Set();
-  var deleted_mmsgs = new Set();
+  var deleted_mmsgs = {};
   var last_update = new Date().getTime();
   var is_reviewed = false;
   var update_periods = [1, 5, 25, 60];
@@ -266,23 +268,22 @@
     $('#chat_reports').html(data_chats["reports"]);
     $('#multiline_chat_reports').html(data_chats["multiline-reports"]);
     $('#update_time').html(data_chats["time"]);
-    if (!$('#filter_score_0').is('.active')) {
-      const filter_values = [20, 40, 60];
-      for (const i of filter_values) {
-        if ($(`#filter_score_${i}`).is('.active'))
-          filter_score(i);
-      }
-    }
-    filter_langs();
+    filter_out();
     set_selection(data_chats);
     filter_messages();
     for (var msg_id of hidden_msgs) {
       $(`#msgA${msg_id}`).css("display","none");
       $(`#msgB${msg_id}`).css("display","none");
     }
-    for (var msg_id of deleted_mmsgs)
+    var to_delete = new Set();
+    for (var msg_id in deleted_mmsgs) {
       $(`#mmsg${msg_id}`).css("display","none");
-    deleted_mmsgs.clear();
+      if (new Date().getTime() >= deleted_mmsgs[msg_id] + 300000)
+        to_delete.add(msg_id);
+    }
+    for (var msg_id of to_delete) {
+      delete deleted_mmsgs[msg_id];
+    }
     return true;
   }
   function update_tournament_list(data) {
@@ -315,8 +316,12 @@
   }
   function timeout(msg_id, reason=0) {
     if (reason == 0 && !is_clickable()) return;
-    if (!msg_id.startsWith('C') && !msg_id.startsWith('F') && !msg_id.startsWith('B'))
-      $(`#msg${msg_id}`).css("display","none");
+    if (msg_id.startsWith('A') || msg_id.startsWith('C') || msg_id.startsWith('F')) {
+      m_id = msg_id.substring(1);
+      $(`#msgA${m_id}`).css("display","none");
+      $(`#msgC${m_id} .btn`).css("display","none");
+      $(`#msgF${m_id} .btn`).css("display","none");
+    }
     hide_msg(msg_id, true);
     $.ajax({url: `/chat/timeout/${msg_id}/${reason}`, type: "post"})
       .done(function(data_chats, textStatus, jqXHR) {
@@ -334,7 +339,7 @@
   function set_multi_ok(msg_id) {
     if (!is_clickable()) return;
     $(`#mmsg${msg_id}`).css("display","none");
-    deleted_mmsgs.add(msg_id);
+    deleted_mmsgs[msg_id] = new Date().getTime();
     $.ajax({url: `/chat/set_multi_msg_ok/${msg_id}`, type: "post"});
   }
   function warn(username, subject) {
@@ -473,7 +478,7 @@
     var text = username ? username : "Process";
     if (num_messages > 0)
       text = `<b>${num_messages}</b>: ${text}`;
-    $('#btn_filter_msgs').html(text);
+    $('#abbr_filter_msgs').html(text);
   }
   function add_users_all_messages() {
     $('#filtered_messages .selectee').each(function(i, el) {
@@ -495,33 +500,46 @@
       else
         $(`#filter_score_${i}`).removeClass("active");
     }
-    if (to_filter) {
-      $("div").filter(function() {
-        return parseInt($(this).attr("data-mscore")) < val;
-      }).css("display","none");
-      $("div").filter(function() {
-        return parseInt($(this).attr("data-mscore")) >= val;
-      }).css("display","block");
-    }
+    if (to_filter)
+      filter_out();
   }
-  function filter_langs(val=-1) {
-    if (val >= 0) {
-      if ($(`#filter_lang_${val}`).is('.btn-success'))
-        $(`#filter_lang_${val}`).removeClass("btn-success").addClass("btn-secondary");
-      else
-        $(`#filter_lang_${val}`).removeClass("btn-secondary").addClass("btn-success");
+  function get_score_to_filter() {
+    var val = 0;
+    if (!$('#filter_score_0').is('.active')) {
+      const filter_values = [20, 40, 60];
+      for (const i of filter_values) {
+        if ($(`#filter_score_${i}`).is('.active'))
+          val = i;
+      }
     }
+    return val;
+  }
+  function get_langs() {
     var flags = 0;
     for (var i = 0; i < 9; i++)
       if ($(`#filter_lang_${i}`).is('.btn-success'))
         flags |= 2 ** i;
-    if (val >= 0)
-      setCookie('chat_langs', flags);
+    return flags;
+  }
+  function filter_langs(val) {
+    if ($(`#filter_lang_${val}`).is('.btn-success'))
+      $(`#filter_lang_${val}`).removeClass("btn-success").addClass("btn-secondary");
+    else
+      $(`#filter_lang_${val}`).removeClass("btn-secondary").addClass("btn-success");
+    var flags = get_langs();
+    setCookie('chat_langs', flags);
+    filter_out();
+  }
+  function filter_out() {
+    var flags = get_langs();
+    var val = get_score_to_filter();
     $("div").filter(function() {
-      return $(this).is("[data-langs]") && (parseInt($(this).attr("data-langs")) & flags) == 0;
+      return (parseInt($(this).attr("data-mscore")) < val) ||
+              ($(this).is("[data-langs]") && (parseInt($(this).attr("data-langs")) & flags) == 0);
     }).css("display","none");
     $("div").filter(function() {
-      return $(this).is("[data-langs]") && (parseInt($(this).attr("data-langs")) & flags);
+      return (parseInt($(this).attr("data-mscore")) >= val) &&
+              (!$(this).is("[data-langs]") || (parseInt($(this).attr("data-langs")) & flags));
     }).css("display","block");
   }
   function reset_langs() {
@@ -536,6 +554,7 @@
     if (to_reset)
       $('#btn_filter_msgs').removeClass("btn-success").addClass("btn-outline-success");
     if ($('#btn_filter_msgs').hasClass("btn-success")) {
+      $('#abbr_filter_msgs').prop('title', "Show all chat messages");
       $('#filtered_section').removeClass("d-none").addClass("d-block");
       $('#selected_messages').removeClass("d-block").addClass("d-none");
       var active_element = $('#filtered_section .selectee-center');
@@ -544,6 +563,7 @@
         window.scrollTo(0, 0);
       }
     } else {
+      $('#abbr_filter_msgs').prop('title', "Show only the selected user's messages");
       $('#filtered_section').removeClass("d-block").addClass("d-none");
       $('#selected_messages').removeClass("d-none").addClass("d-block");
     }

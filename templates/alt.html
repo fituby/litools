@@ -110,7 +110,7 @@
     clear_data();
     //$('#alt-names').attr("placeholder", alts).val("").focus().blur();
     $('#alts_downloading').removeClass("d-none").addClass("d-flex");
-    $('#downloading_text').html(`Downloading ${alts}&hellip;`);
+    $('#downloading_text').html(`Downloading ${alts.substring(0, 30)}&hellip;`);
     var num_games_val = $('#num-games').val();
     var timer0 = 0;
     timer0 = setInterval(function() {
@@ -180,7 +180,7 @@
     var timer2 = 0;
     timer2 = setInterval(function() {
       $.ajax({
-        url: `/alts/2/`,
+        url: `/alts/1/`,
         type: "post",
         data: {alts: current_alts, num_games: num_games_val, force_refresh_openings: true}})
         .done(function(data, textStatus, jqXHR) {
