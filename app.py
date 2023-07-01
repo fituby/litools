@@ -111,8 +111,10 @@ def create_alt():
         return make_response(redirect('/login'))
     alts = request.form.get("alts", None) if request.method == 'POST' else None
     num_games = request.form.get("num_games", None) if request.method == 'POST' else None
-    resp = make_response(render_template('/alt.html', alts=alts, num_games=num_games,
-                                         embed_lichess=get_embed_lichess(), mod=mod, view=mod.view, icon="A/"))
+    date_begin = request.form.get("date_begin", None) if request.method == 'POST' else None
+    date_end = request.form.get("date_end", None) if request.method == 'POST' else None
+    resp = make_response(render_template('/alt.html', embed_lichess=get_embed_lichess(), mod=mod, view=mod.view, icon="A/",
+                                         alts=alts, num_games=num_games, date_begin=date_begin, date_end=date_end))
     return resp
 
 
@@ -124,8 +126,10 @@ def get_alts(step):
         return Response(status=400)
     alt_names = request.form.get("alts", None)
     num_games = request.form.get("num_games", None)
+    date_begin = request.form.get("date_begin", None)
+    date_end = request.form.get("date_end", None)
     force_refresh_openings = bool(request.form.get("force_refresh_openings", False))
-    resp = Alts.get_response(step, alt_names, num_games, force_refresh_openings, mod)
+    resp = Alts.get_response(step, alt_names, num_games, date_begin, date_end, force_refresh_openings, mod)
     return make_response(resp)
 
 

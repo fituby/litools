@@ -8,7 +8,7 @@ from enum import Enum
 from threading import Thread
 from api import ApiType
 from elements import UserData, Games, Variants, ModActionType, PerfType
-from elements import get_tc, delta_s, deltainterval, datetime_to_ago, get_user_ids, log
+from elements import get_tc, delta_s, deltainterval, datetime_to_ago, get_user_ids, log, log_exception
 from elements import load_mod_log, get_mod_log, get_notes
 from elements import needs_to_refresh_insights, set_insights_refreshed, render
 from consts import *
@@ -58,7 +58,7 @@ def download_openings(user_id, color, opening_stage, mod, to_refresh=False):
 class Alt:
     team_cache = {}  # TODO: based on `alt_cache`s, clear to prevent memory leak?
 
-    def __init__(self, username, num_games, mod):
+    def __init__(self, username, num_games, date_begin, date_end, mod):
         if not num_games:
             num_games = MAX_NUM_GAMES_TO_DOWNLOAD
         else:
@@ -66,6 +66,8 @@ class Alt:
                 num_games = int(num_games)
             except:
                 num_games = MAX_NUM_GAMES_TO_DOWNLOAD
+        self.date_begin = date_begin
+        self.date_end = date_end
         self.user = UserData(username, mod)
         self.games = Games(self.user.id, min(MAX_NUM_GAMES_TO_DOWNLOAD, num_games), ALT_MAX_PERIOD_FOR_GAMES,
                            STATUSES_TO_DISCARD_ALT, download_moves=False, only_rated=False)
@@ -95,7 +97,15 @@ class Alt:
             return
         now = datetime.now()
         if not self.time_step2 or delta_s(now, self.time_step2) >= ALT_UPDATE_PERIOD:
-            self.games.download(mod, perf_type=PerfType.all_but_correspondence())
+            date_begin = f"{self.date_begin}T00:00" if self.date_begin else None
+            date_end = f"{self.date_end}T23:59" if self.date_end else None
+            since = None
+            if date_begin:
+                try:
+                    since = datetime.strptime(date_begin, '%Y-%m-%dT%H:%M').replace(tzinfo=tz.tzutc())
+                except Exception as exception:
+                    log_exception(exception)
+            self.games.download(mod, since=since, before=date_end, perf_type=PerfType.all_but_correspondence())
             self.time_step2 = now
         self.mutual_games.clear()
         self.hist_hours = [0.0] * 12
@@ -271,18 +281,18 @@ class OverlappingGames:
         self.interval_s = max(0, (t2 - t1) / 1000)
 
 
-def get_alt(user_id, num_games, mod):
+def get_alt(user_id, num_games, date_begin, date_end, mod):
     now = datetime.now()
     alt, last_update = mod.alt_cache.get(user_id, (None, None))
     if num_games:
         num_games = int(num_games)
-    if alt and (alt.games.max_num_games == num_games):
+    if alt and (alt.games.max_num_games == num_games) and (alt.date_begin == date_begin) and (alt.date_end == date_end):
         if delta_s(now, last_update) < ALT_UPDATE_PERIOD:
             return alt
     for user_i in list(mod.alt_cache.keys()):
         if delta_s(now, mod.alt_cache[user_i][1]) >= ALT_UPDATE_PERIOD:
             del mod.alt_cache[user_i]
-    alt = Alt(user_id, num_games, mod)
+    alt = Alt(user_id, num_games, date_begin, date_end, mod)
     mod.alt_cache[user_id] = alt, now
     return alt
 
@@ -301,10 +311,14 @@ class Alts:
         return unique_usernames
 
     @staticmethod
-    def get_response(step, alt_names, num_games, force_refresh_openings, mod):
+    def get_response(step, alt_names, num_games, date_begin, date_end, force_refresh_openings, mod):
+        if date_begin:
+            date_begin = date_begin[:10]
+        if date_end:
+            date_end = date_end[:10]
         now = datetime.now()
         usernames = Alts.get_usernames(alt_names)
-        alts_key = (",".join(usernames), num_games)
+        alts_key = (",".join(usernames), num_games, date_begin, date_end)
         alts, last_update = mod.alt_group_cache.get(alts_key, (None, None))
         if not alts or delta_s(now, last_update) >= ALT_UPDATE_PERIOD:
             alts = Alts(mod.view.theme_color)
@@ -317,7 +331,7 @@ class Alts:
         if not alts.is_step0:
             if alts.is_step0 is None:
                 alts.is_step0 = False
-                Thread(name="alts_set", target=alts.set, args=(usernames, num_games, mod)).start()
+                Thread(name="alts_set", target=alts.set, args=(usernames, num_games, date_begin, date_end, mod)).start()
             return NOT_READY
         try:
             step = int(step)
@@ -351,8 +365,8 @@ class Alts:
         self.errors = []
         self.wait_insights_refresh_s = 0
 
-    def set(self, names, num_games, mod):
-        self.players = [get_alt(username, num_games, mod) for username in names]
+    def set(self, names, num_games, date_begin, date_end, mod):
+        self.players = [get_alt(username, num_games, date_begin, date_end, mod) for username in names]
         self.alt_names = {alt.user.id: alt.user.name for alt in self.players}
         self.overlapping_games = {alt.user.id: defaultdict(list) for alt in self.players}
         self.is_step0 = True
@@ -624,7 +638,7 @@ class Alts:
             else:
                 str_seen = "&mdash;"
             other_alts = [alt.user.name for alt in self.players if alt.user.id != player.user.id]
-            class_num_games = " text-danger" if len(player.games) < 25 else "text-warning" if len(player.games) < 60 else ""
+            class_num_games = " text-danger" if len(player.games) < 25 else " text-warning" if len(player.games) < 60 else ""
             row_num_games = f'<td class="text-right{class_num_games}">{len(player.games)}</td>' if self.is_step2 else ""
             rows.append(f'<tr><td class="text-left">{player.user.get_name("?mod")}</td>'
                         f'{row_num_games}'

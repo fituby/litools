@@ -24,7 +24,17 @@
               </select>
             </div>
           </td>
-          <td rowspan="2"><button class="btn btn-primary" style="min-height:100%;" onclick="go_alts()">Go</button></td>
+          <td><button class="btn btn-primary" style="min-height:100%;" onclick="go_alts()">Go</button></td>
+        </tr>
+        <tr>
+          <td><label for="date-begin" class="text-nowrap m-0">Games from:</label></td>
+          <td class="w-100 px-1"><input id="date-begin" class="w-100" type="date" value=""></td>
+          <td class="pr-1">optional</td>
+        </tr>
+        <tr>
+          <td><label for="date-end" class="text-nowrap m-0">Games to:</label></td>
+          <td class="w-100 px-1"><input id="date-end" class="w-100" type="date" value=""></td>
+          <td class="pr-1">optional</td>
         </tr>
       </tbody></table>
       <div id="alts_downloading" class="d-none justify-content-center align-items-center my-3">
@@ -83,6 +93,12 @@
     {% if num_games %}
     $("#num-games").val("{{num_games}}");
     {% endif %}
+    {% if date_begin %}
+    $("#date-begin").val("{{date_begin}}");
+    {% endif %}
+    {% if date_end %}
+    $("#date-end").val("{{date_end}}");
+    {% endif %}
     set_alts('{{alts}}');
     {% else %}
     clear_data();
@@ -112,12 +128,14 @@
     $('#alts_downloading').removeClass("d-none").addClass("d-flex");
     $('#downloading_text').html(`Downloading ${alts.substring(0, 30)}&hellip;`);
     var num_games_val = $('#num-games').val();
+    var date_begin_val = $('#date-begin').val();
+    var date_end_val = $('#date-end').val();
     var timer0 = 0;
     timer0 = setInterval(function() {
       $.ajax({
         url: `/alts/0/`,
         type: "post",
-        data: {alts: alts, num_games: num_games_val}})
+        data: {alts: alts, num_games: num_games_val, date_begin: date_begin_val, date_end: date_end_val}})
         .done(function(data, textStatus, jqXHR) {
           if ("not ready" in data)
             return;
@@ -133,7 +151,7 @@
             $.ajax({
               url: `/alts/1/`,
               type: "post",
-              data: {alts: alts, num_games: num_games_val}})
+              data: {alts: alts, num_games: num_games_val, date_begin: date_begin_val, date_end: date_end_val}})
               .done(function(data, textStatus, jqXHR) {
                 if ("not ready" in data)
                   return;
@@ -148,7 +166,7 @@
                   $.ajax({
                     url: `/alts/2/`,
                     type: "post",
-                    data: {alts: alts, num_games: num_games_val}})
+                    data: {alts: alts, num_games: num_games_val, date_begin: date_begin_val, date_end: date_end_val}})
                     .done(function(data, textStatus, jqXHR) {
                       if ("not ready" in data)
                         return;
@@ -177,12 +195,14 @@
     $('#refresh-openings').removeClass("d-flex").addClass("d-none");
     $('#openings_downloading').removeClass("d-none").addClass("d-flex");
     var num_games_val = $('#num-games').val();
+    var date_begin_val = $('#date-begin').val();
+    var date_end_val = $('#date-end').val();
     var timer2 = 0;
     timer2 = setInterval(function() {
       $.ajax({
         url: `/alts/1/`,
         type: "post",
-        data: {alts: current_alts, num_games: num_games_val, force_refresh_openings: true}})
+        data: {alts: current_alts, num_games: num_games_val, date_begin: date_begin_val, date_end: date_end_val, force_refresh_openings: true}})
         .done(function(data, textStatus, jqXHR) {
           if ("not ready" in data)
             return;
@@ -207,7 +227,7 @@
       setCookie('theme_mode', val);
       $.ajax({url: `/set_mode/${val}`, type: "post"});
       if (current_alts) {
-        var form = $(`<form action="/alt" method="post"><input type="hidden" name="alts" value="${current_alts}" /><input type="hidden" name="num_games" value="${$('#num-games').val()}" /></form>`);
+        var form = $(`<form action="/alt" method="post"><input type="hidden" name="alts" value="${current_alts}" /><input type="hidden" name="num_games" value="${$('#num-games').val()}" /><input type="hidden" name="date_begin" value="${$('#date-begin').val()}" /><input type="hidden" name="date_end" value="${$('#date-end').val()}" /></form>`);
         $('body').append(form);
         form.submit();
       } else {
