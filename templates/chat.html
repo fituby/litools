@@ -346,6 +346,7 @@
   }
   function timeout_multi(msg_id, reason=0) {
     if (reason == 0 && !is_clickable()) return;
+    $(`#mmsg${msg_id}`).css("display","none");
     $.ajax({url: `/chat/timeout_multi/${msg_id}/${reason}`, type: "post"})
       .done(function(data_chats, textStatus, jqXHR) {
         update_data(data_chats);

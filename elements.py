@@ -1236,6 +1236,9 @@ class ModAction:
     def is_warning(self):
         return self.action == 'modMessage' and self.details.startswith("Warning")
 
+    def is_perms(self):
+        return self.action == 'permissions'
+
     def get_timeout_reason(self):
         return Reason.Shaming if self.details.startswith('shaming') else \
             Reason.Offensive if self.details.startswith('insult') else \

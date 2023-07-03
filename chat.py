@@ -253,10 +253,37 @@ class ChatAnalysis:
             return True
         is_up_to_date = (last_action_time is not None) and (updated_user.actions[0].date <= last_action_time)
         if not is_up_to_date:
-            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: Failed to apply your action "
-                           f"to @{name}. There are new entries in the mod log. Please check them first.", False)
+            self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: Failed to apply your action"
+                           f" to @{name}. There are new entries in the mod log. Please check them first,"
+                           f" then you can re-apply your action.", False)
             self.state_reports += 1
         return is_up_to_date
+
+    @staticmethod
+    def is_same_msg_timed_out(msg, actions, now_utc):
+        for action in actions:
+            if not action.is_new(now_utc):
+                return False
+            if action.is_timeout():
+                i = action.details.find(": ")
+                if i > 0:
+                    text = action.details[i + 2:]
+                    if text == msg.text:
+                        return True
+        return False
+
+    @staticmethod
+    def is_modlog_ok_for_timeout(msg, mod, check_perms=False):
+        now_utc = datetime.now(tz=tz.tzutc())
+        mod_log_data = load_mod_log(msg.username, mod)
+        if mod_log_data is None:
+            mod.last_mod_log_error = now_utc
+            return True
+        mod_log, actions = get_mod_log(mod_log_data, mod, ModActionType.Chat)
+        if check_perms:
+            if any([a.is_perms() for a in actions]):
+                return False
+        return not ChatAnalysis.is_same_msg_timed_out(msg, actions, now_utc)
 
     def api_timeout(self, msg, reason, is_timeout_manual, mod, is_auto=False):
         reason_tag = Reason.to_tag(reason)
@@ -290,7 +317,22 @@ class ChatAnalysis:
                 'roomId': msg.tournament.id,
                 'chan': chan,
                 'text': text}
-        if is_timeout_manual or (is_auto and mod and mod.is_mod()):
+        to_timeout = is_timeout_manual or (is_auto and mod and mod.is_mod())
+        if to_timeout:
+            if is_auto:
+                to_timeout = ChatAnalysis.is_modlog_ok_for_timeout(msg, mod, True)
+            elif is_timeout_manual:
+                username = self.get_selected_username(mod)
+                if username == msg.username:
+                    user = self.users[mod.id].get(username)
+                    if user:
+                        now_utc = datetime.now(tz=tz.tzutc())
+                        is_msg = ChatAnalysis.is_same_msg_timed_out(msg, user.actions, now_utc)
+                        if is_msg:
+                            self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
+                                           f"@{msg.username}'s identical message is already timed out", False)
+                            return
+        if to_timeout:
             url = "https://lichess.org/mod/public-chat/timeout"
             r = mod.api.post(ApiType.ModPublicChatTimeout, url, token=mod.token if mod else '', json=data)
             timeout_tag = ('' if is_timeout_manual else '[AUTO] ') if is_auto else ""
@@ -318,7 +360,6 @@ class ChatAnalysis:
                                f"<u>RoomId</u>: {msg.tournament.id} <u>Channel</u>: {chan} <u>Text</u>: {text}", False)
         else:
             if msg.id not in self.recommended_timeouts:
-                #print(f"Recommended to time out #{msg.id}/{len(self.recommended_timeouts)}: {data}")
                 now = datetime.now()
                 max_time = timedelta(minutes=int(1.5 * CHAT_TOURNAMENT_FINISHED_AGO))
                 self.recommended_timeouts[msg.id] = now
@@ -758,7 +799,7 @@ class ChatAnalysis:
                 if not u or not u.is_up_to_date():
                     self.update_selected_user(mod)
                 user = self.users[mod.id].get(username)
-                is_diff = any([a.action == "permissions" for a in user.actions])
+                is_diff = any([a.is_perms() for a in user.actions])
                 msg = make_selected(msg_i.get_info('C', show_hidden=True, highlight_user=True,
                                                    is_diff_highlight=is_diff, is_selected=True, is_centered=True),
                                     is_diff)
