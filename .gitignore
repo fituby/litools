@@ -3,5 +3,7 @@ app.spec
 __pycache__/
 _install_/
 build/
+db/
 dist/
+log/
 venv/
