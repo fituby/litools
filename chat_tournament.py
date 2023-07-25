@@ -164,8 +164,7 @@ class Tournament:
                         self.last_update = db_messages[-1].time
                     new_messages = self.add_messages(db_messages, can_be_old=bool(self.messages))
                 self.is_sync_with_db = True
-            headers = {'User-Agent': "Mozilla/5.0 (X11; U; Linux i686; en-US) AppleWebKit/532.0 (KHTML, like Gecko) "
-                                     "Chrome/4.0.212.0 Safari/532.0"}
+            headers = {'User-Agent': "litools" }
             #if not self.is_arena:
             #    token = mod.token  # otherwise it doesn't load messages
             token = None
