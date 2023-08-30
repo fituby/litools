@@ -164,9 +164,7 @@ class Tournament:
                         self.last_update = db_messages[-1].time
                     new_messages = self.add_messages(db_messages, can_be_old=bool(self.messages))
                 self.is_sync_with_db = True
-            headers = {'User-Agent': "litools" }
-            #if not self.is_arena:
-            #    token = mod.token  # otherwise it doesn't load messages
+            headers = {'User-Agent': CLIENT_ID}
             token = None
             url = self.link if self.link else f"https://lichess.org/{self.get_endpoint()}/{self.id}"
             r = non_mod.api.get(ApiType.TournamentId, url, token=token, headers=headers)

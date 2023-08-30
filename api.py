@@ -104,12 +104,22 @@ class Api:
             headers['Authorization'] = f"Bearer {token}"
         return headers
 
+    @staticmethod
+    def check_delay(tag, url, t1_utc):
+        now_utc = datetime.now(tz=tz.tzutc())
+        dt = (now_utc - t1_utc).total_seconds()
+        if dt >= 10:
+            short_url = url[19:] if url.startswith("https://lichess.org") else url
+            log(f"...{dt:.1f}s to {tag} {short_url}", True)
+
     def get(self, api: Endpoint, url, token=None, **kwargs):
         with api.lock:
             headers = self.prepare(api, url, token, "GET", **kwargs)
             kwargs.pop('headers', None)
             try:
+                t1_utc = datetime.now(tz=tz.tzutc())
                 r = Api.requests_session.get(url, headers=headers, **kwargs)
+                Api.check_delay("GET", url, t1_utc)
             except requests.exceptions.ChunkedEncodingError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
@@ -129,7 +139,9 @@ class Api:
             headers = self.prepare(api, url, token, "POST", **kwargs)
             kwargs.pop('headers', None)
             try:
+                t1_utc = datetime.now(tz=tz.tzutc())
                 r = Api.requests_session.post(url, headers=headers, **kwargs)
+                Api.check_delay("POST", url, t1_utc)
             except requests.exceptions.ChunkedEncodingError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
@@ -149,7 +161,9 @@ class Api:
             headers = self.prepare(api, url, token, "DELETE", **kwargs)
             kwargs.pop('headers', None)
             try:
+                t1_utc = datetime.now(tz=tz.tzutc())
                 r = Api.requests_session.delete(url, headers=headers, **kwargs)
+                Api.check_delay("DELETE", url, t1_utc)
             except requests.exceptions.ChunkedEncodingError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
@@ -173,7 +187,9 @@ class Api:
                        'Authorization': f"Bearer {token}"}
             with Api.ndjson_lock:
                 try:
+                    t1_utc = datetime.now(tz=tz.tzutc())
                     r = Api.requests_session.get(url, allow_redirects=True, headers=headers)
+                    Api.check_delay("GET", url, t1_utc)
                 except requests.exceptions.ChunkedEncodingError as exception:
                     log_exception(exception, to_print=False)
                     time.sleep(6)

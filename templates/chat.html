@@ -212,6 +212,7 @@
   var is_reviewed = false;
   var update_periods = [1, 5, 25, 60];
   var update_period = update_periods[{{update_frequency}}];
+  var next_report_id_to_select = 0;
   function tournament_entered(e) {
     if (!e) e = window.event;
     var keyCode = e.code || e.key;
@@ -313,6 +314,7 @@
   function set_ok(msg_id) {
     //if (!is_clickable()) return;
     var next_id = is_autoselect() ? get_next_report_id(msg_id) : null;
+    next_report_id_to_select = next_id;
     if (!msg_id.startsWith('C') && !msg_id.startsWith('F'))
       $(`#msg${msg_id}`).css("display","none");
     hide_msg(msg_id, true);
@@ -320,7 +322,7 @@
         .done(function(data_chats, textStatus, jqXHR) {
           hide_msg(msg_id, false);
           update_data(data_chats);
-          if (next_id)
+          if (next_id && (next_id == next_report_id_to_select))
             select_msg(next_id);
         });
   }

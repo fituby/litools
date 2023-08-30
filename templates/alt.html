@@ -38,7 +38,7 @@
         </tr>
       </tbody></table>
       <div id="alts_downloading" class="d-none justify-content-center align-items-center my-3">
-        <div class="spinner-grow text-secondary" role="status"><span class="sr-only">Loading...</span></div>
+        <div class="spinner-border text-secondary text-truncate" role="status"></div>
         <span id="downloading_text" class="ml-3 text-secondary text-truncate">Downloading user data&hellip;</span>
       </div>
       <div id="part-1">
@@ -88,6 +88,13 @@
     $("#loadOverlay").css("display","none");
     $("#mainOverlay").css("display","block");
     $("#alt-names").on('keypress', username_entered);
+    jQuery(function($){
+      $('#alt-names').bind('paste', function(event){
+        event.preventDefault();
+        var clipboardData = event.originalEvent.clipboardData.getData('text/plain');
+        alts_pasted(clipboardData);
+      });
+    });
     {% if alts %}
     $("#alt-names")[0].value = "{{alts}}";
     {% if num_games %}
@@ -111,9 +118,57 @@
       go_alts();
     }
   }
+  (function ($, undefined) {
+    $.fn.getCursorPosition = function() {
+        var el = $(this).get(0);
+        var pos = 0;
+        if('selectionStart' in el) {
+            pos = el.selectionStart;
+        } else if('selection' in document) {
+            el.focus();
+            var Sel = document.selection.createRange();
+            var SelLength = document.selection.createRange().text.length;
+            Sel.moveStart('character', -el.value.length);
+            pos = Sel.text.length - SelLength;
+        }
+        return pos;
+    }
+  })(jQuery);
+  (function ($, undefined) {
+    $.fn.getSelectionEnd = function() {
+        var el = $(this).get(0);
+        var pos = 0;
+        if('selectionEnd' in el)
+            return el.selectionEnd;
+        return null;
+    }
+  })(jQuery);
+  function alts_pasted(text) {
+    var names = [];
+    if (text.includes("\t")) {
+      var lines = text.replace(/\t /g, "\n").split("\n");
+      for (var i = 0; i < lines.length; i++) {
+        var line = lines[i].trim();
+        if (line.length > 2) {
+          var words = line.split(/\s+/);
+          if (["GM", "WGM", "IM", "WIM", "FM", "WFM", "NM", "CM", "WCM", "LM", "BOT"].includes(words[0]))
+            names.push(words[1]);
+          else
+            names.push(words[0]);
+        }
+      }
+    }
+    else
+      names.push(text);
+    var pos = $("#alt-names").getCursorPosition();
+    var end = $("#alt-names").getSelectionEnd();
+    if (end === null)
+      end = pos;
+    var val = $("#alt-names").val();
+    $("#alt-names").val(val.substring(0, pos) + names.join(" ") + val.substring(end, val.length));
+  }
   function go_alts() {
     set_alts($("#alt-names")[0].value.trim());
-    //$("#alt-names")[0].value = "";
   }
   var current_alts = "";
   function set_alts(alts) {

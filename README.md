@@ -10,8 +10,7 @@ There are several tools, e.g.:
     - `port: 5000`
     - `url: "https://some.website.org"`
     - everything else is best left by default
-
-Tested on Windows in Python 3.7 with Firefox.
+3. Run python app.py
 
 ## Feedback
 Any suggestions for possible improvements and bug reports are welcome.
