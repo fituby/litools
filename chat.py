@@ -636,7 +636,7 @@ class ChatAnalysis:
             elif txt_class and not is_disabled:
                 btn_title = f'<span class="{txt_class}">{btn_title}</span>'
             btn_class = "btn-secondary disabled" if is_disabled else "btn-primary"
-            return f'<button class="dropdown-item {btn_class}" onclick="warn(\'{user_name}\',\'{subject_tag}\');">' \
+            return f'<button class="dropdown-item {btn_class}" onclick="warn(this, \'{user_name}\',\'{subject_tag}\');">' \
                    f'{btn_title}</button>'
 
         def is_recent(times, key, time_now):
@@ -728,8 +728,8 @@ class ChatAnalysis:
                     add_info = f'{add_info}{" + " if add_info else ""}<span class="text-warning">' \
                                f'kid?</span>'
                     if not is_kid and not is_SBed:
-                        user_data.bio_add = f'<button class="btn btn-warning text-nowrap align-baseline flex-grow-0 py-0 ' \
-                                            f'px-1 ml-1" onclick="warn(\'{user_name}\',\'kidMode_Note\');">' \
+                        user_data.bio_add = f'<button class="btn btn-danger text-nowrap align-baseline flex-grow-0 py-0 ' \
+                                            f'px-1 ml-1" onclick="warn(this, \'{user_name}\',\'kidMode_Note\');">' \
                                             f'Kid+Note</button>'
                 if buttons or (not is_kid and not is_SBed):
                     buttons.append(get_warn_btn('kidMode', "Kid Mode", kid_sus, user_name, txt_class="text-warning",

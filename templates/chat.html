@@ -358,9 +358,12 @@
     deleted_mmsgs[msg_id] = new Date().getTime();
     $.ajax({url: `/chat/set_multi_msg_ok/${msg_id}`, type: "post"});
   }
-  function warn(username, subject) {
+  function warn(obj, username, subject) {
     if (!is_clickable()) return;
-    $('#warn-ban').css("display","none");
+    if (subject == "kidMode_Note")
+      $(obj).css("display","none");
+    else
+      $('#warn-ban').css("display","none");
     $.ajax({url: `/chat/warn/${username}/${subject}`, type: "post"})
       .done(function(data_chats, textStatus, jqXHR) {
         update_data(data_chats);
