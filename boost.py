@@ -1084,7 +1084,7 @@ def send_mod_action(action, username, mod):
                 is_ok = mark_booster(username, mod)
             else:
                 raise Exception(f"Wrong mod action: [{username}]: {action}")
-            log(f"{username}: {action} -> {'DONE' if is_ok else 'skipped'}", to_print=True, to_save=True)
+            log(f"{username}: {action} -> {'DONE' if is_ok else 'skipped'}", to_print=True, to_save=True, verbose=2)
             if is_ok:
                 boost.update_mod_log(mod)
                 return {'user': username, 'mod-log': boost.mod_log_out,

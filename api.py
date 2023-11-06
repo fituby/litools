@@ -9,7 +9,7 @@ import yaml
 import traceback
 import os
 from threading import Lock
-from consts import API_TOURNEY_PAGE_DELAY, CONFIG_FILE
+from consts import API_TOURNEY_PAGE_DELAY, CONFIG_FILE, VERBOSE
 
 
 log_file: str = None
@@ -62,7 +62,6 @@ class ApiType:
 
 class Api:
     ndjson_lock = Lock()
-    verbose = 0  # 0, 1, 2
 
     requests_session = requests.Session()
     retries = Retry(total=5, backoff_factor=0.1)
@@ -77,7 +76,7 @@ class Api:
             now = datetime.now()
             wait_s = api.delay - (now - self.api_times[api.name][-api.num_requests]).total_seconds()
         if wait_s > 0:
-            if Api.verbose >= 2:
+            if VERBOSE >= 4:
                 print(f'Waiting for "{api.name}" for {wait_s:0.1f}s')
             time.sleep(wait_s)
         self.finish(api)  # or after it's completed?
@@ -94,7 +93,7 @@ class Api:
         return 0
 
     def prepare(self, api: Endpoint, url, token, tag, **kwargs):
-        if Api.verbose:
+        if VERBOSE >= 3:
             print(f"request {datetime.now(tz=tz.tzutc()):%H:%M:%S.%f}: {tag} {url}")
         self.wait(api)
         if token is None:
@@ -179,7 +178,7 @@ class Api:
             return r
 
     def get_ndjson(self, api, url, token, Accept="application/x-ndjson"):
-        if Api.verbose:
+        if VERBOSE >= 3:
             print(f"request {datetime.now(tz=tz.tzutc()):%H:%M:%S.%f}: {url}")
         with api.lock:
             self.wait(api)
@@ -189,7 +188,8 @@ class Api:
                 try:
                     t1_utc = datetime.now(tz=tz.tzutc())
                     r = Api.requests_session.get(url, allow_redirects=True, headers=headers)
-                    Api.check_delay("GET", url, t1_utc)
+                    if api.name != ApiType.ApiGamesUser.name:
+                        Api.check_delay("GET", url, t1_utc)
                 except requests.exceptions.ChunkedEncodingError as exception:
                     log_exception(exception, to_print=False)
                     time.sleep(6)
@@ -200,10 +200,10 @@ class Api:
                     time.sleep(5)
                     raise exception
                 if r.status_code == 429:
-                    if Api.verbose:
+                    if VERBOSE >= 3:
                         log(f"ERROR: Status 429: waiting 60s... {datetime.now():%H:%M:%S.%f} {url}")
                     time.sleep(60)
-        if Api.verbose >= 2:
+        if VERBOSE >= 4:
             print(f"finish {datetime.now(tz=tz.tzutc()):%H:%M:%S.%f}: {url}")
         if r.status_code != 200:
             try:
@@ -219,7 +219,9 @@ class Api:
         return data
 
 
-def log(text, to_print=False, to_save=True):
+def log(text, to_print=False, to_save=True, verbose=1):
+    if verbose > VERBOSE:
+        return
     global log_file
     if log_file is None:
         try:

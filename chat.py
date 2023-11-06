@@ -6,6 +6,7 @@ import re
 import sys
 from collections import defaultdict
 from typing import DefaultDict, Dict
+import html
 from api import ApiType
 from elements import Reason, TournType, delta_s, log, log_exception
 from elements import get_notes, add_note, load_mod_log, get_mod_log, get_highlight_style, add_timeout_msg
@@ -74,12 +75,12 @@ class ChatAnalysis:
         self.selected_user_num_recent_comm_warnings: DefaultDict[str, int] = defaultdict(int)
         self.selected_user_lock: DefaultDict[str, Lock] = defaultdict(Lock)  # = Lock()
 
-    def add_error(self, text, is_critical=True):
+    def add_error(self, text, is_critical=True, verbose=1):
         if is_critical:
             self.errors.append(text)
         else:
             self.warnings.append(text)
-        log(text, to_print=True, to_save=True)
+        log(text, to_print=True, to_save=True, verbose=verbose)
 
     def wait_refresh_chats(self):
         now = datetime.now()
@@ -156,7 +157,7 @@ class ChatAnalysis:
                 self.update_chat(tourn_id, non_mod, auto_mod, now_utc)
         except Exception as exception:
             log_exception(exception)
-            self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}")
+            self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", True, 2)
         except:
             self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in chat.run")
         self.update_count += 1
@@ -216,7 +217,7 @@ class ChatAnalysis:
         except Exception as exception:
             log_exception(exception)
             now_utc = datetime.now(tz=tz.tzutc())
-            self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
+            self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False, 2)
             self.state_reports += 1
 
     def set_multi_msg_ok(self, msg_id):
@@ -231,7 +232,7 @@ class ChatAnalysis:
         except Exception as exception:
             log_exception(exception)
             now_utc = datetime.now(tz=tz.tzutc())
-            self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False)
+            self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", False, 2)
             self.state_reports += 1
 
     def is_user_up_to_date(self, name, mod):
@@ -255,7 +256,7 @@ class ChatAnalysis:
         if not is_up_to_date:
             self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: Failed to apply your action"
                            f" to @{name}. There are new entries in the mod log. Please check them first,"
-                           f" then you can re-apply your action.", False)
+                           f" then you can re-apply your action.", False, 2)
             self.state_reports += 1
         return is_up_to_date
 
@@ -295,15 +296,15 @@ class ChatAnalysis:
             return
         if msg.tournament.id not in self.tournaments:
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
-                           f"Tournament {msg.tournament.id} deleted", False)
+                           f"Tournament {msg.tournament.id} deleted", False, 2)
             return
         if msg.is_timed_out or msg.is_disabled:
             self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
-                           f"Someone else just timed out @{msg.username}'s message", False)
+                           f"Someone else just timed out @{msg.username}'s message", False, 2)
             return
         if msg.is_removed:
             self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
-                           f"@{msg.username}'s message is already hidden (SB'ed)", False)
+                           f"@{msg.username}'s message is already hidden (SB'ed)", False, 2)
             return
         if mod and not self.is_user_up_to_date(msg.username, mod):
             return
@@ -330,7 +331,7 @@ class ChatAnalysis:
                         is_msg = ChatAnalysis.is_same_msg_timed_out(msg, user.actions, now_utc)
                         if is_msg:
                             self.add_error(f"WARNING at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: "
-                                           f"@{msg.username}'s identical message is already timed out", False)
+                                           f"@{msg.username}'s identical message is already timed out", False, 2)
                             return
         if to_timeout:
             url = "https://lichess.org/mod/public-chat/timeout"
@@ -340,7 +341,7 @@ class ChatAnalysis:
                 text = f'{text}{msg.text[MAX_LEN_TEXT-1:]}'
             if 200 <= r.status_code <= 299:
                 log(f"{timeout_tag}{reason_tag.upper()} @{msg.username} score={msg.score} "
-                    f"{chan.upper()}={msg.tournament.id}: {text}", True)
+                    f"{chan.upper()}={msg.tournament.id}: {text}", True, True, 2)
                 start_time = msg.time - timedelta(minutes=TIMEOUT_RANGE[0])
                 end_time = msg.time + timedelta(minutes=TIMEOUT_RANGE[1])
                 for m in self.all_messages.values():
@@ -357,7 +358,7 @@ class ChatAnalysis:
                 status_info = "invalid token?" if r.status_code == 200 else f"status: {r.status_code}"
                 self.add_error(f"ERROR: Timeout ({status_info}):<br>{timeout_tag}{reason_tag.upper()} "
                                f"<u>Score</u>: {msg.score} <u>User</u>: {msg.username} "
-                               f"<u>RoomId</u>: {msg.tournament.id} <u>Channel</u>: {chan} <u>Text</u>: {text}", False)
+                               f"<u>RoomId</u>: {msg.tournament.id} <u>Channel</u>: {chan} <u>Text</u>: {text}", False, 2)
         else:
             if msg.id not in self.recommended_timeouts:
                 now = datetime.now()
@@ -417,7 +418,7 @@ class ChatAnalysis:
         url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
         r = mod.api.post(ApiType.ModWarn, url, token=mod.token)
         if r.status_code == 200:
-            log(f"WARNING @{username}: {subject}", True)
+            log(f"WARNING @{username}: {subject}", True, True, 2)
             self.update_selected_user(mod)
         else:
             self.add_error(f"ERROR: Warn (status: {r.status_code}):<br>@{username}: <u>Subject</u>: {subject}", False)
@@ -429,7 +430,7 @@ class ChatAnalysis:
         url = f"https://lichess.org/mod/{username}/kid"
         r = mod.api.post(ApiType.ModKid, url, token=mod.token)
         if r.status_code == 200:
-            log(f"ACTION @{username}: kidMode", True)
+            log(f"ACTION @{username}: kidMode", True, True, 2)
             if to_update:
                 self.update_selected_user(mod)
                 self.state_reports += 1
@@ -445,7 +446,7 @@ class ChatAnalysis:
         url = f"https://lichess.org/mod/{username}/troll/true"
         r = mod.api.post(ApiType.ModTroll, url, token=mod.token)
         if r.status_code == 200:
-            log(f"SB @{username}", True)
+            log(f"SB @{username}", True, True, 2)
             self.update_selected_user(mod)
         else:
             self.add_error(f"ERROR: SB (status: {r.status_code}):<br>@{username}", False)
@@ -470,7 +471,7 @@ class ChatAnalysis:
                         if to_add_note:
                             user = self.users[mod.id].get(username)
                             if user:
-                                bio = user.profile.bio
+                                bio = html.unescape(user.profile.bio)
                                 if bio:
                                     self.send_note(f'Bio: {bio}', username, mod)
                     elif subject_tag in ModAction.warnings:
@@ -860,7 +861,7 @@ class ChatAnalysis:
     def set_tournament(self, tourn_id, checked):
         tournament = self.tournaments.get(tourn_id)
         if not tournament:
-            self.add_error(f"ERROR: No tournament \"{tourn_id}\" to set {checked}", False)
+            self.add_error(f"WARNING: No tournament \"{tourn_id}\" to set {checked}", False)
             self.state_reports += 1
             return
         is_enabled = (not tournament.is_enabled) if checked is None else checked
@@ -871,7 +872,7 @@ class ChatAnalysis:
         if tournament:
             tournament.is_monitored = False
         else:
-            self.add_error(f"ERROR: No tournament \"{tourn_id}\" to delete", False)
+            self.add_error(f"WARNING: No tournament \"{tourn_id}\" to delete", False)
             self.state_reports += 1
         return self.get_tournaments()
 
@@ -958,7 +959,7 @@ class ChatAnalysis:
         if tournament:
             tournament.set_max_messages(True, self)
         else:
-            self.add_error(f"ERROR: No tournament \"{tourn_id}\" to load more messages", False)
+            self.add_error(f"WARNING: No tournament \"{tourn_id}\" to load more messages", False)
         self.state_reports += 1
         data = self.get_tournaments()
         data.update(self.get_all(mod))
@@ -1122,7 +1123,7 @@ class ChatAnalysis:
                     return data
         except Exception as exception:
             log_exception(exception)
-            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: send_note: {exception}", False)
+            self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: send_note: {exception}", False, 2)
             self.state_reports += 1
         return {'selected-user': username, 'mod-notes': "", 'user-profile': "", 'user-info': ""}
 

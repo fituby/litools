@@ -961,7 +961,9 @@ class Reason(IntEnum):
         return "NO" if tag is None else f"{tag[0].upper()}{tag[1:]}"
 
 
-def log(text, to_print=False, to_save=True):
+def log(text, to_print=False, to_save=True, verbose=1):
+    if verbose > VERBOSE:
+        return
     global log_file
     if log_file is None:
         load_config()
@@ -1055,7 +1057,7 @@ def add_note(username, note, mod):
         url = f"https://lichess.org/api/user/{username}/note"
         r = mod.api.post(ApiType.ApiUserNote_Post, url, token=mod.token, json=data)
         if r.status_code == 200:
-            log(f"ADD NOTE for @{username}:\n{note}", False)
+            log(f"ADD NOTE for @{username}:\n{note}", False, True, 2)
             return True
     except Exception as exception:
         log_exception(exception)
@@ -1430,7 +1432,7 @@ def warn_user(username, subject, mod):
         url = f"https://lichess.org/mod/{username}/warn?subject={subject}"
         r = mod.api.post(ApiType.ApiWarn, url, token=mod.token)
         if r.status_code == 200:
-            log(f"WARNING @{username}: {subject}", True)
+            log(f"WARNING @{username}: {subject}", True, True, 2)
             return True
     except Exception as exception:
         log_exception(exception)
@@ -1450,7 +1452,7 @@ def mark_booster(username, mod):
         url = f"https://lichess.org/mod/{username}/booster/true"
         r = mod.api.post(ApiType.ApiBooster, url, token=mod.token)
         if r.status_code == 200:
-            log(f'MARK BOOST: @{username}', True)
+            log(f'MARK BOOST: @{username}', True, True, 2)
             return True
     except Exception as exception:
         log_exception(exception)

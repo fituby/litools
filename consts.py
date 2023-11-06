@@ -98,3 +98,4 @@ UPDATE_INTERVAL_MOD_PERMS = 24 * 60 * 60  # [s]
 CONFIG_FILE = "config.yml"
 NOT_READY = {'not ready': True}
 REFRESH_OPENINGS_PERIOD = 24 * 60 * 60  # seconds
+VERBOSE = 1
