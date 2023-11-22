@@ -207,7 +207,7 @@ class Profile:
         self.ecfRating = 0
 
     def set(self, data):
-        self.country = data.get('country', "")
+        self.country = data.get('flag', "")
         self.location = data.get('location', "")
         bio = data.get('bio', "")
         try:

@@ -29,7 +29,7 @@ CHAT_MAX_NUM_OLD_MSGS = 9900
 CHAT_MSGS_LIFETIME = 365  # days
 CHAT_FREQUENT_MSGS_MIN_SCORE = [15, 30]
 CHAT_BEGINNING_MESSAGES_TEXT = '"name":"Chat room","lines":['
-CHAT_END_MESSAGES_TEXT = '],"userId":'
+CHAT_END_MESSAGES_TEXT = '],"'
 TOURNEY_STANDING_BEGINNING_TEXT = '"standing":{"page":1,"players":['
 TOURNEY_STANDING_ENDING_TEXT = ']},"socketVersion":'
 HR = '<hr class="my-0" style="border-top:dotted 2px;"/>'
