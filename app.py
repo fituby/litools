@@ -15,7 +15,7 @@ from boost import get_boost_data, send_boost_note, send_mod_action
 from chat import ChatAnalysis
 from alt import Alts
 from mod import Mod, ModInfo, View
-from elements import get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s, log_exception
+from elements import get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s, log, log_exception
 from database import Mods, Authentication
 from consts import *
 
@@ -613,6 +613,7 @@ def revoke_token(token_hash):
 
 
 if __name__ == "__main__":
+    log(f"Started: {LITOOLS_VERSION}", to_print=True, to_save=True)
     thread = threading.Thread(name="chat_loop", target=chat_loop)
     thread.start()
     serve(app.run(), host=get_host(), port=get_port(), threads=get_num_threads())
