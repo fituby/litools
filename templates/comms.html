@@ -140,7 +140,7 @@ $(document).ready(function() {
   $('#msgs_table_wrapper').addClass("d-none");
 });
 function values_changed(e) {
-  if ($('#username').val().length || $('#date_begin').val().length || $('#date_end').val().length || $('#text').val().length)
+  if ($('#username').val().length >= 2 || $('#date_begin').val().length || $('#date_end').val().length || $('#text').val().length)
     $('#go').removeAttr("disabled");
   else
     $('#go').attr("disabled", "");

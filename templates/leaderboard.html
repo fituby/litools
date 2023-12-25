@@ -81,7 +81,7 @@ $(document).ready(function() {
       "render": function(data, type, row, meta) {
         var country = data[6];
         if (type != 'display')
-          return (country && country.charAt(0) == '_') ? 'zy' + country.substr(1) : 'zz';
+          return !country.length ? 'zz' : (country.charAt(0) == '_') ? 'zy' + country.substr(1) : country;
         if (!country.length)
           return country;
         var names = {'GB-WLS': 'Wales󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-SCT': 'Scotland󠁢󠁳󠁣󠁴󠁿󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-ENG': 'England󠁢󠁥󠁮󠁧󠁿', 'GB-NIR': 'Northern Ireland󠁢󠁥󠁮󠁧󠁿',

@@ -159,7 +159,7 @@ class Mod:
             revoke_info = f'<p><small>* If you revoke tokens, they will become invalid for use on this website, but will ' \
                           f'not be deleted from Lichess.<br>To remove them from Lichess, you have to <b>log out</b> after ' \
                           f'logging in with the token you want to remove.<br>Alternatively, you can delete them ' \
-                          f'<a href="https://lichess.org/account/security" target="_blank">directly on lichess</a>.' \
+                          f'<a href="https://lichess.org/account/security" target="_blank">directly on Lichess</a>.' \
                           f'</small></p>' if is_revoke else ""
             table = f'<table id="table-sessions" ' \
                     f'class="table table-striped table-hover text-center w-auto text-nowrap mt-5">' \
