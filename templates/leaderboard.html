@@ -1,0 +1,160 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+<div class="container mt-2">
+  <div class="justify-content-around">
+    <div class="d-flex flex-wrap justify-content-around my-2" style="padding-right: 100px;">
+      {% for var in ["ultraBullet", "bullet", "blitz", "rapid", "classical", "chess960", "crazyhouse",
+              "antichess", "atomic", "horde", "kingOfTheHill", "racingKings", "threeCheck"] %}
+      <a class="pr-2 {{'d-none' if variant.lower() == var.lower() else ''|safe}}" href="/lb/{{var|safe}}">{{var[0].upper() + var[1:]|safe}}</a>
+      <span class="pr-2 {{'d-none' if variant.lower() != var.lower() else ''|safe}}">{{var[0].upper() + var[1:]|safe}}</span>
+      {% endfor %}
+    </div>
+    <div class="position-relative mt-5 mb-2">
+      <div class="position-absolute top-0 start-0 row align-items-baseline">
+        <p class="pr-2 m-0">Mode</p>
+        <div class="btn-group btn-group-toggle">
+          <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
+          <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
+          <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
+        </div>
+      </div>
+      <h4 class="text-center text-warning my-2">{{variant|safe}} Leaderboard</h4>
+    </div>
+    <div class="text-muted row justify-content-center mx-3">{{dt|safe}} UTC</div>
+    <div class="row justify-content-center">
+      <div class="column flex-grow-1" style="max-width: 1000px;">
+        <table id="lb_table" class="table table-sm table-striped table-hover text-center text-nowrap mb-5">
+          <thead><tr>
+            <th style="cursor:default;">Place <i class="fas fa-sort text-muted"></i></th>
+            <th class="d-none d-lg-table-cell" style="cursor:default;">Flair <i class="fas fa-sort text-muted"></i></th>
+            <th class="text-left" style="cursor:default;">Player <i class="fas fa-sort text-muted"></i></th>
+            <th style="cursor:default;">Flag <i class="fas fa-sort text-muted"></i></th>
+            <th style="cursor:default;">Rating <i class="fas fa-sort text-muted"></i></th>
+            <th style="cursor:default;"># Games <i class="fas fa-sort text-muted"></i></th>
+            <th style="cursor:default;">Online <i class="fas fa-sort text-muted"></i></th>
+            <th style="cursor:default;"><abbr class="pr-2" title="# {{variant|safe}} Games" style="text-decoration:none;"># {{variant|safe}}</abbr> <i class="fas fa-sort text-muted"></i></th>
+            <th class="text-left" style="cursor:default;">Created <i class="fas fa-sort text-muted"></i></th>
+          </tr></thead>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+  update_mode({{view.mode|safe}}, false);
+  if (window.matchMedia)
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+      if ($('#mode_0').is('.active'))
+        update_mode(event.matches ? -1 : -2);
+    });
+  $("body").tooltip({ selector: '[data-toggle=tooltip]' });
+  $("#loadOverlay").css("display","none");
+  $("#mainOverlay").css("display","block");
+  $('#lb_table').DataTable({
+    "searching": true, "paging": false, "info": false,
+    "aaSorting": [8], "order": [[ 8, "desc" ]],
+    columnDefs: [
+    {
+      "targets": [1],
+      "className": "align-middle py-0",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display') return data[4];
+        return data[4] ? '<abbr class="pr-2" title="' + data[12] + '" style="text-decoration:none;"><img src="https://lichess1.org/assets/______0/flair/img/' + data[4] + '.webp" style="max-width:30px;"></abbr>' : "";
+      }
+    },{
+      "targets": [2],
+      "className": "text-left align-middle",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        return '<a href="https://lichess.org/@/' + data[1].toLowerCase() + '" target="_blank">' + data[1] + '</a>';
+      }
+    },{
+      "targets": [3],
+      "className": "text-left align-middle py-0",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        var country = data[6];
+        if (type != 'display')
+          return (country && country.charAt(0) == '_') ? 'zy' + country.substr(1) : 'zz';
+        if (!country.length)
+          return country;
+        var names = {'GB-WLS': 'Wales󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-SCT': 'Scotland󠁢󠁳󠁣󠁴󠁿󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-ENG': 'England󠁢󠁥󠁮󠁧󠁿', 'GB-NIR': 'Northern Ireland󠁢󠁥󠁮󠁧󠁿',
+            "AD": "Andorra", "AE": "United Arab Emirates", "AF": "Afghanistan", "AG": "Antigua and Barbuda", "AI": "Anguilla", "AL": "Albania", "AM": "Armenia", "AN": "Netherlands Antilles", "AO": "Angola", "AQ": "Antarctica", "AR": "Argentina", "AS": "American Samoa", "AT": "Austria", "AU": "Australia", "AW": "Aruba", "AX": "Åland Islands", "AZ": "Azerbaijan", "BA": "Bosnia and Herzegovina", "BB": "Barbados", "BD": "Bangladesh", "BE": "Belgium", "BF": "Burkina Faso", "BG": "Bulgaria", "BH": "Bahrain", "BI": "Burundi", "BJ": "Benin", "BL": "Saint Barthélemy", "BM": "Bermuda", "BN": "Brunei Darussalam", "BO": "Bolivia", "BQ": "Bonaire, Sint Eustatius and Saba", "BR": "Brazil", "BS": "Bahamas", "BT": "Bhutan", "BV": "Bouvet Island", "BW": "Botswana", "BY": "Belarus", "BZ": "Belize", "CA": "Canada", "CC": "Cocos (Keeling) Islands", "CD": "Congo", "CF": "Central African Republic", "CG": "Congo", "CH": "Switzerland", "CI": "Côte D'Ivoire", "CK": "Cook Islands", "CL": "Chile", "CM": "Cameroon", "CN": "China", "CO": "Colombia", "CR": "Costa Rica", "CU": "Cuba", "CV": "Cape Verde", "CW": "Curaçao", "CX": "Christmas Island", "CY": "Cyprus", "CZ": "Czech Republic", "DE": "Germany", "DJ": "Djibouti", "DK": "Denmark", "DM": "Dominica", "DO": "Dominican Republic", "DZ": "Algeria", "EC": "Ecuador", "EE": "Estonia", "EG": "Egypt", "EH": "Western Sahara", "ER": "Eritrea", "ES": "Spain", "ET": "Ethiopia", "FI": "Finland", "FJ": "Fiji", "FK": "Falkland Islands (Malvinas)", "FM": "Micronesia", "FO": "Faroe Islands", "FR": "France", "GA": "Gabon", "GB": "United Kingdom", "GD": "Grenada", "GE": "Georgia", "GF": "French Guiana", "GG": "Guernsey", "GH": "Ghana", "GI": "Gibraltar", "GL": "Greenland", "GM": "Gambia", "GN": "Guinea", "GP": "Guadeloupe", "GQ": "Equatorial Guinea", "GR": "Greece", "GS": "South Georgia", "GT": "Guatemala", "GU": "Guam", "GW": "Guinea-Bissau", "GY": "Guyana", "HK": "Hong Kong", "HM": "Heard Island and Mcdonald Islands", "HN": "Honduras", "HR": "Croatia", "HT": "Haiti", "HU": "Hungary", "ID": "Indonesia", "IE": "Ireland", "IL": "Israel", "IM": "Isle of Man", "IN": "India", "IO": "British Indian Ocean Territory", "IQ": "Iraq", "IR": "Iran", "IS": "Iceland", "IT": "Italy", "JE": "Jersey", "JM": "Jamaica", "JO": "Jordan", "JP": "Japan", "KE": "Kenya", "KG": "Kyrgyzstan", "KH": "Cambodia", "KI": "Kiribati", "KM": "Comoros", "KN": "Saint Kitts and Nevis", "KP": "North Korea", "KR": "South Korea", "KW": "Kuwait", "KY": "Cayman Islands", "KZ": "Kazakhstan", "LA": "Lao People's Democratic Republic", "LB": "Lebanon", "LC": "Saint Lucia", "LI": "Liechtenstein", "LK": "Sri Lanka", "LR": "Liberia", "LS": "Lesotho", "LT": "Lithuania", "LU": "Luxembourg", "LV": "Latvia", "LY": "Libya", "MA": "Morocco", "MC": "Monaco", "MD": "Moldova", "ME": "Montenegro", "MF": "Saint Martin (French Part)", "MG": "Madagascar", "MH": "Marshall Islands", "MK": "Macedonia", "ML": "Mali", "MM": "Myanmar", "MN": "Mongolia", "MO": "Macao", "MP": "Northern Mariana Islands", "MQ": "Martinique", "MR": "Mauritania", "MS": "Montserrat", "MT": "Malta", "MU": "Mauritius", "MV": "Maldives", "MW": "Malawi", "MX": "Mexico", "MY": "Malaysia", "MZ": "Mozambique", "NA": "Namibia", "NC": "New Caledonia", "NE": "Niger", "NF": "Norfolk Island", "NG": "Nigeria", "NI": "Nicaragua", "NL": "Netherlands", "NO": "Norway", "NP": "Nepal", "NR": "Nauru", "NU": "Niue", "NZ": "New Zealand", "OM": "Oman", "PA": "Panama", "PE": "Peru", "PF": "French Polynesia", "PG": "Papua New Guinea", "PH": "Philippines", "PK": "Pakistan", "PL": "Poland", "PM": "Saint Pierre and Miquelon", "PN": "Pitcairn", "PR": "Puerto Rico", "PS": "Palestinian Territory", "PT": "Portugal", "PW": "Palau", "PY": "Paraguay", "QA": "Qatar", "RE": "Réunion", "RO": "Romania", "RS": "Serbia", "RU": "Russia", "RW": "Rwanda", "SA": "Saudi Arabia", "SB": "Solomon Islands", "SC": "Seychelles", "SD": "Sudan", "SE": "Sweden", "SG": "Singapore", "SH": "Saint Helena, Ascension and Tristan Da Cunha", "SI": "Slovenia", "SJ": "Svalbard and Jan Mayen", "SK": "Slovakia", "SL": "Sierra Leone", "SM": "San Marino", "SN": "Senegal", "SO": "Somalia", "SR": "Suriname", "SS": "South Sudan", "ST": "Sao Tome and Principe", "SV": "El Salvador", "SX": "Sint Maarten (Dutch Part)", "SY": "Syrian Arab Republic", "SZ": "Swaziland", "TC": "Turks and Caicos Islands", "TD": "Chad", "TF": "French Southern Territories", "TG": "Togo", "TH": "Thailand", "TJ": "Tajikistan", "TK": "Tokelau", "TL": "Timor-Leste", "TM": "Turkmenistan", "TN": "Tunisia", "TO": "Tonga", "TR": "Turkey", "TT": "Trinidad and Tobago", "TV": "Tuvalu", "TW": "Taiwan", "TZ": "Tanzania", "UA": "Ukraine", "UG": "Uganda", "UM": "United States Minor Outlying Islands", "US": "United States", "UY": "Uruguay", "UZ": "Uzbekistan", "VA": "Vatican City", "VC": "Saint Vincent and The Grenadines", "VE": "Venezuela", "VG": "Virgin Islands, British", "VI": "Virgin Islands, U.S.", "VN": "Viet Nam", "VU": "Vanuatu", "WF": "Wallis and Futuna", "WS": "Samoa", "YE": "Yemen", "YT": "Mayotte", "ZA": "South Africa", "ZM": "Zambia", "ZW": "Zimbabwe",
+            'EU': 'European Union', "_pirate": "Pirate Flag", "_rainbow": "Rainbow Flag", "_united-nations": "United Nations", '_earth': 'Earth', "_lichess": "Lichess Flag"};
+        country_name = country in names ? names[country] : country.toUpperCase();
+        if (country_name.charAt(0) == '_')
+          country_name = country_name.substr(1);
+        return country ? '<abbr class="pr-2" title="' + country_name + '" style="text-decoration:none;"><img src="https://lichess1.org/assets/______0/images/flags/' + country + '.png" style="max-width:30px;"></abbr>' : "";
+      }
+    },{
+      "targets": [4],
+      "className": "align-middle",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display') return data[2];
+        return '<span class="text-warning">' + data[2].toLocaleString('en-US').replace(/,/g,'&nbsp;') + '</span>';
+      }
+    },{
+      "targets": [5],
+      "className": "text-right align-middle pr-3",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display') return -data[3];
+        return '<span class="text-muted">' + data[3].toLocaleString('en-US').replace(/,/g,'&nbsp;') + '</span>';
+      }
+    },{
+      "targets": [6],
+      "className": "d-none d-lg-table-cell text-left align-middle py-0",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display') return data[5];
+        return '<abbr class="pr-2" title="' + data[5] + '" style="text-decoration:none;">' + data[10] + '</abbr>';
+      }
+    },{
+      "targets": [7],
+      "className": "text-right align-middle pr-3",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display') return -data[7];
+        return '<span class="text-muted">' + data[7].toLocaleString('en-US').replace(/,/g,'&nbsp;') + '</span>';
+      }
+    },{
+      "targets": [8],
+      "className": "text-left align-middle pr-3",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display') return data[11];
+        return '<abbr class="pr-2" title="' + data[11] + '" style="text-decoration:none;">' + data[8] + '</abbr>';
+      }
+    }],
+    "ajax": "/lb_{{variant.lower()|safe}}.txt",
+    "deferRender": true,
+  });
+  $('.col-sm-12.col-md-6').removeClass('col-md-6');
+  setCookie('lb_variant', '{{variant.lower()|safe}}');
+});
+function update_mode(val, to_request=true) {
+  if (val == 0)
+    val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
+  for (var i = 0; i < 3; i++) {
+    if (val == i || (val < 0 && i == 0))
+      $(`#mode_${i}`).addClass("active");
+    else
+      $(`#mode_${i}`).removeClass("active");
+  }
+  if (to_request && val != "{{view.mode}}") {
+    setCookie('theme_mode', val);
+    $.ajax({url: `/set_mode/${val}`, type: "post"});
+    window.location.reload();
+  }
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.20/js/jquery.dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.20/js/dataTables.bootstrap4.min.js"></script>
+{% endblock %}

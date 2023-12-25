@@ -994,6 +994,28 @@ class ChatAnalysis:
             ret_data.update(self.cache_selected_data[mod.id])
             return ret_data
 
+    def msgs_query(self, username, text, date_begin, date_end, num_msgs, mod):
+        if not mod.is_admin:
+            return None
+        order_by = [Messages.time, Messages.id] if date_begin and not date_end else [-Messages.time, -Messages.id]
+        date_begin = f"{date_begin}T00:00" if date_begin else "2020-01-01T00:00"
+        date_begin = datetime.strptime(date_begin, '%Y-%m-%dT%H:%M')
+        where = Messages.time >= date_begin.replace(tzinfo=None)
+        if date_end:
+            date_end = datetime.strptime(f"{date_end}T23:59", '%Y-%m-%dT%H:%M')
+            where &= Messages.time <= date_end
+        if username:
+            where &= Messages.username.collate('NOCASE') == username.strip()
+        if text:
+            where &= Messages.text.contains(text.strip()).collate('NOCASE')
+        try:
+            limit = int(num_msgs)
+        except:
+            limit = 100
+        msgs = [[f'{msg.time:%Y-%m-%d %H:%M}', msg.tournament, msg.username, msg.text]
+                for msg in Messages.select().where(where).order_by(*order_by).limit(limit).execute()]
+        return msgs
+
     def prepare_reports(self):
         with self.reports_lock:
             if self.state_reports != self.cache_reports['state_reports']:

@@ -12,6 +12,7 @@ from dateutil import tz
 import math
 from peewee import DoesNotExist
 from boost import get_boost_data, send_boost_note, send_mod_action
+from leaderboard import update_leaderboard
 from chat import ChatAnalysis
 from alt import Alts
 from mod import Mod, ModInfo, View
@@ -36,6 +37,30 @@ auto_mod_token = get_token()
 auto_mod = Mod(auto_mod_token) if auto_mod_token else None
 non_mod = Mod("")
 mod_cache = {}
+
+
+@app.route('/lb/<variant>', methods=['GET'])
+@app.route('/lb/<variant>/', methods=['GET'])
+def create_leaderboard(variant):
+    try:
+        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
+    except:
+        return make_response(redirect('/login'))
+    leaderboard, lb_last_update, variant = update_leaderboard(non_mod, variant)
+    dt = f"{lb_last_update:%d %B %H:%M}" if lb_last_update else ""
+    resp = make_response(render_template('/leaderboard.html', variant=variant, dt=dt, mod=mod, view=mod.view, icon="L/"))
+    return resp
+
+
+@app.route("/lb_<variant>.txt")
+def make_leaderboard(variant):
+    try:
+        mod = get_mod(request.cookies)
+    except:
+        return Response(status=400)
+    leaderboard, lb_last_update, variant = update_leaderboard(mod, variant)
+    resp = make_response({'data': leaderboard})
+    return resp
 
 
 @app.route('/boost/', methods=['GET', 'POST'])
@@ -367,6 +392,36 @@ def custom_timeout():
     return resp
 
 
+@app.route('/comms/', methods=['GET'])
+@app.route('/comms', methods=['GET'])
+def create_comms():
+    try:
+        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
+    except:
+        return make_response(redirect('/login'))
+    resp = make_response(render_template('/comms.html', mod=mod, view=mod.view, icon="C/"))
+    return resp
+
+
+@app.route('/comms', methods=['POST'])
+def query_comms():
+    try:
+        mod = get_mod(request.cookies, update_seenAt=True)
+    except:
+        return Response(status=400)
+    data = request.form.to_dict()
+    username = data.get("username", None)
+    text = data.get("text", None)
+    date_begin = data.get("date_begin", None)
+    date_end = data.get("date_end", None)
+    num_msgs = data.get("num_msgs", '100')
+    msgs = chat.msgs_query(username, text, date_begin, date_end, num_msgs, mod)
+    if msgs is None:
+        return Response(status=401)
+    resp = make_response(msgs)
+    return resp
+
+
 @app.route('/set_mode/<mode>', methods=['POST'])
 def set_mode(mode):
     try:
@@ -468,7 +523,8 @@ def get_mod(cookies, update_theme=False, update_seenAt=False, print_exception=Fa
 
 def create_main_page(mod, error_title="", error_text=""):
     view = mod.view if mod else View()
-    resp = make_response(render_template('/main.html', mod=mod, view=view, icon="",
+    variant = request.cookies.get('lb_variant', 'bullet')
+    resp = make_response(render_template('/main.html', mod=mod, view=view, variant=variant, icon="",
                                          error_title=error_title, error_text=error_text))
     return resp
 

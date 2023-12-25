@@ -53,13 +53,38 @@
           <p class="card-text">Analyzing publicly available user information to determine similarities.</p>
           <ul>
             <li>Enter several user names in the first field and select the number of games of each user to investigate.</li>
-            <li>Alternatively, you can copy a few rows directly from the user table and paste them.</li>
+            <li>Alternatively, you can copy a few rows directly from the user table and paste them (everything except usernames will be removed).</li>
             <li>The more players and the greater the number of games, the longer you have to wait for the results.</li>
             <li>Rate limits for APIs don't allow to get full data on more than 4 players in 1 minute (additional data can be requested manually).</li>
           </ul>
         </div>
       </div>
+      <div class="card border-danger my-2" style="min-width:300px;">
+        <div class="card-body">
+          <a href="/comms" class="stretched-link" style="text-decoration:none;">
+            <h4 class="card-title text-danger text-center">Public Comms</h4>
+          </a>
+          <p class="card-text">History of public messages in chats of broadcasts and arenas.</p>
+          <ul>
+            <li>Search for public messages by username and/or part of text.</li>
+            <li>Only chats of official arenas and broadcasts are available.</li>
+            <li>Some messages may not be found if litools was down at the time.</li>
+          </ul>
+        </div>
+      </div>
       {% endif %}
+      <div class="card border-info my-2" style="min-width:300px;">
+        <div class="card-body">
+          <a href="/lb/{{variant}}" class="stretched-link" style="text-decoration:none;">
+            <h4 class="card-title text-info text-center">Leaderboards</h4>
+          </a>
+          <p class="card-text">Top 200 of all chess variants.</p>
+           <ul>
+            <li>Searchable and sortable leaderboards for all speeds and variant.</li>
+            <li>There is no leaderboard for correspondence or puzzles.</li>
+          </ul>
+        </div>
+      </div>
     </div>
     {% if mod.is_mod() %}
     <p><small>
@@ -83,7 +108,6 @@
 {% endblock %}
 
 {% block scripts %}
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
   <script>
   $(document).ready(function() {
     $("#loadOverlay").css("display","none");

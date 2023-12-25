@@ -1,0 +1,210 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+<div class="container-fluid mt-2" style="max-width:100vw;min-height:60vh;">
+  <h4 class="text-left text-warning my-2">Public Messages</h4>
+  <div class="d-flex flex-row flex-wrap justify-content-left mt-1 mb-3">
+      <table class="col-auto mr-5"><tbody>
+        <tr>
+          <td class="py-1 pr-2">Username:</td>
+          <td class="d-flex">
+            <input id="username" class="flex-grow-1 mr-1" type="text" placeholder="" onchange="values_changed(event);">
+            <button id="go" class="btn btn-primary py-0" disabled style="min-height:100%;" onclick="find_msgs()">Go</button>
+          </td>
+        </tr>
+        <tr>
+          <td class="py-1 pr-2">Maximum:</td>
+          <td>
+            <select id="num_msgs" class="w-100">
+              <option value="50" title="maximum 50 messages">50 messages</option>
+              <option value="100" selected="selected" title="maximum 100 messages">100 messages</option>
+              <option value="200" title="maximum 200 messages">200 messages</option>
+              <option value="500" title="maximum 500 messages">500 messages</option>
+              <option value="1000" title="maximum 1000 messages">1,000 messages</option>
+              <option value="2000" title="maximum 2000 messages">2,000 messages</option>
+            </select>
+          </td>
+        </tr>
+      </tbody></table>
+      <table class="col-auto mr-5"><tbody>
+        <tr>
+          <td class="py-1 pr-2"><label for="date_begin" class="text-nowrap m-0">From:</label></td>
+          <td class="w-100"><input id="date_begin" class="w-100" type="date" value="" onchange="values_changed(event);"></td>
+        </tr>
+        <tr>
+          <td class="py-1 pr-2"><label for="date_end" class="text-nowrap m-0">To:</label></td>
+          <td class="w-100"><input id="date_end" class="w-100" type="date" value="" onchange="values_changed(event);"></td>
+        </tr>
+      </tbody></table>
+      <table class="col-4"><tbody>
+        <tr>
+          <td class="py-1 pr-2">Text:</td>
+          <td><input id="text" class="w-100" type="text" placeholder="" onchange="values_changed(event);"></td>
+        </tr>
+        <tr><td colspan="2">* Text is case insensitive. Time is in UTC.</td></tr>
+      </tbody></table>
+  </div>
+  <div class="d-flex flex-row flex-wrap justify-content-around my-2">
+    <div class="flex-column flex-grow-1 mx-3">
+      <div id="msgs_downloading" class="d-none justify-content-left align-items-center my-3">
+        <div class="spinner-border text-secondary text-truncate" role="status"></div>
+        <span id="downloading_text" class="ml-3 text-secondary text-truncate">Downloading messages&hellip;</span>
+      </div>
+      <table id="msgs_table" class="d-none table table-sm table-striped table-hover text-center mb-5">
+        <thead><tr>
+          <th class="text-nowrap" style="cursor:default;">Date <i class="fas fa-sort text-muted"></i></th>
+          <th class="text-nowrap" style="cursor:default;">Time <i class="fas fa-sort text-muted"></i></th>
+          <th class="text-nowrap" style="cursor:default;">Tournament <i class="fas fa-sort text-muted"></i></th>
+          <th class="text-nowrap" style="cursor:default;">Player <i class="fas fa-sort text-muted"></i></th>
+          <th class="text-nowrap" style="cursor:default;">Text <i class="fas fa-sort text-muted"></i></th>
+        </tr></thead>
+      </table>
+      <div id="not_authorised" class="d-none text-danger">Not authorised.</div>
+    </div>
+  </div>
+  <div id="mode" class="flex-column mr-2" style="width:300px;min-width:250px;max-width:300px;">
+    <div class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2">
+      <p class="pr-2 m-0">Mode</p>
+      <div class="btn-group btn-group-toggle">
+        <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
+        <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
+        <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+$(document).ready(function() {
+  update_mode({{view.mode|safe}}, false);
+  if (window.matchMedia)
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+      if ($('#mode_0').is('.active'))
+        update_mode(event.matches ? -1 : -2);
+    });
+  $("body").tooltip({ selector: '[data-toggle=tooltip]' });
+  $("#loadOverlay").css("display","none");
+  $("#mainOverlay").css("display","block");
+  $("#username").on('keyup', values_changed);
+  $("#text").on('keyup', values_changed);
+  $("#username").on('keypress', data_entered);
+  $("#text").on('keypress', data_entered);
+  $('#msgs_table').DataTable({
+    "searching": true, "paging": false, "info": true,
+    columnDefs: [
+    {
+      "targets": [0],
+      "className": "col-1 pr-3 text-left align-middle text-nowrap",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display' || data[0].indexOf(' ') < 0) return data[0];
+        return data[0].split(' ')[0];
+      }
+    },{
+      "targets": [1],
+      "className": "col-1 text-left align-middle text-nowrap",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display' || data[0].indexOf(' ') < 0) return data[0];
+        return data[0].split(' ')[1];
+      }
+    },{
+      "targets": [2],
+      "className": "col-1 text-left align-middle text-nowrap",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display') return data[1];
+        return data[1] ? `<a class="text-success" href="https://lichess.org/tournament/${data[1]}" target="_blank" onclick="check_url(event);">${data[1]}</a>` : "";
+      }
+    },{
+      "targets": [3],
+      "className": "col-1 text-left align-middle text-nowrap",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display') return data[2];
+        return data[2] ? `<a class="text-info" href="https://lichess.org/@/${data[2].toLowerCase()}" target="_blank">${data[2]}</a>` : "";
+      }
+    },{
+      "targets": [4],
+      "className": "col-8 text-left align-middle",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        return data[3];
+      }
+    }],
+    "deferRender": true,
+  });
+  $('.col-sm-12.col-md-6').removeClass('col-md-6');
+  $('#msgs_table_wrapper').addClass("d-none");
+});
+function values_changed(e) {
+  if ($('#username').val().length || $('#date_begin').val().length || $('#date_end').val().length || $('#text').val().length)
+    $('#go').removeAttr("disabled");
+  else
+    $('#go').attr("disabled", "");
+}
+function data_entered(e) {
+  if (!e) e = window.event;
+  var keyCode = e.code || e.key;
+  if (keyCode == 'Enter' && !$('#go').is("[disabled]"))
+    find_msgs();
+}
+function find_msgs() {
+  $('#msgs_downloading').removeClass("d-none").addClass("d-flex");
+  $.ajax({
+    url: `/comms`,
+    type: "post",
+    data: {username: $('#username').val(), text: $('#text').val(), num_msgs: $('#num_msgs').val(),
+      date_begin: $('#date_begin').val(), date_end: $('#date_end').val()}
+  }).done(function(data, textStatus, jqXHR) {
+    $('#msgs_table').removeClass("d-none");
+    $('#msgs_table_wrapper').removeClass("d-none");
+    $('#not_authorised').removeClass("d-flex").addClass("d-none");
+    $('#msgs_table').DataTable().clear();
+    $('#msgs_table').DataTable().rows.add(data);
+    $('#msgs_table').DataTable().draw();
+    $('#mode').addClass("d-none");
+  }).fail(function(data, textStatus, jqXHR) {
+    $('#msgs_table').addClass("d-none");
+    $('#msgs_table_wrapper').addClass("d-none");
+    $('#not_authorised').removeClass("d-none").addClass("d-flex");
+    $('#msgs_table').DataTable().clear();
+  }).always(function(data, textStatus, jqXHR) {
+    $('#msgs_downloading').removeClass("d-flex").addClass("d-none");
+  });
+}
+function check_url(e) {
+  e = e || window.event;
+  var element = e.target || e.srcElement;
+  if (!element.href.startsWith("https://lichess.org/tournament/"))
+    return;
+  var api_url = element.href.replace("/tournament/", "/api/tournament/");
+  $.ajax({
+    url: api_url,
+    dataType: 'json',
+    async: false
+  }).fail(function(data) {
+    element.href = element.href.replace("/tournament/", "/broadcast/-/-/");
+  });
+}
+function update_mode(val, to_request=true) {
+  if (val == 0)
+    val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
+  for (var i = 0; i < 3; i++) {
+    if (val == i || (val < 0 && i == 0))
+      $(`#mode_${i}`).addClass("active");
+    else
+      $(`#mode_${i}`).removeClass("active");
+  }
+  if (to_request && val != "{{view.mode}}") {
+    setCookie('theme_mode', val);
+    $.ajax({url: `/set_mode/${val}`, type: "post"});
+    window.location.reload();
+  }
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.20/js/jquery.dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.20/js/dataTables.bootstrap4.min.js"></script>
+{% endblock %}
