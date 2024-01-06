@@ -91,6 +91,25 @@ country_names = {'GB-WLS': 'Wales󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-SCT': 'Scotland�
          "_united-nations": "United Nations", '_earth': 'Earth', "_lichess": "Lichess Flag", "_russia-wbw": "Russia BWB"}
 
 
+def flair_to_text(flair):
+    i1 = flair.find('.')
+    if i1 <= 0 and i1 < len(flair):
+        flair_name = flair
+    else:
+        flair_name = flair[i1+1:].replace('-', ' ')
+        if flair_name:
+            flair_name = f"{flair_name[0].upper()}{flair_name[1:]}"
+    return flair_name
+
+
+def get_flair_element(flair, size=30):
+    if not flair:
+        return ""
+    return f'<abbr class="user-flair text-info pr-1" title="{flair_to_text(flair)}" style="text-decoration:none;">' \
+           f'<img src="https://lichess1.org/assets/______0/flair/img/{flair}.webp" ' \
+           f'style="max-width:{size}px;"></abbr>'
+
+
 def get_highlight_style(opacity, is_diff=False):
     return f"background-color:rgba(160,119,0,{opacity});" if is_diff else f"background-color:rgba(0,160,119,{opacity});"
 
@@ -245,6 +264,7 @@ class User:
         self.disabled = False
         self.tosViolation = False
         self.patron = False
+        self.flair = ""
         self.verified = False
         self.title = ""
         self.country = ""
@@ -266,7 +286,7 @@ class User:
                 title = f'<span class="text-warning">{self.title}</span> '
         else:
             title = ""
-        return f'{title}<a href="https://lichess.org/@/{self.id}{postfix}" target="_blank">{self.name}</a>'
+        return f'{title}<a href="https://lichess.org/@/{self.id}{postfix}" class="pr-1" target="_blank">{self.name}</a>'
 
     def get_short_name(self, max_len=10):
         if len(self.name) > max_len:
@@ -283,8 +303,11 @@ class User:
     def get_patron(self):
         if not self.patron:
             return ""
-        return '<abbr title="Lichess Patron" class="text-info px-1" style="text-decoration:none;">' \
+        return '<abbr title="Lichess Patron" class="text-info pr-1" style="text-decoration:none;">' \
                '<i class="fas fa-gem"></i></abbr>'
+
+    def get_flair(self):
+        return get_flair_element(self.flair)
 
     def get_verified(self):
         if not self.verified:
@@ -313,7 +336,7 @@ class User:
         return f'<span class="px-1">{country_img}</span>'
 
     def get_name_info(self, limits_created_days_ago):
-        part1 = f'{self.get_name()}{self.get_disabled()}{self.get_patron()}{self.get_verified()}'
+        part1 = f'{self.get_patron()}{self.get_flair()}{self.get_name()}{self.get_disabled()}{self.get_verified()}'
         part2 = f'{self.get_tosViolation()}{self.get_country()} {self.get_created(limits_created_days_ago)}'
         return f'<div class="mr-2">{part1}{part2}</div>'
 
@@ -369,6 +392,7 @@ class User:
         if not self.disabled:
             self.tosViolation = user.get('tosViolation', False)
             self.patron = user.get('patron', False)
+            self.flair = user.get('flair', "")
             self.verified = user.get('verified', False)
             self.title = user.get('title', "")
             self.createdAt = user['createdAt']

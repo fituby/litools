@@ -42,6 +42,7 @@ class Tournament:
             self.finishesAt = (tourney['status'] == 'finished')
         self.messages = []
         self.user_names = set()
+        self.user_flairs = {}
         self.re_usernames = []
         self.errors = []
         self.errors_500 = []
@@ -214,9 +215,16 @@ class Tournament:
         deleted_messages = self.delete_old_messages(CHAT_MAX_NUM_OLD_MSGS if self.keep_max_messages else CHAT_MAX_NUM_MSGS)
         text_json = text[i1:i2 + 1]
         data = json.loads(text_json)
+        self.update_flairs(data)
         messages = [Message(d, self, now_utc, delay) for d in data]
         new_messages = self.add_messages(messages, can_be_old=True)
         return new_messages, deleted_messages
+
+    def update_flairs(self, data):
+        for d in data:
+            flair = d.get('f', "")
+            if flair:
+                self.user_flairs[d['u']] = flair
 
     def delete_old_messages(self, max_num_msgs=CHAT_MAX_NUM_MSGS):
         deleted_messages = []

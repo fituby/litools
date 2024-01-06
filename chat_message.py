@@ -5,7 +5,7 @@ from enum import IntFlag
 from elements import STYLE_WORD_BREAK
 from chat_re import list_res, list_res_variety, re_spaces, Lang
 from database import Messages
-from elements import Reason, deltaseconds, get_highlight_style, log, log_exception
+from elements import Reason, deltaseconds, get_highlight_style, get_flair_element, log, log_exception
 from consts import CONFIG_FILE
 
 
@@ -189,6 +189,9 @@ class Message:
                 else f"{time_tz - timedelta(seconds=self.delay):%H:%M:%S}…{time_tz:%H:%M:%S}"
             str_time = f'<abbr title="{time_interval}" class="user-select-none" ' \
                        f'style="text-decoration:none;">{str_time}</abbr>'
+            flair = self.tournament.user_flairs.get(self.username, "")
+            if flair:
+                str_time = f'{str_time}{get_flair_element(flair, 17)}'
         score_theme = "" if self.score is None else ' text-danger' if self.score > 50 \
             else ' text-warning' if self.score > 10 else ""
         score = f'<span class="user-select-none{score_theme}">{self.score}</span>' if self.score and self.score > 0 else ""

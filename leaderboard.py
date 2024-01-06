@@ -3,7 +3,7 @@ from dateutil import tz
 import time
 from collections import defaultdict
 from api import ApiType
-from elements import timestamp_to_ago, log
+from elements import timestamp_to_ago, flair_to_text, log
 
 
 API_USERS_MAX_NUM = 300
@@ -55,13 +55,7 @@ def update_leaderboard(mod, var):
         p = user['perfs'][variant]
         num_anti_games = p['games']
         flair = user.get('flair', "")
-        i1 = flair.find('.')
-        if i1 <= 0 and i1 < len(flair):
-            flair_name = flair
-        else:
-            flair_name = flair[i1+1:].replace('-', ' ')
-            if flair_name:
-                flair_name = f"{flair_name[0].upper()}{flair_name[1:]}"
+        flair_name = flair_to_text(flair)
         tosViolation = 1 if user.get('tosViolation', False) else 0
         country = user.get('profile', {}).get('flag', "")
         seenAt = f"{datetime.fromtimestamp(user['seenAt'] // 1000, tz=tz.tzutc()):%Y-%m-%d %H:%M}"

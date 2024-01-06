@@ -8,6 +8,10 @@
         <button class="btn p-0 mb-1 collapsed" type="button" data-toggle="collapse" data-target="#collapse_settings" aria-expanded="false" aria-controls="collapse_settings" onclick="show_settings($(this).is('.collapsed'));">
           <i class="fas fa-cog text-secondary" style="font-size:23px"></i>
         </button>
+        <div id="hide_flairs" class="custom-control custom-switch d-none">
+          <input class="custom-control-input" type="checkbox" role="switch" id="switchHideFlairs" checked="" onchange="update_hide_flairs(event)">
+          <label class="custom-control-label" for="switchHideFlairs">Hide flairs</label>
+        </div>
         <div id="autoselect_setting" class="custom-control custom-switch d-none">
           <input class="custom-control-input" type="checkbox" role="switch" id="switchAutoSelect" checked="" onchange="update_autoselect(event)">
           <label class="custom-control-label" for="switchAutoSelect">Auto select on Dismiss</label>
@@ -193,6 +197,7 @@
     filter_score(0, false);
     reset_langs();
     $("#switchAutoSelect").prop('checked', is_autoselect());
+    $("#switchHideFlairs").prop('checked', !is_flairs());
     $("#tournament_settings").css("display","none");
     $("#dubious_messages").css("display","none");
     $("#multiline_messages").css("display","none");
@@ -278,6 +283,7 @@
     filter_out();
     set_selection(data_chats);
     filter_messages();
+    update_flairs();
     for (var msg_id of hidden_msgs) {
       $(`#msgA${msg_id}`).css("display","none");
       $(`#msgB${msg_id}`).css("display","none");
@@ -411,6 +417,22 @@
   function update_autoselect(e) {
     setCookie('msg_autoselect', event.target.checked);
   }
+  function is_flairs() {
+    var display_flairs = getCookie("msg_flairs");
+    if (display_flairs == null)
+      return true;
+    return display_flairs;
+  }
+  function update_hide_flairs(e) {
+    setCookie('msg_flairs', !event.target.checked);
+    update_flairs();
+  }
+  function update_flairs() {
+    if (is_flairs())
+      $('.user-flair').removeClass("d-none");
+    else
+      $('.user-flair').addClass("d-none");
+  }
   function get_next_report_id(msg_id) {
     var m_id = null;
     if (msg_id.startsWith('A') || msg_id.startsWith('C') || msg_id.startsWith('F'))
@@ -520,6 +542,7 @@
       .done(function(data, textStatus, jqXHR) {
         set_selection(data);
         filter_messages(!msg_id.startsWith('F'));
+        update_flairs();
         var active_element = $('#selected_messages .selectee-center');
         if (active_element.length) {
           active_element[0].scrollIntoView({block: "center"});
@@ -640,7 +663,6 @@
       .done(function(data, textStatus, jqXHR) {
         $('#btn_refresh_selected').removeClass("btn-outline-info").addClass("btn-outline-secondary");
         update_data(data);
-        set_selection(data);
         var active_element = $('#selected_messages .selectee-center');
         if (active_element.length) {
           active_element[0].scrollIntoView({block: "center"});
@@ -739,10 +761,14 @@
         });
   }
   function show_settings(flag) {
-    if (flag)
+    if (flag) {
+      $('#hide_flairs').removeClass("d-none").addClass("d-block");
       $('#autoselect_setting').removeClass("d-none").addClass("d-block");
-    else
+    }
+    else {
+      $('#hide_flairs').removeClass("d-block").addClass("d-none");
       $('#autoselect_setting').removeClass("d-block").addClass("d-none");
+    }
   }
   </script>
 {% endblock %}
