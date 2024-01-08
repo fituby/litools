@@ -16,12 +16,12 @@
           <td class="py-1 pr-2">Maximum:</td>
           <td>
             <select id="num_msgs" class="w-100">
-              <option value="50" title="maximum 50 messages">50 messages</option>
               <option value="100" selected="selected" title="maximum 100 messages">100 messages</option>
               <option value="200" title="maximum 200 messages">200 messages</option>
               <option value="500" title="maximum 500 messages">500 messages</option>
               <option value="1000" title="maximum 1000 messages">1,000 messages</option>
               <option value="2000" title="maximum 2000 messages">2,000 messages</option>
+              <option value="5000" title="maximum 5000 messages">5,000 messages</option>
             </select>
           </td>
         </tr>
@@ -91,12 +91,26 @@ $(document).ready(function() {
   $("#text").on('keyup', values_changed);
   $("#username").on('keypress', data_entered);
   $("#text").on('keypress', data_entered);
+  jQuery(function($){
+    $('#username').bind('paste', function(event){
+      var data = event.originalEvent.clipboardData.getData('text/plain');
+      if (data.startsWith("https://lichess.org/@/")) {
+        event.preventDefault();
+        var i2 = data.indexOf('?');
+        var username = (i2 < 0) ? data : data.substr(0, i2);
+        var i1 = username.lastIndexOf('/');
+        username = username.substr(i1 + 1).trim();
+        if (username)
+          $('#username').val(username);
+      }
+    });
+  });
   $('#msgs_table').DataTable({
     "searching": true, "paging": false, "info": true,
     columnDefs: [
     {
       "targets": [0],
-      "className": "col-1 pr-3 text-left align-middle text-nowrap",
+      "className": "col-1 pr-3 text-left align-middle text-nowrap user-select-none",
       "data": null,
       "render": function(data, type, row, meta) {
         if (type != 'display' || data[0].indexOf(' ') < 0) return data[0];
@@ -104,7 +118,7 @@ $(document).ready(function() {
       }
     },{
       "targets": [1],
-      "className": "col-1 text-left align-middle text-nowrap",
+      "className": "col-1 text-left align-middle text-nowrap user-select-none",
       "data": null,
       "render": function(data, type, row, meta) {
         if (type != 'display' || data[0].indexOf(' ') < 0) return data[0];
@@ -112,7 +126,7 @@ $(document).ready(function() {
       }
     },{
       "targets": [2],
-      "className": "col-1 text-left align-middle text-nowrap",
+      "className": "col-1 text-left align-middle text-nowrap user-select-none",
       "data": null,
       "render": function(data, type, row, meta) {
         if (type != 'display' || !data[1].length) return data[1];
@@ -123,7 +137,7 @@ $(document).ready(function() {
       }
     },{
       "targets": [3],
-      "className": "col-1 text-left align-middle text-nowrap",
+      "className": "col-1 text-left align-middle text-nowrap user-select-none",
       "data": null,
       "render": function(data, type, row, meta) {
         if (type != 'display') return data[2];
