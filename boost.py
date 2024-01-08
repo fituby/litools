@@ -174,34 +174,36 @@ class GameAnalysis:
         link = f'https://lichess.org/@/{{username}}/search?dateMax={max_date:%Y-%m-%d}&turnsMax={num_moves}{{perf_index}}' \
                f'&mode=1&players.a={{user_id}}&players.{winner_loser}={{user_id}}&sort.field=d&sort.order=desc'
         link_open = f'<a class="ml-2" href="{link}" target="_blank">open</a>'
-        add_info = []
-        if self.resign.num >= BOOST_NUM_RESIGN_REPORTABLE:
-            add_info.append(f"resigned {self.resign.num} games {stats_resign.info()}")
-        if self.timeout.num >= BOOST_NUM_TIMEOUT_REPORTABLE:
-            add_info.append(f"left the game in {self.timeout.num} games{stats_timeout.info()}")
-        if self.out_of_time.num >= BOOST_NUM_OUT_OF_TIME_REPORTABLE:
-            add_info.append(f"out of time in {self.out_of_time.num} games{stats_out_of_time.info()}")
         info = f'{link}'
-        if add_info or self.streak.num >= BOOST_STREAK_REPORTABLE or stats_bad_games.score >= 1:
-            won_lost = "lost" if self.is_sandbagging else "won"
-            info = f"{info}\nIn the only game" if self.all_games.num == 1 else f'{info}\nAmong {self.all_games.num} games'
-            info = f"{info}{{info_games_played}}"
-            if self.all_games.num == 100 or self.all_games.num < 30:
-                info = f'{info}, they {won_lost} {self.bad_games.num} games'
-            else:
-                perc = int(round(100 * self.bad_games.num / self.all_games.num)) if self.all_games.num else 0
-                info = f'{info}, they {won_lost} {perc}% of their games'
-            if self.max_num_moves == 0:
-                info = f'{info} without making a single move'
-            else:
-                info = f'{info} in {self.max_num_moves} moves or less'
-            if add_info:
-                str_opp = ": " if self.is_sandbagging else ": their opponents "
-                info = f'{info}{str_opp}{", ".join(add_info)}'
-            if self.streak.num >= BOOST_STREAK_REPORTABLE:
-                str_incl = "including" if self.streak.num < self.bad_games.num else "i.e."
-                info = f'{info}, {str_incl} {self.streak.num} games streak'
-            info = f"{info}."
+        if BOOST_ADD_INFO:
+            add_info = []
+            if self.resign.num >= BOOST_NUM_RESIGN_REPORTABLE:
+                add_info.append(f"resigned {self.resign.num} games {stats_resign.info()}")
+            if self.timeout.num >= BOOST_NUM_TIMEOUT_REPORTABLE:
+                add_info.append(f"left the game in {self.timeout.num} games{stats_timeout.info()}")
+            if self.out_of_time.num >= BOOST_NUM_OUT_OF_TIME_REPORTABLE:
+                add_info.append(f"out of time in {self.out_of_time.num} games{stats_out_of_time.info()}")
+            if add_info or self.streak.num >= BOOST_STREAK_REPORTABLE or stats_bad_games.score >= 1:
+                won_lost = "lost" if self.is_sandbagging else "won"
+                info = f"{info}\nIn the only game" if self.all_games.num == 1 \
+                    else f'{info}\nAmong {self.all_games.num} games'
+                info = f"{info}{{info_games_played}}"
+                if self.all_games.num == 100 or self.all_games.num < 30:
+                    info = f'{info}, they {won_lost} {self.bad_games.num} games'
+                else:
+                    perc = int(round(100 * self.bad_games.num / self.all_games.num)) if self.all_games.num else 0
+                    info = f'{info}, they {won_lost} {perc}% of their games'
+                if self.max_num_moves == 0:
+                    info = f'{info} without making a single move'
+                else:
+                    info = f'{info} in {self.max_num_moves} moves or less'
+                if add_info:
+                    str_opp = ": " if self.is_sandbagging else ": their opponents "
+                    info = f'{info}{str_opp}{", ".join(add_info)}'
+                if self.streak.num >= BOOST_STREAK_REPORTABLE:
+                    str_incl = "including" if self.streak.num < self.bad_games.num else "i.e."
+                    info = f'{info}, {str_incl} {self.streak.num} games streak'
+                info = f"{info}."
         self.row = f'''<tr>
                     <td class="text-left"><button class="btn btn-primary p-0" style="min-width: 120px;" 
                         onclick="add_to_notes(this)" data-selection=\'{info}\'>{self.max_num_moves}</button>{link_open}</td>

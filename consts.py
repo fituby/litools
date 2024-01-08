@@ -46,7 +46,7 @@ STD_SHORT_MESSAGES = ["hi", "hello", "good luck", "bye", "gl", "hf", "thanks", "
 
 # Boost
 BOOST_UPDATE_PERIOD = 5 * 60  # seconds
-
+BOOST_ADD_INFO = False
 BOOST_SUS_PROGRESS = 50
 BOOST_SUS_NUM_GAMES = 50
 BOOST_SUS_RATING_DIFF = [150, 300]
