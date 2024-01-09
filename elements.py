@@ -47,7 +47,7 @@ country_names = {'GB-WLS': 'Wales󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-SCT': 'Scotland�
          "CV": "Cape Verde", "CW": "Curaçao", "CX": "Christmas Island", "CY": "Cyprus", "CZ": "Czech Republic",
          "DE": "Germany", "DJ": "Djibouti", "DK": "Denmark", "DM": "Dominica", "DO": "Dominican Republic",
          "DZ": "Algeria", "EC": "Ecuador", "EE": "Estonia", "EG": "Egypt", "EH": "Western Sahara",
-         "ER": "Eritrea", "ES": "Spain", "ET": "Ethiopia", "FI": "Finland", "FJ": "Fiji",
+         "ER": "Eritrea", "ES": "Spain", "ES-CT": "Catalonia", "ET": "Ethiopia", "FI": "Finland", "FJ": "Fiji",
          "FK": "Falkland Islands (Malvinas)", "FM": "Micronesia", "FO": "Faroe Islands", "FR": "France",
          "GA": "Gabon", "GB": "United Kingdom", "GD": "Grenada", "GE": "Georgia", "GF": "French Guiana",
          "GG": "Guernsey", "GH": "Ghana", "GI": "Gibraltar", "GL": "Greenland", "GM": "Gambia", "GN": "Guinea",
@@ -303,7 +303,7 @@ class User:
     def get_patron(self):
         if not self.patron:
             return ""
-        return '<abbr title="Lichess Patron" class="text-info pr-1" style="text-decoration:none;">' \
+        return '<abbr title="Lichess Patron" class="text-info px-1" style="text-decoration:none;">' \
                '<i class="fas fa-gem"></i></abbr>'
 
     def get_flair(self):
@@ -336,7 +336,7 @@ class User:
         return f'<span class="px-1">{country_img}</span>'
 
     def get_name_info(self, limits_created_days_ago):
-        part1 = f'{self.get_patron()}{self.get_flair()}{self.get_name()}{self.get_disabled()}{self.get_verified()}'
+        part1 = f'{self.get_flair()}{self.get_patron()}{self.get_name()}{self.get_disabled()}{self.get_verified()}'
         part2 = f'{self.get_tosViolation()}{self.get_country()} {self.get_created(limits_created_days_ago)}'
         return f'<div class="mr-2">{part1}{part2}</div>'
 
