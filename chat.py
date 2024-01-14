@@ -20,7 +20,7 @@ from consts import *
 sys.setrecursionlimit(9999)
 
 
-official_teams = [
+tournament_teams = [
     "lichess-swiss",
     "lichess-antichess",
     "lichess-atomic",
@@ -30,7 +30,11 @@ official_teams = [
     "lichess-king-of-the-hill",
     "lichess-racing-kings",
     "lichess-three-check",
-    "team-chessable"
+    "team-chessable",
+    "persian-empire",
+    "dark-horse",
+    "sc-turm-illingen",
+    "chessscoutinfo-team"
 ]
 
 arena_tournament_page = "https://lichess.org/tournament/"
@@ -1159,7 +1163,7 @@ class ChatAnalysis:
 def get_current_tournaments(non_mod):
     # Arenas of official teams
     arenas = []
-    for teamId in official_teams:
+    for teamId in tournament_teams:
         url = f"https://lichess.org/api/team/{teamId}/arena"
         data = non_mod.api.get_ndjson(ApiType.ApiTeamArena, url, non_mod.token, Accept="application/nd-json")
         arenas.extend(data)
@@ -1172,19 +1176,25 @@ def get_current_tournaments(non_mod):
     arenas.extend([*data['created'], *data['started'], *data['finished']])
     tournaments = []
     now_utc = datetime.now(tz=tz.tzutc())
+    arena_ids = set()
     for arena in arenas:
-        tourn = Tournament(arena, TournType.Arena)
-        if tourn.is_active(now_utc):
-            tournaments.append(tourn)
+        if arena['id'] not in arena_ids:
+            arena_ids.add(arena['id'])
+            tourn = Tournament(arena, TournType.Arena)
+            if tourn.is_active(now_utc):
+                tournaments.append(tourn)
     # Swiss
-    for teamId in official_teams:
+    swiss_ids = set()
+    for teamId in tournament_teams:
         url = f"https://lichess.org/api/team/{teamId}/swiss"
         swiss_data = non_mod.api.get_ndjson(ApiType.ApiTeamSwiss, url, non_mod.token, Accept="application/nd-json")
         for swiss in swiss_data:
             try:
-                tourn = Tournament(swiss, TournType.Swiss)
-                if tourn.is_active(now_utc):
-                    tournaments.append(tourn)
+                if swiss['id'] not in swiss_ids:
+                    swiss_ids.add(swiss['id'])
+                    tourn = Tournament(swiss, TournType.Swiss)
+                    if tourn.is_active(now_utc):
+                        tournaments.append(tourn)
             except Exception as exception:
                 log_exception(exception)
     # Broadcast
