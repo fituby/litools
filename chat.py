@@ -1208,7 +1208,7 @@ def get_current_tournaments(non_mod):
                 r['nbPlayers'] = 0
                 r['name'] = f"{r['name']} | {broadcast_name}"
                 r['status'] = "finished" if r.get('finished') else "unknown"
-                tourn = Tournament(r, TournType.Study, r['url'])
+                tourn = Tournament(r, TournType.Study, r.get('url', f"https://lichess.org/broadcast/-/-/{r['id']}"))
                 if tourn.is_active(now_utc):
                     tournaments.append(tourn)
         except Exception as exception:
