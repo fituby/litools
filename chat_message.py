@@ -117,8 +117,8 @@ class Message:
         return f"[{self.username}]: {self.text}"
 
     def dont_evaluate(self):
-            self.eval_text = self.text
-            self.score = 0
+        self.eval_text = html.escape(self.text)
+        self.score = 0
 
     def evaluate(self, re_usernames):
         if self.is_official:
@@ -150,7 +150,7 @@ class Message:
         except Exception as exception:
             log(f"ERROR when processing: {self}", to_print=True, to_save=True)
             log_exception(exception)
-            self.eval_text = self.text
+            self.eval_text = html.escape(self.text)
             self.score = 0
 
     def is_hidden(self):

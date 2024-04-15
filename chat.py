@@ -1016,7 +1016,7 @@ class ChatAnalysis:
             limit = int(num_msgs)
         except:
             limit = 100
-        msgs = [[f'{msg.time:%Y-%m-%d %H:%M}', msg.tournament, msg.username, msg.text]
+        msgs = [[f'{msg.time:%Y-%m-%d %H:%M}', msg.tournament, msg.username, html.escape(msg.text)]
                 for msg in Messages.select().where(where).order_by(*order_by).limit(limit).execute()]
         return msgs
 

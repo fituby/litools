@@ -672,7 +672,7 @@ Lang.Ru: [
        ban=-2, reason=Reason.Offensive, info="долбоёб"),
     Re(r'даун(у|ы|е|[оа]в|ами?|ах?|)', 30,
        reason=Reason.Offensive, info="даун"),
-    Re(r'д[еи]бил(|ам?|ы|у|ов)', 30,
+    Re(r'д[еи]бил(|ам?|ы|у|ов|и)', 30,
        reason=Reason.Offensive, info="дебил"),
     Re(r'дерьм(а|о|е|вый|вая|вое)',
        reason=Reason.Offensive, info="дерьмо"),
@@ -684,6 +684,8 @@ Lang.Ru: [
        reason=Reason.Other, info="залупа"),
     Re(r'заткни(те|)c[ья]', 30,
        reason=Reason.Other, info="заткнитесь"),
+    Re(r'заходи(|те)',
+       reason=Reason.Spam, info="заходите"),
     Re(r'идиот(|ам?|ы|у|ов)', 20,
        reason=Reason.Offensive, info="идиот"),
     Re(r'йух', 40,
@@ -1166,6 +1168,8 @@ Lang.Spam: [
        reason=Reason.Spam, info="[a ] x20..24"),
     Re(r'[\s\Weuioaёëуеыаоэяю]{15,19}', 10, is_separate_word=False,
        reason=Reason.Spam, info="[a ] x15..19"),
+    Re(r'<\/?\s*script\s*>', 50, is_separate_word=False,
+       reason=Reason.Spam, info="_script_"),
 ]
 }
 
