@@ -590,7 +590,7 @@ class Alts:
                     total_overlapping_time_s = sum([og.interval_s for og in overlapping_games])
                     interval_short = deltainterval(total_overlapping_time_s, show_seconds=True, short=True)
                     interval_long = deltainterval(total_overlapping_time_s, show_seconds=True)
-                    str_with = '<span class="text-info">themselves</span>' if alt_id == player_id else alt.user.name
+                    str_with = '<span class="text-info">themself</span>' if alt_id == player_id else alt.user.name
                     player_info.append(f'<span class="{num_games_class}">{len(overlapping_games)}'
                                        f' game{"" if len(overlapping_games) == 1 else "s"}</span>'
                                        f' <abbr title="{interval_long}">{interval_short}</abbr>'
