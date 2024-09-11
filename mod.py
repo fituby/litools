@@ -3,7 +3,7 @@ from dateutil import tz
 from enum import IntEnum
 from threading import Lock
 from elements import decode_string, read_notes, datetime_to_abbr_ago, datetime_to_abbr_in, log_exception
-from elements import load_mod_log, get_mod_log
+from elements import load_mod_log, load_timeout_log, get_mod_log
 from database import Mods
 from api import Api, ApiType
 from consts import BOOST_RING_TOOL
@@ -47,7 +47,12 @@ class Mod:
             self.check_perms()
 
     def check_perms(self):
-        self.is_timeout = True
+        self.is_timeout = False
+        try:
+            log = load_timeout_log("tv", self)
+            self.is_timeout = not not log.get('logs', [])
+        except:
+            pass
         self.boost_ring_tool = decode_string(BOOST_RING_TOOL, self) if self.is_timeout else ""
         # decode_string() returns "" (not None) if not available
         self.is_admin = self.check_admin() if self.boost_ring_tool else False

@@ -30,6 +30,7 @@ class ApiType:
     ApiUserNote = Endpoint('api/user/note')
     ApiUserModLog = Endpoint('api/user/mod-log')
     ApiUsersStatus = Endpoint('api/users/status')
+    ModChatUser = Endpoint('mod/chat-user')
     ReportListBoost = Endpoint('report/list/boost')
     ApiTeamOf = Endpoint('api/team/of')
     AtUsernameFollowing = Endpoint('@/username/following')

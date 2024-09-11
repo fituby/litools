@@ -8,8 +8,8 @@ from collections import defaultdict
 from typing import DefaultDict, Dict
 import html
 from api import ApiType
-from elements import Reason, TournType, delta_s, log, log_exception
-from elements import get_notes, add_note, load_mod_log, get_mod_log, get_highlight_style, add_timeout_msg
+from elements import Reason, TournType, delta_s, log, log_exception, get_notes, add_note
+from elements import load_mod_log, load_timeout_log, get_mod_log, get_highlight_style, add_timeout_msg
 from elements import ModActionType, ModAction, UserData
 from chat_message import Message
 from chat_tournament import Tournament
@@ -280,7 +280,7 @@ class ChatAnalysis:
     @staticmethod
     def is_modlog_ok_for_timeout(msg, mod, check_perms=False):
         now_utc = datetime.now(tz=tz.tzutc())
-        mod_log_data = load_mod_log(msg.username, mod)
+        mod_log_data = load_mod_log(msg.username, mod) if mod.is_mod() else load_timeout_log(msg.username, mod)
         if mod_log_data is None:
             mod.last_mod_log_error = now_utc
             return True
@@ -548,12 +548,12 @@ class ChatAnalysis:
                 return
             user = UserData(username, mod)
             now_utc = datetime.now(tz=tz.tzutc())
-            if mod.to_read_mod_log and (mod.last_mod_log_error is None
-                                        or now_utc > mod.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
+            if mod.is_timeout and (mod.last_mod_log_error is None
+                                   or now_utc > mod.last_mod_log_error + timedelta(minutes=DELAY_ERROR_READ_MOD_LOG)):
                 with self.selected_user_lock[mod.id]:
                     self.selected_user_num_recent_timeouts[mod.id] = 0
                     self.selected_user_num_recent_comm_warnings[mod.id] = 0
-                    mod_log_data = load_mod_log(username, mod)
+                    mod_log_data = load_mod_log(username, mod) if mod.is_mod() else load_timeout_log(username, mod)
                     if mod_log_data is None:
                         mod.last_mod_log_error = now_utc
                     else:

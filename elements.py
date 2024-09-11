@@ -1095,11 +1095,38 @@ def load_mod_log(username, mod):
     return None
 
 
+def load_timeout_log(username, mod):
+    try:
+        url = f"https://lichess.org/mod/chat-user/{username}"
+        r = mod.api.get(ApiType.ModChatUser, url, token=mod.token)
+        if r.status_code != 200:
+            raise Exception(f"ERROR /mod/chat-user/{username}: Status Code {r.status_code}")
+        data = r.json()
+        if not data:
+            return None
+        history = data.get('history', [])
+        if not history:
+            return {'logs': []}
+        log = []
+        for h in history:
+            item = {
+                'mod': h.get('mod', ""),
+                'action': 'chatTimeout',
+                'date': h['date'],
+                'details': h.get('reason', "")
+            }
+            log.append(item)
+        return {'logs': [log]}
+    except Exception as exception:
+        log_exception(exception)
+    return None
+
+
 class ModActionType(IntEnum):
     Standard = 0
     Boost = 1
     Chat = 2
-    Alt = 1
+    Alt = 3
 
 
 def get_table_row_for_actions(actions, now_utc):
@@ -1226,9 +1253,19 @@ class ModAction:
 
     @staticmethod
     def update_names(actions, mod):
+        is_ids = all([((not action.mod_id) or action.mod_id.islower()) for action in actions])
+        if not is_ids:
+            # load_timeout_log() returns usernames, not user ids
+            for action in actions:
+                if action.mod_id:
+                    mod_username = action.mod_id
+                    action.mod_id = action.mod_id.lower()
+                    if action.mod_id not in ModAction.names:
+                        ModAction.names[action.mod_id] = mod_username
+            return
         ids = set()
         for action in actions:
-            if action.mod_id and action.mod_id not in ModAction.names:
+            if action.mod_id and (action.mod_id not in ModAction.names):
                 ids.add(action.mod_id)
         ids = list(ids)
         if ids:
@@ -1392,6 +1429,16 @@ class BoostModAction(ModAction):
 class ChatModAction(ModAction):
     def __init__(self, data):
         super().__init__(data)
+
+    @classmethod
+    def from_timeout_data(cls, data):
+        d = {
+            'mod': data.get('mod', ""),
+            'action': 'chatTimeout',
+            'date': data['date'],
+            'details': data.get('reason', "")
+        }
+        return cls(d)
 
     def get_class(self, now_utc):
         if self.is_warning():

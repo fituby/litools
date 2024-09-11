@@ -1105,9 +1105,9 @@ Lang.Spam: [
     # Spam
     Re(r'((.)\2{45,})', 80, is_capturing_groups=True, is_separate_word=False,
        ban=-1, reason=Reason.Spam, info="(.) x45"),
-    Re(r'(n{1,23}o{30,})', 50, is_capturing_groups=True, is_separate_word=False,
+    Re(r'(n{1,23}o{35,})', 50, is_capturing_groups=True, is_separate_word=False,
        ban=-3, reason=Reason.Spam, info="noooooooo"),
-    Re(r'(a{1,23}h{30,})', 50, is_capturing_groups=True, is_separate_word=False,
+    Re(r'(a{1,23}h{35,})', 50, is_capturing_groups=True, is_separate_word=False,
        ban=-3, reason=Reason.Spam, info="ahhhhhhhh"),
     Re(r'((.)\2{30,})', 80, is_capturing_groups=True, is_separate_word=False,
        ban=-1, reason=Reason.Spam, info="(.) x30"),
