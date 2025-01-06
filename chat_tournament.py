@@ -168,6 +168,8 @@ class Tournament:
             headers = {'User-Agent': CLIENT_ID}
             token = None
             url = self.link if self.link else f"https://lichess.org/{self.get_endpoint()}/{self.id}"
+            if url and self.t_type == TournType.Study:
+                url = f"{url}#players"
             r = non_mod.api.get(ApiType.TournamentId, url, token=token, headers=headers)
             if r.status_code != 200:
                 if r.status_code >= 500:
@@ -358,6 +360,8 @@ class Tournament:
     def get_link(self, short=True):
         name = shorten(self.name, MAX_LEN_TOURNEY_NAME_SHORT if short else MAX_LEN_TOURNEY_NAME_LONG)
         link = self.link if self.link else f'https://lichess.org/{self.get_endpoint()}/{self.id}'
+        if link and self.t_type == TournType.Study:
+            link = f"{link}#players"
         tournament = f'<a href="{link}" target="_blank">{name}</a>'
         return tournament
 

@@ -78,10 +78,24 @@
     <div class="col mt-3" style="min-width:370px;max-width:800px;">
       <div id="notes-section" class="d-none mt-3">
         <div class="d-flex user-select-none justify-content-between px-1 py-1">
-          <span id="label_add_notes" class="d-none align-self-center mr-2">Add note + </span>
-          <button id="warn_sandbag" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="mod_action('warn_sandbagging')">Warn: Sandbag</button>
-          <button id="warn_boost" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="mod_action('warn_boosting')">Warn: Boost</button>
-          <button id="mark_booster" class="btn btn-secondary align-baseline flex-grow-1 p-0" onclick="mod_action('mark_booster')">Mark</button>
+          <span id="label_add_notes" class="d-none text-info align-self-center mr-2">Add note + </span>
+          <span>Warn:</span>
+          <div class="btn-group">
+            <button id="warn_sandbag" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="mod_action('warn_sandbagging')">
+              <abbr title="Warning: Sandbagging" style="text-decoration:none;cursor:inherit;">Sandbag</abbr>
+            </button>
+            <button id="warn_fail_to_start" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="mod_action('warn_failure_to_start')">
+              <abbr title="Warning: Failure to start tournament games" style="text-decoration:none;cursor:inherit;">FailToStart</abbr>
+            </button>
+            <button id="warn_boost" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="mod_action('warn_boosting')">
+              <abbr title="Warning: Boosting" style="text-decoration:none;cursor:inherit;">Boost</abbr>
+            </button>
+          </div>
+          <button id="mark_booster" class="btn btn-secondary align-baseline flex-grow-1 p-0" onclick="mod_action('mark_booster')">
+            <abbr title="Mark as booster" style="text-decoration:none;cursor:inherit;">
+              <i class="fas fa-hammer"></i> Mark
+            </abbr>
+          </button>
         </div>
         <textarea id="notes" class="form-control" rows="5" oninput='update_notes()'></textarea>
         <div id="btn_actions" class="d-none user-select-none justify-content-between px-1 py-1">
@@ -222,14 +236,22 @@
     $('#mod-notes').removeClass("d-flex").addClass("d-none");
   }
   function enable_buttons(data) {
-    if (data["enable-sandbagging"] == 1)
+    if (data["enable-sandbagging"] == 1) {
       $('#warn_sandbag').removeClass("btn-secondary").addClass("btn-warning");
-    else
+      $('#warn_fail_to_start').removeClass("btn-secondary").addClass("btn-warning");
+    }
+    else {
       $('#warn_sandbag').removeClass("btn-warning").addClass("btn-secondary");
-    if (data["enable-sandbagging"] == -1)
+      $('#warn_fail_to_start').removeClass("btn-warning").addClass("btn-secondary");
+    }
+    if (data["enable-sandbagging"] == -1) {
       $('#warn_sandbag').attr("disabled", "");
-    else
+      $('#warn_fail_to_start').attr("disabled", "");
+    }
+    else {
       $('#warn_sandbag').removeAttr("disabled");
+      $('#warn_fail_to_start').removeAttr("disabled");
+    }
     if (data["enable-boosting"] == 1)
       $('#warn_boost').removeClass("btn-secondary").addClass("btn-warning");
     else

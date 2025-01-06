@@ -84,13 +84,11 @@ class Mod:
         return not not self.boost_ring_tool  # workaround
 
     def check_admin(self):
-        num = 0
         try:
             data = read_notes("test", self)
-            num = len(data)
+            return len(data) >= 2 and data[0].get('dox')  # workaround
         except:
-            pass
-        return num >= 2  # workaround
+            return False
 
     def get_public_data(self):
         try:

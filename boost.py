@@ -11,7 +11,7 @@ from api import ApiType
 from elements import get_user, shorten, delta_s, log, log_exception
 from elements import get_notes, add_note, load_mod_log, get_mod_log, add_variant_rating
 from elements import ModActionType, WarningStats, User, Games, Variants, PerfType
-from elements import warn_sandbagging, warn_boosting, mark_booster
+from elements import warn_sandbagging, warn_failure_to_start, warn_boosting, mark_booster
 from elements import needs_to_refresh_insights, set_insights_refreshed, render
 from consts import *
 
@@ -968,7 +968,7 @@ class ModLogData:
             if action.is_warning():
                 if action.mod_id == "lichess" and action.details == "Warning: possible sandbagging":
                     self.sandbag_auto.add(action, now_utc)
-                elif action.details == "Warning: Sandbagging":
+                elif action.details in ["Warning: Sandbagging", "Warning: Failure to start tournament games"]:
                     self.sandbag_manual.add(action, now_utc)
                     self.update_manual_warning(action)
                 elif action.mod_id == "lichess" and action.details == "Warning: possible boosting":
@@ -1080,6 +1080,8 @@ def send_mod_action(action, username, mod):
             output.update(boost.get_enabled_buttons())
             if action == "warn_sandbagging":
                 is_ok = warn_sandbagging(username, mod)
+            elif action == "warn_failure_to_start":
+                is_ok = warn_failure_to_start(username, mod)
             elif action == "warn_boosting":
                 is_ok = warn_boosting(username, mod)
             elif action == "mark_booster":

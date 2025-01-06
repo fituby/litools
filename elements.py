@@ -1395,6 +1395,8 @@ class BoostModAction(ModAction):
                 return "Auto warning: sandbagging"
             if self.details == "Warning: Sandbagging":
                 return "Warning: Sandbagging"
+            if self.details == "Warning: Failure to start tournament games":
+                return "Warning: Failure to start tournament games"
             if self.mod_id == "lichess" and self.details == "Warning: possible boosting":
                 return "Auto warning: boosting"
             if self.details == "Warning: Boosting":
@@ -1504,6 +1506,10 @@ def warn_user(username, subject, mod):
 
 def warn_sandbagging(username, mod):
     return warn_user(username, "Warning: Sandbagging", mod)
+
+
+def warn_failure_to_start(username, mod):
+    return warn_user(username, "Warning: Failure to start tournament games", mod)
 
 
 def warn_boosting(username, mod):

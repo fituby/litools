@@ -914,6 +914,11 @@ class ChatAnalysis:
             page = page.strip()
             if page.startswith('/'):
                 page = page[1:]
+            i1 = page.find("?")
+            i2 = page.find('#')
+            i = i1 if i2 < 0 else i2 if i1 < 0 else min(i1, i2)
+            if i >= 0:
+                page = page[:i]
         if len(page) == 8 and ChatAnalysis.re_tourn_id.search(page):
             page = f'{arena_tournament_page}{page}'
         if page and page.startswith(str_lichess):

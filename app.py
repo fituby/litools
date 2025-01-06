@@ -1,4 +1,5 @@
 from flask import Flask, Response, render_template, request, make_response, session, redirect
+from flask_minify import minify
 from waitress import serve
 import logging
 import threading
@@ -32,6 +33,7 @@ logger.setLevel(logging.ERROR)
 app = Flask(__name__, template_folder="templates", static_folder="static", static_url_path="/")
 app.secret_key = token_bytes(32)
 app.config['SESSION_TYPE'] = 'memcached'
+minify(app=app, html=True, js=True, cssless=True)
 chat = ChatAnalysis()
 auto_mod_token = get_token()
 auto_mod = Mod(auto_mod_token) if auto_mod_token else None
