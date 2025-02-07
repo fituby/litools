@@ -1004,6 +1004,25 @@ def log_exception(exception, to_print=True, to_save=True):
     log(text, to_print=False, to_save=to_save)
 
 
+def log_read(lines_per_page=100, page=0):
+    if lines_per_page < 0 or page < 0:
+        return ""
+    max_size = 50_000_000
+    file_size = os.stat(log_file).st_size
+    with open(log_file, "r", encoding="utf-8") as file:
+        if file_size > max_size:
+            file.seek(file_size - max_size)
+            all_lines = file.readlines()[1:]
+        else:
+            all_lines = file.readlines()
+        offset = page * lines_per_page
+        if len(all_lines) <= offset:
+            return ""
+        lines = all_lines[-offset - lines_per_page:] if offset == 0 else all_lines[-offset - lines_per_page: -offset]
+        lines.append(f"Version: {LITOOLS_VERSION[1:]}\nLog size: {file_size:,}\nLines: {len(all_lines):,}\n\n")
+        return html.escape("".join(reversed(lines))).replace('\n', "<br>")
+
+
 def get_user_link(username, no_name="Unknown User", class_a="text-info", max_len=10):
     if username:
         if len(username) > max_len:
@@ -1013,6 +1032,10 @@ def get_user_link(username, no_name="Unknown User", class_a="text-info", max_len
             user_url = username.lower()
         return f'<a class="{class_a}" href="https://lichess.org/@/{user_url}" target="_blank">{username}</a>'
     return f'<i>{no_name}</i>'
+
+
+def get_user_comm_href(username):
+    return f"https://lichess.org/mod/{username}/communication"
 
 
 def read_notes(username, mod):

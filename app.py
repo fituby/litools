@@ -17,7 +17,8 @@ from leaderboard import update_leaderboard
 from chat import ChatAnalysis
 from alt import Alts
 from mod import Mod, ModInfo, View
-from elements import get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s, log, log_exception
+from elements import get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s
+from elements import log, log_exception, log_read
 from database import Mods, Authentication
 from consts import *
 
@@ -549,6 +550,22 @@ def index():
         mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
         resp = create_main_page(mod)
         return resp
+    except:
+        return make_response(redirect('/login'))
+
+
+@app.route('/log/<lines>/<page>', methods=['GET'])
+@app.route('/log/<lines>/<page>/', methods=['GET'])
+@app.route('/log/<lines>', defaults={'page': 0}, methods=['GET'])
+@app.route('/log/<lines>/', defaults={'page': 0}, methods=['GET'])
+@app.route("/log", defaults={'lines': 100, 'page': 0}, methods=['GET'])
+@app.route("/log/", defaults={'lines': 100, 'page': 0}, methods=['GET'])
+def log_data(lines, page):
+    try:
+        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
+        view = mod.view if mod else View()
+        text = log_read(int(lines), int(page)) if mod.is_admin else f"Version: {LITOOLS_VERSION[1:]}"
+        return make_response(render_template('/log.html', view=view, icon="", log=text))
     except:
         return make_response(redirect('/login'))
 

@@ -5,7 +5,7 @@ from enum import IntFlag
 from elements import STYLE_WORD_BREAK
 from chat_re import list_res, list_res_variety, re_spaces, Lang
 from database import Messages
-from elements import Reason, deltaseconds, get_highlight_style, get_flair_element, log, log_exception
+from elements import Reason, deltaseconds, get_user_comm_href, get_highlight_style, get_flair_element, log, log_exception
 from consts import CONFIG_FILE
 
 
@@ -197,8 +197,8 @@ class Message:
         score = f'<span class="user-select-none{score_theme}">{self.score}</span>' if self.score and self.score > 0 else ""
         username = f"<b><u>{self.username}</u></b>" if highlight_user is True or highlight_user == self.username \
             else self.username
-        user = f'<a class="text-info user-select-none" href="https://lichess.org/@/{self.username.lower()}" ' \
-               f'target="_blank" onclick="prevent_click(event)">{username}</a>' if add_user else ""
+        user = f'<a class="text-info user-select-none" href="{get_user_comm_href(self.username)}"' \
+               f' target="_blank" onclick="prevent_click(event)">{username}</a>' if add_user else ""
         highlight_style = "" if not highlight_user or highlight_user != self.username \
             else get_highlight_style(0.2, is_diff_highlight)
         name_dismiss = rename_dismiss if rename_dismiss else "Dismiss"

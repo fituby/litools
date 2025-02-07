@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta
 from dateutil import tz
 import json
-from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, shorten, add_timeout_msg, Error500
-from elements import log, log_exception
+from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, shorten, add_timeout_msg, get_user_comm_href
+from elements import log, log_exception, Error500
 from chat_re import ReUser, Lang
 from chat_message import Message
 from api import ApiType
@@ -510,7 +510,7 @@ class Tournament:
             tag = 'B'
             score_theme = ' class="text-danger"' if score_int > 50 else ' class="text-warning"' if score_int > 10 else ""
             score = f'<span{score_theme}>{final_score}</span>'
-            user = f'<a class="text-info" href="https://lichess.org/@/{user_name.lower()}" target="_blank">{user_name}</a>'
+            user = f'<a class="text-info" href="{get_user_comm_href(user_name)}" target="_blank">{user_name}</a>'
             button_dismiss = f'<button class="btn btn-primary align-baseline flex-grow-0 px-1 py-0" ' \
                              f'onclick="set_multi_ok(\'{tag}{msgs_id}\')">Dismiss</button>'
             if best_reason == Reason.No:

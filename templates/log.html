@@ -1,0 +1,16 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+<div class="container text-nowrap m-0" style="max-width:96vw;min-height:97vh;">
+  {{log|safe}}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  $(document).ready(function() {
+    $("#loadOverlay").css("display","none");
+    $("#mainOverlay").css("display","block");
+  });
+</script>
+{% endblock %}
