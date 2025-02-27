@@ -564,7 +564,8 @@ def log_data(lines, page):
     try:
         mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
         view = mod.view if mod else View()
-        text = log_read(int(lines), int(page)) if mod.is_admin else f"Version: {LITOOLS_VERSION[1:]}"
+        reverse = False if request.args.get('reverse', "true").lower() in ["false", "0"] else True
+        text = log_read(int(lines), int(page), reverse) if mod.is_admin else f"Version: {LITOOLS_VERSION[1:]}"
         return make_response(render_template('/log.html', view=view, icon="", log=text))
     except:
         return make_response(redirect('/login'))

@@ -146,6 +146,8 @@ def get_token():
     except Exception as e:
         log(f"There appears to be a syntax problem with {CONFIG_FILE}: {e}", to_print=True, to_save=True)
         token = ""
+    if token:
+        log("using token", to_print=True, to_save=True)
     return token
 
 
@@ -1004,7 +1006,7 @@ def log_exception(exception, to_print=True, to_save=True):
     log(text, to_print=False, to_save=to_save)
 
 
-def log_read(lines_per_page=100, page=0):
+def log_read(lines_per_page=100, page=0, reverse=True):
     if lines_per_page < 0 or page < 0:
         return ""
     max_size = 50_000_000
@@ -1015,12 +1017,14 @@ def log_read(lines_per_page=100, page=0):
             all_lines = file.readlines()[1:]
         else:
             all_lines = file.readlines()
-        offset = page * lines_per_page
-        if len(all_lines) <= offset:
-            return ""
-        lines = all_lines[-offset - lines_per_page:] if offset == 0 else all_lines[-offset - lines_per_page: -offset]
-        lines.append(f"Version: {LITOOLS_VERSION[1:]}\nLog size: {file_size:,}\nLines: {len(all_lines):,}\n\n")
-        return html.escape("".join(reversed(lines))).replace('\n', "<br>")
+    offset = page * lines_per_page
+    if len(all_lines) <= offset:
+        return ""
+    lines = all_lines[-offset - lines_per_page:] if offset == 0 else all_lines[-offset - lines_per_page: -offset]
+    if reverse:
+        lines.reverse()
+    lines.insert(0, f"Version: {LITOOLS_VERSION[1:]}\nLog size: {file_size:,}\nLines: {len(all_lines):,}\n\n")
+    return html.escape("".join(lines)).replace('\n', "<br>").replace(' ', "&nbsp;")
 
 
 def get_user_link(username, no_name="Unknown User", class_a="text-info", max_len=10):
@@ -1418,12 +1422,12 @@ class BoostModAction(ModAction):
                 return "Auto warning: sandbagging"
             if self.details == "Warning: Sandbagging":
                 return "Warning: Sandbagging"
-            if self.details == "Warning: Failure to start tournament games":
-                return "Warning: Failure to start tournament games"
             if self.mod_id == "lichess" and self.details == "Warning: possible boosting":
                 return "Auto warning: boosting"
             if self.details == "Warning: Boosting":
                 return "Warning: Boosting"
+            if self.details in ["Warning: Failure to start tournament games", "Warning: Throwing casual games"]:
+                return self.details
         return None
 
     def get_action(self):
@@ -1452,6 +1456,11 @@ class BoostModAction(ModAction):
 
 
 class ChatModAction(ModAction):
+    chat_warnings = [ModAction.warnings['shaming'], ModAction.warnings['insult'], ModAction.warnings['trolling'],
+                     ModAction.warnings['spam'], ModAction.warnings['ad'], ModAction.warnings['team_ad'],
+                     "Warning: Inappropriate (personal/sex-related)", "Warning: Excessive draw offers / takeback requests",
+                     "Warning: Abusing Reports"]
+
     def __init__(self, data):
         super().__init__(data)
 
@@ -1467,8 +1476,7 @@ class ChatModAction(ModAction):
 
     def get_class(self, now_utc):
         if self.is_warning():
-            if self.details in [ModAction.warnings['shaming'], ModAction.warnings['insult'], ModAction.warnings['trolling'],
-                                ModAction.warnings['spam'], ModAction.warnings['ad'], ModAction.warnings['team_ad']]:
+            if self.details in ChatModAction.chat_warnings:
                 return "table-secondary" if self.is_old(now_utc) else "table-warning"
             return "table-muted" if self.is_old(now_utc) else "table-info"
         if self.action in ['engine', 'booster', 'troll', 'alt', 'closeAccount']:
