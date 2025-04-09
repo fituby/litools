@@ -18,7 +18,7 @@ There are several tools, e.g.:
 ```bash
 docker build -t litools .
 
-docker run -p 5000:5000 litools
+docker run --rm -p 5000:5000 litools
 ```
 
 ## Feedback

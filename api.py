@@ -9,7 +9,6 @@ import traceback
 import os
 from threading import Lock
 from consts import API_TOURNEY_PAGE_DELAY, VERBOSE
-from elements import get_log_file
 
 
 class Endpoint:
@@ -227,7 +226,7 @@ def log(text, to_print=False, to_save=True, verbose=1):
     if not to_save:
         return
     try:
-        with open(get_log_file(), "a", encoding="utf-8") as file:
+        with open(os.getenv("LOG_FILE", "./log/log.txt"), "a", encoding="utf-8") as file:
             file.write(f"{line}\n")
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
