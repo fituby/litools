@@ -692,4 +692,4 @@ if __name__ == "__main__":
     log(f"Started: {LITOOLS_VERSION}", to_print=True, to_save=True)
     thread = threading.Thread(name="chat_loop", target=chat_loop)
     thread.start()
-    serve(app.run(), host=get_host(), port=get_port(), threads=get_num_threads())
+    serve(app.run(host=get_host(), port=get_port()), threads=get_num_threads())

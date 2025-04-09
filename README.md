@@ -5,12 +5,21 @@ There are several tools, e.g.:
 
 ## Deployment
 1. Install the packages from requirements.txt.
-2. Edit the following settings in config.yml:
-    - `host: "127.0.0.1"`
-    - `port: 5000`
-    - `url: "https://some.website.org"`
-    - everything else is best left by default
-3. Run `python app.py`
+2. Run the app:
+    ```bash
+    python app.py
+
+    # or customize the host, port, and app URL
+    HOST=127.0.0.1 PORT=5000 APP_URL=https://some.website.org python app.py
+    ```
+
+## Test docker build locally
+
+```bash
+docker build -t litools .
+
+docker run -p 5000:5000 litools
+```
 
 ## Feedback
 Any suggestions for possible improvements and bug reports are welcome.
