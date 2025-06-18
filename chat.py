@@ -431,7 +431,7 @@ class ChatAnalysis:
     def api_kidMode(self, username, mod, to_update):
         if not self.is_user_up_to_date(username, mod):
             return False
-        url = f"https://lichess.org/mod/{username}/kid"
+        url = f"https://lichess.org/mod/{username}/kid?v=true"
         r = mod.api.post(ApiType.ModKid, url, token=mod.token)
         if r.status_code == 200:
             log(f"ACTION @{username}: kidMode", True, True, 2)
