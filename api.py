@@ -5,14 +5,10 @@ from collections import defaultdict
 import time
 from datetime import datetime
 from dateutil import tz
-import yaml
 import traceback
 import os
 from threading import Lock
-from consts import API_TOURNEY_PAGE_DELAY, CONFIG_FILE, VERBOSE
-
-
-log_file: str = None
+from consts import API_TOURNEY_PAGE_DELAY, VERBOSE
 
 
 class Endpoint:
@@ -223,26 +219,17 @@ class Api:
 def log(text, to_print=False, to_save=True, verbose=1):
     if verbose > VERBOSE:
         return
-    global log_file
-    if log_file is None:
-        try:
-            with open(os.path.abspath(f"./{CONFIG_FILE}")) as stream:
-                config = yaml.safe_load(stream)
-                log_file = config.get('log', "")
-        except:
-            log_file = ""
     now_utc = datetime.now(tz=tz.tzutc())
     line = f"{now_utc: %Y-%m-%d %H:%M:%S} UTC: {text}"
     if to_print:
         print(line)
-    if not log_file or not to_save:
+    if not to_save:
         return
     try:
-        with open(log_file, "a", encoding="utf-8") as file:
+        with open(os.getenv("LOG_FILE", "./log/log.txt"), "a", encoding="utf-8") as file:
             file.write(f"{line}\n")
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
-        log_file = ""
 
 
 def log_exception(exception, to_print=True, to_save=True):

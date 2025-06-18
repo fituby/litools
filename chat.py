@@ -43,7 +43,7 @@ swiss_tournament_page = "https://lichess.org/swiss/"
 
 class ChatAnalysis:
     re_kid_years = re.compile(r"(?:\b|\D)({})(?:\b|\D)".format("|".join(
-        [f"{y}\s*(?:г|л|y|j)|{datetime.now().year - y}" for y in range(6, 12)])), re.IGNORECASE)
+        [f"{y}\\s*(?:г|л|y|j)|{datetime.now().year - y}" for y in range(6, 12)])), re.IGNORECASE)
     re_tourn_id = re.compile(r"^\w{8}$")
 
     def __init__(self):

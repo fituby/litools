@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from dateutil import tz
 from dateutil.relativedelta import relativedelta
 from enum import IntEnum, Enum, IntFlag
-import yaml
 import traceback
 import os
 import html
@@ -10,7 +9,6 @@ import re
 import hashlib
 import math
 import base64
-import random
 import struct
 from itertools import chain
 from pygal.style import DarkStyle
@@ -18,13 +16,6 @@ from api import ApiType
 from consts import *
 
 
-log_file: str = None
-db_file = ""
-host = "127.0.0.1"
-port = 5000
-num_threads = 2
-uri = ""
-embed_lichess = False
 refresh_insights_times = {}
 
 STYLE_WORD_BREAK = "word-break:break-word;"  # "word-break:break-all;"
@@ -120,65 +111,39 @@ def add_timeout_msg(timeouts, msg):
         timeouts[msg.username] = msg
 
 
-def load_config():
-    global log_file, db_file, host, port, num_threads, uri, embed_lichess
-    if log_file is None:
-        try:
-            with open(os.path.abspath(f"./{CONFIG_FILE}")) as stream:
-                config = yaml.safe_load(stream)
-                log_file = config.get('log', "")
-                db_file = config.get('db', "")
-                host = config.get('host', host)
-                port = config.get('port', port)
-                num_threads = config.get('num_threads', num_threads)
-                uri = config.get('url', "")
-                embed_lichess = config.get('embed_lichess', False)
-        except Exception as e:
-            print(f"There appears to be a syntax problem with {CONFIG_FILE}: {e}")
-            log_file = ""
+def get_log_file():
+    return os.getenv("LOG_FILE", "./log/log.txt")
 
 
 def get_token():
-    try:
-        with open(os.path.abspath(f"./{CONFIG_FILE}")) as stream:
-            config = yaml.safe_load(stream)
-            token = config.get('token', "")
-    except Exception as e:
-        log(f"There appears to be a syntax problem with {CONFIG_FILE}: {e}", to_print=True, to_save=True)
-        token = ""
+    token = os.getenv("TOKEN")
     if token:
         log("using token", to_print=True, to_save=True)
     return token
 
 
 def get_db():
-    load_config()
-    return db_file
+    return os.getenv("DB_FILE", "./db/litools.sqlite")
 
 
 def get_host():
-    load_config()
-    return host
+    return os.getenv("HOST", "0.0.0.0")
 
 
 def get_port():
-    load_config()
-    return port
+    return int(os.getenv("PORT", 5000))
 
 
 def get_num_threads():
-    load_config()
-    return num_threads
+    return int(os.getenv("NUM_THREADS", 2))
 
 
 def get_uri():
-    load_config()
-    return uri
+    return os.getenv("APP_URL", "http://localhost:5000")
 
 
 def get_embed_lichess():
-    load_config()
-    return embed_lichess
+    return os.getenv("EMBED_LICHESS", "False") == "True"
 
 
 def needs_to_refresh_insights(user_id, now=None):
@@ -982,21 +947,17 @@ class Reason(IntEnum):
 def log(text, to_print=False, to_save=True, verbose=1):
     if verbose > VERBOSE:
         return
-    global log_file
-    if log_file is None:
-        load_config()
     now_utc = datetime.now(tz=tz.tzutc())
     line = f"{now_utc: %Y-%m-%d %H:%M:%S} UTC: {text}"
     if to_print:
         print(line)
-    if not log_file or not to_save:
+    if not to_save:
         return
     try:
-        with open(log_file, "a", encoding="utf-8") as file:
+        with open(get_log_file(), "a", encoding="utf-8") as file:
             file.write(f"{line}\n")
     except Exception as exception:
         traceback.print_exception(type(exception), exception, exception.__traceback__)
-        log_file = ""
 
 
 def log_exception(exception, to_print=True, to_save=True):
@@ -1010,6 +971,7 @@ def log_read(lines_per_page=100, page=0, reverse=True):
     if lines_per_page < 0 or page < 0:
         return ""
     max_size = 50_000_000
+    log_file = get_log_file()
     file_size = os.stat(log_file).st_size
     with open(log_file, "r", encoding="utf-8") as file:
         if file_size > max_size:

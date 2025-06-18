@@ -1,4 +1,4 @@
-import yaml
+import os
 import html
 from datetime import datetime, timedelta
 from enum import IntFlag
@@ -6,7 +6,6 @@ from elements import STYLE_WORD_BREAK
 from chat_re import list_res, list_res_variety, re_spaces, Lang
 from database import Messages
 from elements import Reason, deltaseconds, get_user_comm_href, get_highlight_style, get_flair_element, log, log_exception
-from consts import CONFIG_FILE
 
 
 class AddButtons(IntFlag):
@@ -17,21 +16,19 @@ class AddButtons(IntFlag):
 
 
 def load_res():
-    with open(CONFIG_FILE) as stream:
-        config = yaml.safe_load(stream)
-        timeouts = config.get('timeouts', "En Spam").lower()
-        list_re = []
-        list_re_variety = []
-        for lang in Lang:
-            if lang.name.lower() in timeouts:
-                for re in list_res[lang]:
-                    re.lang = lang
-                list_re.extend(list_res[lang])
-        for lang in Lang:
-            if (lang.name.lower() in timeouts) and (lang in list_res_variety):
-                for re in list_res_variety[lang]:
-                    re.lang = lang
-                list_re_variety.extend(list_res_variety[lang])
+    timeouts = os.getenv('TIMEOUTS', "Spam En Ru De Hi Es It Fr Tr").lower()
+    list_re = []
+    list_re_variety = []
+    for lang in Lang:
+        if lang.name.lower() in timeouts:
+            for re in list_res[lang]:
+                re.lang = lang
+            list_re.extend(list_res[lang])
+    for lang in Lang:
+        if (lang.name.lower() in timeouts) and (lang in list_res_variety):
+            for re in list_res_variety[lang]:
+                re.lang = lang
+            list_re_variety.extend(list_res_variety[lang])
     return list_re, list_re_variety
 
 

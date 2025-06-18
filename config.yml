@@ -1,9 +1,0 @@
-token: ""                                 # <-- "" if it's a server, otherwise (not in a production deployment!) put your web:mod-enabled API token here, like:    token: "liSOMELETTERSnNUMBERSHERE"
-host: "127.0.0.1"                         # <-- host, which is used here: http://127.0.0.1:5000/chat
-port: 5000                                # <-- port, which is used here: http://127.0.0.1:5000/chat
-num_threads: 2                            # <-- the number of threads used by waitress
-url: "https://some.website.org"           # <-- the URL of the website (only if it's a server, otherwise ""): used for the OAuth2 Authorization Code Flow with PKCE
-log: "./log/log.txt"                      # <-- specify the path to your log file, or use "./log/log.txt" if you run it from source code, or leave "" if you don't want to log anything
-db: "./db/litools.sqlite"                 # <-- specify the path to the SQLite database
-timeouts: "Spam En Ru De Hi Es It Fr Tr"  # <-- remove languages you don't want to monitor. Available items: Spam, En, Ru, De, Es, It, Hi, Fr, Tr
-embed_lichess: false
