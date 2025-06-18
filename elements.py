@@ -143,7 +143,7 @@ def get_uri():
 
 
 def get_embed_lichess():
-    return bool(os.getenv("EMBED_LICHESS", False))
+    return os.getenv("EMBED_LICHESS", "False") == "True"
 
 
 def needs_to_refresh_insights(user_id, now=None):
