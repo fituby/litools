@@ -4,8 +4,8 @@
 <div class="container-fluid m-0 px-2 pb-3" style="max-width:96vw;min-height:97vh;">
   {% if error_title or error_text %}
   <div class="col my-2">
-    <h2 class="text-danger text-center">{{error_title|safe}}</h2>
-    <h4>{{error_text|safe}}</h4>
+    <h2 class="text-danger text-center">{{error_title}}</h2>
+    <h4>{{error_text}}</h4>
   </div>
   {% endif %}
   {% if mod %}
@@ -59,12 +59,14 @@
           </ul>
         </div>
       </div>
-      <div class="card border-danger m-2" style="min-width:400px;">
+      {% endif %}
+      {% if mod.is_mod() %}
+      <div class="card border-success m-2" style="min-width:400px;">
         <div class="card-body">
           <a href="/comms" class="stretched-link" style="text-decoration:none;">
-            <h4 class="card-title text-danger text-center">Public Comms</h4>
+            <h4 class="card-title text-success text-center">Public Comms</h4>
           </a>
-          <p class="card-text">History of public messages in chats of broadcasts and arenas.</p>
+          <p class="card-text">History of public messages in arena and broadcast chats.</p>
           <ul>
             <li>Search for public messages by username and/or part of text.</li>
             <li>Only chats of official arenas and broadcasts are available.</li>

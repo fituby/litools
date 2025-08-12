@@ -1004,7 +1004,7 @@ class ChatAnalysis:
             return ret_data
 
     def msgs_query(self, username, text, date_begin, date_end, num_msgs, mod):
-        if not mod.is_admin:
+        if not mod.is_mod():
             return None
         order_by = [Messages.time, Messages.id] if date_begin and not date_end else [-Messages.time, -Messages.id]
         date_begin = f"{date_begin}T00:00" if date_begin else "2020-01-01T00:00"

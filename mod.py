@@ -64,21 +64,11 @@ class Mod:
             self.is_hunter = False
         else:
             self.is_hunter = False
-            mod_log_data = load_mod_log(self.name, self)
-            mod_log, actions = get_mod_log(mod_log_data, self)
-            for action in actions:
-                if action.action == 'permissions':
-                    perms = action.details.lower()
-                    if perms.startswith("-") or perms.startswith("+"):
-                        if perms.find("+hunter") >= 0 or perms.find("+boosthunter") >= 0:
-                            self.is_hunter = True
-                            break
-                        if perms.find("-hunter") >= 0 or perms.find("-boosthunter") >= 0:
-                            self.is_hunter = False
-                            break
-                    else:
-                        self.is_hunter = perms.find("hunter") >= 0
-                        break
+            url = f'https://lichess.org/insights/data/test'
+            headers = {'Content-Type': "application/json"}
+            data = {'metric': "performance", 'dimension': "date", 'filters': {'variant': ['atomic']}}
+            r = self.api.post(ApiType.InsightsData, url, token=self.token, json=data, headers=headers)
+            self.is_hunter = (r.status_code == 200)
 
     def is_mod(self):
         return not not self.boost_ring_tool  # workaround
