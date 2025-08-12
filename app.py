@@ -11,6 +11,7 @@ import requests
 from datetime import datetime, timedelta
 from dateutil import tz
 import math
+import re
 from peewee import DoesNotExist
 from boost import get_boost_data, send_boost_note, send_mod_action
 from leaderboard import update_leaderboard
@@ -40,6 +41,7 @@ auto_mod_token = get_token()
 auto_mod = Mod(auto_mod_token) if auto_mod_token else None
 non_mod = Mod("")
 mod_cache = {}
+re_state = re.compile(r'[\w-]')
 
 
 @app.route('/lb/<variant>', methods=['GET'])
@@ -592,9 +594,9 @@ def logout():
 def login():
     try:
         now_tz = datetime.now(tz=tz.tzutc()).replace(tzinfo=None)
-        verifier = encode_base64(token_bytes(32))
-        state = encode_base64(token_bytes(16)).decode('ascii')
-        challenge = encode_base64(hashlib.sha256(verifier).digest())
+        verifier = encode_base64(token_bytes(32))  # len(verifier) == 43
+        state = encode_base64(token_bytes(16)).decode('ascii')  # len(state) == 22
+        challenge = encode_base64(hashlib.sha256(verifier).digest())  # len(challenge) == 43
         verifier = verifier.decode('ascii')
         with Mod.auth_lock:
             query_delete_old_states = Authentication.delete().where(Authentication.expiresAt < now_tz)
@@ -617,18 +619,35 @@ def login():
     return resp
 
 
+def log_bad_request(info):
+    ip = str(request.access_route[0] if len(request.access_route) == 1
+             else list(request.access_route) if request.access_route else "-")
+    ua = str(request.user_agent)
+    al = str(request.accept_languages)
+    log(f"ERROR: bad request: {info}: [IP]{ip} [UA]{ua} [Lang]{al}", to_print=False, to_save=True)
+
 @app.route(AUTH_ENDPOINT, methods=['GET'])
 def oauth2_callback():
     try:
         error = get_auth_error(request.args, "Authorization")
-        if error:
-            raise Exception(error)
         state = request.args.get('state') or (session['state'] if 'state' in session else None)
+        if error:
+            if state and (len(state) != 22 or re_state.sub("", state)):
+                log_bad_request("oauth2 error & malformed state='{state}'")
+            raise Exception(error)
         if not state:
             raise Exception("Failed to get 'state'.")
+        if re_state.sub("", state):
+            log_bad_request("malformed state")
+            raise Exception(f"Wrongs state='{state}'.")
+        if len(state) != 22:
+            raise Exception(f"Wrongs state length '{state}'.")
         code = request.args.get('code')
         if not code:
             raise Exception(f"Failed to get 'code' for state='{state}'.")
+        if re_state.sub("", code):
+            log_bad_request("malformed code")
+            raise Exception(f"Wrongs code='{state}'.")
         headers = {'Content-Type': 'application/json'}
         verifier = ""
         with Mod.auth_lock:
