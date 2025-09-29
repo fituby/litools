@@ -292,7 +292,7 @@ class User:
         country = self.profile.country
         if not country:
             return ""
-        country_img = f'<img src="https://lichess1.org/assets/______0/images/flags/{country}.png" style="max-width:30px;">'
+        country_img = f'<img src="https://lichess1.org/assets/______0/flags/{country}.png" style="max-width:30px;">'
         country_name = country_names.get(country, None)
         if country_name is None:
             country_name = country.upper()
