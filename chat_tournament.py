@@ -14,7 +14,7 @@ class Tournament:
     def __init__(self, tourney, t_type, link="", is_monitored=False):
         self.t_type = t_type
         self.id = tourney['id']
-        self.is_official = (tourney['createdBy'] == "lichess")
+        self.is_official = (tourney['createdBy'] in ["lichess", "Lichess"])
         self.num_players = tourney['nbPlayers']
         startsAt = tourney.get('startsAt')
         if startsAt is None:

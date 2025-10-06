@@ -48,7 +48,7 @@ class Message:
         self.username = data['u']
         self.text = data['t']
         self.eval_text = ""
-        self.is_official = (self.username == "lichess")
+        self.is_official = (self.username in ["lichess", "Lichess"])
         self.is_deleted = False  # was available before and now isn't on the page
         self.is_removed = data.get('r', False)  # SB'ed, was never visible
         self.is_disabled = data.get('d', False)  # deleted by mods
