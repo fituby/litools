@@ -1178,7 +1178,7 @@ Lang.Spam: [
        ban=-2, reason=Reason.Spam, info="(..) x8..9"),
     Re(r'((..)\2{6,7})', 10, is_capturing_groups=True, is_separate_word=False,
        ban=-3, reason=Reason.Spam, info="(..) x6..7"),
-    Re(r'[.·-]{15,}', 30, is_separate_word=False,
+    Re(r'[.·\-\\\/\|]{15,}', 30, is_separate_word=False,
        reason=Reason.Spam, info="Morse code"),
     Re(r'[\W_\-]{30,}', 80, is_separate_word=False,
        ban=-1, reason=Reason.Spam, info="[$] x30"),

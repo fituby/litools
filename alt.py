@@ -1,4 +1,5 @@
 import re
+import html
 from datetime import datetime
 from dateutil import tz
 from collections import defaultdict
@@ -197,7 +198,7 @@ class Alt:
     def get_mutual_teams_row(self, alts):
         team_names = sorted([Alt.team_cache[team] for team in self.teams])
         cells = [f'<td class="text-left">{self.user.get_name("?mod")}</td>'
-                 f'<td class="text-center"><abbr title="{", ".join(team_names)}"'
+                 f'<td class="text-center"><abbr title="{html.escape(", ".join(team_names))}"'
                  f' style="text-decoration:none;">{len(self.teams)}</abbr></td>']
         for alt in alts:
             player_id = alt.user.id
@@ -207,7 +208,7 @@ class Alt:
                 mutual_teams = self.teams.intersection(alt.teams)
                 if mutual_teams:
                     team_names = sorted([Alt.team_cache[team] for team in mutual_teams])
-                    cells.append(f'<td class="text-center"><abbr title="{", ".join(team_names)}"'
+                    cells.append(f'<td class="text-center"><abbr title="{html.escape(", ".join(team_names))}"'
                                  f' style="text-decoration:none;">{len(mutual_teams)}</abbr></td>')
                 else:
                     cells.append('<td class="text-center">&mdash;</td>')
