@@ -1,0 +1,419 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+<div class="container-fluid mt-2" style="max-width:100vw;min-height:60vh;">
+  <h4 class="text-left text-success my-2">Footprints</h4>
+  <div class="d-flex justify-content-center px-1">
+    <div class="d-flex flex-row flex-wrap justify-content-around mt-1 mb-2" style="max-width: 1200px;">
+      <div class="flex-column mx-5" style="width:420px;min-width:370px;max-width:500px;">
+        <table><tbody>
+          <tr>
+            <td><label for="username" class="text-nowrap m-0">Player:</label></td>
+            <td class="w-100 px-1"><input id="username" class="w-100" type="text" maxlength="20" value=""></td>
+          </tr>
+          <tr>
+            <td>
+              <label for="min-date" class="text-nowrap m-0">
+                <abbr title="If no Min date is entered, games from 2 years prior to the Max date will be downloaded. The longest period between the Min and Max dates is 2 years. If a longer period is specified, priority will be given to the most recent games.">
+                  Min date:
+                </abbr>
+              </label>
+            </td>
+            <td class="w-100 px-1"><input id="min-date" class="w-100" type="date" value=""></td>
+            <td class="pr-1">optional</td>
+          </tr>
+          <tr>
+            <td>
+              <label for="max-date" class="text-nowrap m-0">
+                <abbr title="The longest period between the Min and Max dates is 2 years. If a longer period is specified, priority will be given to the most recent games.">
+                  Max date:
+                </abbr>
+              </label>
+            </td>
+            <td class="w-100 px-1"><input id="max-date" class="w-100" type="date" value=""></td>
+            <td class="pr-1">optional</td>
+          </tr>
+        </tbody></table>
+      </div>
+      <div class="flex-column mx-5" style="width:420px;min-width:370px;max-width:500px;">
+        <table><tbody>
+          <tr>
+            <td><label for="max-num" class="text-nowrap m-0">Max games:</label></td>
+            <td class="w-100 px-1"><input id="max-num" class="w-100" type="number" min="1" max="9999" step="1" value="50"></td>
+          </tr>
+          <tr>
+            <td>Games:</td>
+            <td class="btn-group btn-group-toggle d-flex flex-row justify-content-between align-items-baseline w-100 px-1">
+              <button id="rated_0" class="col-4 btn btn-secondary py-0" onclick="update_rated(0);">Any</button>
+              <button id="rated_1" class="col-4 btn btn-secondary py-0" onclick="update_rated(1);">Rated</button>
+              <button id="rated_2" class="col-4 btn btn-secondary py-0" onclick="update_rated(2);">Casual</button>
+            </td>
+          </tr>
+          <tr>
+            <td>Color:</td>
+            <td class="btn-group btn-group-toggle d-flex flex-row justify-content-between align-items-baseline w-100 px-1">
+              <button id="color_0" class="col-4 btn btn-secondary py-0" onclick="update_color(0);">Both</button>
+              <button id="color_1" class="col-4 btn btn-secondary py-0" onclick="update_color(1);">White</button>
+              <button id="color_2" class="col-4 btn btn-secondary py-0" onclick="update_color(2);">Black</button>
+            </td>
+          </tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+  <div class="d-flex flex-row justify-content-center align-items-baseline px-1">
+    <table><tbody>
+      <tr>
+        {% for var1_id, variant in variants1.items() %}
+        <td><button id="{{var1_id|safe}}" class="d-flex align-items-center btn w-100 pr-2" onclick="select_variant('{{var1_id|safe}}');">
+          {{variant.flair25|safe}}
+          <span class="ml-2">{{variant.name|safe}}</span>
+        </button></td>
+        {% endfor %}
+      </tr>
+      <tr>
+        {% for var2_id, variant in variants2.items() %}
+        <td><button id="{{var2_id|safe}}" class="d-flex align-items-center btn w-100 pr-2" onclick="select_variant('{{var2_id|safe}}');">
+          {{variant.flair25|safe}}
+          <span class="ml-2">{{variant.name|safe}}</span>
+        </button></td>
+        {% endfor %}
+      </tr>
+    </tbody></table>
+  </div>
+  <div id="fp-error" class="h4 text-danger text-center my-2"></div>
+  <div class="d-flex justify-content-center align-items-baseline px-1">
+    <div id="progress-cancel" class="d-none align-items-baseline flex-grow-1" style="max-width: 1000px;">
+      <div id="progress" class="d-none flex-grow-1"></div>
+      <button id="btn-cancel" class="btn btn-danger flex-grow-0 d-none ml-2" onclick="cancel();">Cancel</button>
+    </div>
+    <button id="btn-analyze" class="btn btn-primary d-none flex-grow-1" disabled style="max-width: 1000px;" onclick="analyze();">Analyze</button>
+  </div>
+
+  <div class="d-flex flex-row flex-wrap justify-content-around my-2">
+    <div class="d-flex flex-column align-items-center flex-grow-1 mx-3">
+      <div id="msgs_downloading" class="d-none justify-content-left align-items-center my-3">
+        <div class="spinner-border text-secondary text-truncate" role="status"></div>
+        <span id="downloading_text" class="ml-3 text-secondary text-truncate"></span>
+      </div>
+    </div>
+  </div>
+
+  <h4 id="res-info" class="text-center text-success my-2"></h4>
+  <div id="results" class="d-none justify-content-center">
+    <table id="res-table" class="table table-sm table-striped table-hover text-center text-nowrap mb-5" style="min-width:300px;">
+      <thead><tr>
+        <th style="cursor:default;" class="text-start">Player</th>
+        <th style="cursor:default;">Similarity</th>
+      </tr></thead>
+    </table>
+  </div>
+
+
+  <div id="mode" class="flex-column mr-2" style="width:300px;min-width:250px;max-width:300px;">
+    <div class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2">
+      <p class="pr-2 m-0">Mode</p>
+      <div class="btn-group btn-group-toggle">
+        <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
+        <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
+        <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var timer = 0;
+$(document).ready(function() {
+  update_mode({{view.mode|safe}}, false);
+  if (window.matchMedia)
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+      if ($('#mode_0').is('.active'))
+        update_mode(event.matches ? -1 : -2);
+    });
+  $("body").tooltip({ selector: '[data-toggle=tooltip]' });
+
+  update_rated(0);
+  update_color(0);
+  $('#max-date').val(new Date().toJSON().slice(0,10));
+  $("#loadOverlay").css("display","none");
+  $("#mainOverlay").css("display","block");
+  jQuery(function($){
+    $('#username').bind('paste', function(event){
+      let clipboard_data = event.originalEvent.clipboardData.getData('text/plain');
+      username_pasted(clipboard_data, event);
+    }).bind('change', function(){
+      update_analyze();
+    });
+  });
+
+  $('#res-table').DataTable({
+    searching: true,
+    paging: false,
+    info: false,
+    lengthChange: false,
+    aaSorting: [[1, "desc"]],
+    select: { style: 'single' },
+    columnDefs: [
+    {
+      "targets": [0],
+      "className": "text-left align-middle pl-2",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display')
+          return `player:${data['username'].toLowerCase()}`;
+        return userlink(data['username']);
+      }
+    },{
+      "targets": [1],
+      "className": "text-right align-middle pr-2",
+      "data": null,
+      "render": function(data, type, row, meta) {
+        if (type != 'display')
+          return data['score'];
+        return Math.round(data['score']);
+      }
+    }],
+    deferRender: true
+  });
+  $("#res-table_wrapper .dt-search input").addClass("w-100");
+  $("#res-table_wrapper .dt-search").addClass("d-flex w-100 align-items-baseline");
+  $("#res-table_wrapper .dt-search").parent().addClass("d-flex w-100");
+
+  update_analyze();
+  update_res();
+});
+
+function username_pasted(data, event) {
+  if (data.startsWith("https://lichess.org/@/")) {
+    event.preventDefault();
+    let i2 = data.indexOf('?');
+    let username = (i2 < 0) ? data : data.substr(0, i2);
+    let i1 = username.lastIndexOf('/');
+    username = username.substr(i1 + 1).trim();
+    if (username) {
+      let pos = $("#username").getCursorPosition();
+      let end = $("#username").getSelectionEnd();
+      if (end === null)
+        end = pos;
+      let val = $("#username").val();
+      $("#username").val(val.substring(0, pos) + username + val.substring(end, val.length));
+    }
+  }
+}
+
+function update_rated(val) {
+  for (var i = 0; i < 3; i++) {
+    if (val == i) {
+      $(`#rated_${i}`).addClass("active");
+      if (i != 0)
+        $(`#rated_${i}`).addClass("btn-danger");
+    }
+    else {
+      $(`#rated_${i}`).removeClass("active").removeClass("btn-danger");
+    }
+  }
+}
+
+function update_color(val) {
+  for (var i = 0; i < 3; i++) {
+    if (val == i) {
+      $(`#color_${i}`).addClass("active");
+      if (i != 0)
+        $(`#color_${i}`).addClass("btn-danger");
+    }
+    else {
+      $(`#color_${i}`).removeClass("active").removeClass("btn-danger");
+    }
+  }
+}
+
+function select_variant(var_id) {
+  if ($(`#${var_id}`).is(".btn-success"))
+    $(`#${var_id}`).removeClass("btn-success");
+  else
+    $(`#${var_id}`).addClass("btn-success");
+  update_analyze();
+}
+
+function update_analyze() {
+  var username = $("#username").val().trim();
+  var variants = get_selected_variants();
+  if (!username || !variants)
+    $('#btn-analyze').prop("disabled", true);
+  else
+    $('#btn-analyze').prop("disabled", false);
+  $('#fp-error').html("");
+}
+
+function set_analyze(enabled) {
+  if (enabled) {
+    $("#btn-analyze").removeClass("d-none").addClass("d-block");
+    $("#btn-cancel").removeClass("d-block").addClass("d-none");
+  }
+  else {
+    $("#btn-analyze").removeClass("d-block").addClass("d-none");
+    $("#btn-cancel").removeClass("d-none").addClass("d-block");
+  }
+}
+
+function get_selected_variants() {
+  const all_variants = ["ultraBullet", "bullet", "blitz", "rapid", "classical", "correspondence", "chess960",
+                        "crazyhouse", "antichess", "atomic", "horde", "kingOfTheHill", "racingKings", "threeCheck"];
+  var variants = [];
+  for (const var_id of all_variants) {
+    if ($(`#${var_id}`).is(".btn-success"))
+      variants.push(var_id);
+  }
+  if (!variants.length)
+    return "";
+  return variants.join(",");
+}
+
+function analyze() {
+  if (!$('#btn-analyze').is('.d-block'))
+    return;
+  $('#fp-error').html("");
+  var variants = get_selected_variants();
+  if (!variants) {
+    $('#fp-error').html("Please select variants");
+    return;
+  }
+  var username = $("#username").val().trim();
+  if (!username) {
+    $('#fp-error').html("Please enter a username");
+    return;
+  }
+  else {
+    if (!/^([-\w]{3,20})$/.test(username)) {
+      $('#fp-error').html("Please enter a valid username");
+      return;
+    }
+  }
+  var max_num = $('#max-num').val();
+  if (!$.isNumeric(max_num) || max_num < 1 || max_num > 9999) {
+    $('#fp-error').html("Please enter a valid maximum number of games");
+    return;
+  }
+  var min_date = $('#min-date').val();
+  var max_date = $('#max-date').val();
+  var is_rated = $('#rated_1').is("active") ? 1 : $('#rated_2').is("active") ? 2 : 0;
+  var color_val = $('#color_1').is("active") ? 1 : $('#color_2').is("active") ? 2 : 0;
+  $("#downloading_text").html("Downloading games&hellip;");
+  $("#msgs_downloading").removeClass("d-none").addClass("d-flex");
+  set_analyze(false);
+  set_progress(0);
+  $.ajax({
+    url: "/fp/analyze",
+    type: "post",
+    data: {
+            variants: variants,
+            player: username,
+            num_games: max_num,
+            date_begin: min_date,
+            date_end: max_date,
+            rated: is_rated,
+            color: color_val
+          }
+  }).done(function() {
+    $("#downloading_text").html("Processing games&hellip;");
+    update_res();
+  }).fail(function(data) {
+    $("#msgs_downloading").removeClass("d-flex").addClass("d-none");
+    var msg = `Failed to analyze&nbsp;<i class="ms-2"><b>${username}</b></i>'s games`;
+    msg = (data && data.responseText) ? `${msg}: ${data.responseText}` : `${msg}`;
+    $('#fp-error').html(msg);
+  });
+}
+
+function cancel() {
+  $.ajax({
+    url: "/fp/cancel",
+    type: "post"
+  }).done(function() {
+    set_analyze(true);
+    set_progress(-1);
+  });
+}
+
+function set_progress(p, moves_processed = "downloading") {
+  if (p < 0) {
+    $("#progress").html("");
+    $("#progress-cancel").removeClass("d-flex").addClass("d-none");
+    $("#progress").removeClass("d-block").addClass("d-none");
+  }
+  else {
+    let progress = `<abbr title="${moves_processed}" style="text-decoration:none;cursor:inherit;"><div class="progress"><div class="progress-bar bg-success" role="progressbar" style="width: ${p}%;" aria-valuenow="${p}" aria-valuemin="0" aria-valuemax="100">${p}%</div></div></abbr>`;
+    $("#progress").html(progress);
+    $("#progress-cancel").removeClass("d-none").addClass("d-flex");
+    $("#progress").removeClass("d-none").addClass("d-block");
+  }
+}
+
+function update_res() {
+  clearInterval(timer);
+  timer = setInterval(function() {
+    $.ajax({
+      url: "/fp/data",
+      type: "post"})
+      .done(function(data, textStatus, jqXHR) {
+        if (data['status'] == 1 || data['status'] == 2) {
+          if (data['status'] == 1)
+            $("#downloading_text").html("Downloading games&hellip;");
+          else
+            $("#downloading_text").html(`Processing ${data['game_progress']}&hellip;`);
+          $("#msgs_downloading").removeClass("d-none").addClass("d-flex");
+          set_progress(data['progress'], data['moves_processed']);
+        }
+        else {
+          clearInterval(timer);
+          $("#msgs_downloading").removeClass("d-flex").addClass("d-none");
+          set_progress(-1);
+        }
+        set_analyze(data['status'] != 1 && data['status'] != 2);
+        if (data['error'])
+          $('#fp-error').html(`Failed to analyze&nbsp;<i class="ms-2"><b>${$("#username").val().trim()}</b></i>'s games: ${data['error']}`);
+        if (data['info'])
+          $("#res-info").html(data['info']);
+        if ((data['status'] >= 2 && data['status'] <= 4) && data['res']) {
+          var datatable = $("#res-table").DataTable();
+          datatable.clear();
+          datatable.rows.add(data['res']);
+          if (datatable.rows().count())
+            $("#results").removeClass("d-none").addClass("d-flex")
+          else
+            $("#results").removeClass("d-flex").addClass("d-none")
+          datatable.draw();
+        }
+      }).fail(function(data) {
+        clearInterval(timer);
+        $("#msgs_downloading").removeClass("d-flex").addClass("d-none");
+        var msg = `Failed to analyze&nbsp;<i class="ms-2"><b>${$("#username").val().trim()}</b></i>'s games`;
+        msg = (data && data.responseText) ? `${msg}: ${data.responseText}` : `${msg}`;
+        $('#fp-error').html(msg);
+        set_analyze(true);
+      });
+  }, 1000);
+}
+
+function update_mode(val, to_request=true) {
+  if (val == 0)
+    val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
+  for (var i = 0; i < 3; i++) {
+    if (val == i || (val < 0 && i == 0))
+      $(`#mode_${i}`).addClass("active");
+    else
+      $(`#mode_${i}`).removeClass("active");
+  }
+  if (to_request && val != "{{view.mode}}") {
+    setCookie('theme_mode', val);
+    $.ajax({url: `/set_mode/${val}`, type: "post"});
+    window.location.reload();
+  }
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.20/js/jquery.dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.20/js/dataTables.bootstrap4.min.js"></script>
+{% endblock %}

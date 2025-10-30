@@ -17,6 +17,7 @@ from boost import get_boost_data, send_boost_note, send_mod_action
 from leaderboard import update_leaderboard
 from chat import ChatAnalysis
 from alt import Alts
+from footprints import analyze_footprints, cancel_footprints, get_footprints, variants1, variants2
 from mod import Mod, ModInfo, View
 from elements import get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s
 from elements import log, log_exception, log_read
@@ -427,6 +428,64 @@ def query_comms():
     return resp
 
 
+@app.route('/fp/', methods=['GET'])
+@app.route('/fp', methods=['GET'])
+def create_fp():
+    try:
+        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
+        if not mod.is_mod():
+            return Response(status=401)
+    except:
+        return make_response(redirect('/login'))
+    resp = make_response(render_template('/fp.html', mod=mod, variants1=variants1, variants2=variants2, view=mod.view, icon="F/"))
+    return resp
+
+
+@app.route('/fp/analyze', methods=['POST'])
+def analyze_fp():
+    try:
+        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
+        if not mod.is_mod():
+            return Response(status=401)
+        data = request.form.to_dict()
+        variants = data.get("variants", None)
+        player = data.get("player", None)
+        num_games = data.get("num_games", None)
+        date_begin = data.get("date_begin", None)
+        date_end = data.get("date_end", None)
+        rated = data.get("rated", None)
+        color = data.get("color", None)
+        error = analyze_footprints(mod, variants, player, num_games, date_begin, date_end, rated, color)
+        if error:
+            return Response(error, status=400)
+        return Response(status=204)
+    except:
+        return Response(status=400)
+
+
+@app.route('/fp/cancel', methods=['POST'])
+def cancel_fp():
+    try:
+        mod = get_mod(request.cookies, update_theme=False, update_seenAt=True)
+        if not mod.is_mod():
+            return Response(status=401)
+        cancel_footprints(mod)
+    except:
+        return Response(status=400)
+    return Response(status=204)
+
+
+@app.route('/fp/data', methods=['POST'])
+def get_fp_data():
+    try:
+        mod = get_mod(request.cookies, update_theme=False, update_seenAt=True)
+        if not mod.is_mod():
+            return Response(status=401)
+        return get_footprints(mod)
+    except:
+        return Response(status=400)
+
+
 @app.route('/set_mode/<mode>', methods=['POST'])
 def set_mode(mode):
     try:
@@ -625,6 +684,7 @@ def log_bad_request(info):
     ua = str(request.user_agent)
     al = str(request.accept_languages)
     log(f"ERROR: bad request: {info}: [IP]{ip} [UA]{ua} [Lang]{al}", to_print=False, to_save=True)
+
 
 @app.route(AUTH_ENDPOINT, methods=['GET'])
 def oauth2_callback():

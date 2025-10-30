@@ -75,6 +75,21 @@
         </div>
       </div>
       {% endif %}
+      {% if mod.is_alt() %}
+      <div class="card border-danger m-2" style="min-width:400px;">
+        <div class="card-body">
+          <a href="/fp" class="stretched-link" style="text-decoration:none;">
+            <h4 class="card-title text-danger text-center">Footprints</h4>
+          </a>
+          <p class="card-text">Analyzing opening moves to determine similarities.</p>
+          <ul>
+            <li>Download games of the player of interest.</li>
+            <li>Opening Explorer will be used to find similarities between other players.</li>
+            <li>Expect an analysis speed of 1 move per second.</li>
+          </ul>
+        </div>
+      </div>
+      {% endif %}
       <div class="card border-info m-2" style="min-width:400px;">
         <div class="card-body">
           <a href="/lb/{{variant}}" class="stretched-link" style="text-decoration:none;">

@@ -59,6 +59,11 @@ function copyTextToClipboard(text) {
   }
   document.body.removeChild(textArea);
 }
+function userlink(username) {
+  if (!username)
+    return "";
+  return `<a href="https://lichess.org/@/${username}" target="_blank">${username}</a>`;
+}
 </script>
 </head>
 <body>

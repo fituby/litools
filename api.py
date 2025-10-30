@@ -35,6 +35,7 @@ class ApiType:
     ApiTournament = Endpoint('api/tournament')
     TournamentId = Endpoint('tournament', API_TOURNEY_PAGE_DELAY)
     PlayerTop = Endpoint('player/top')
+    ExplorerLichess = Endpoint('explorer/lichess')
     # Get ndjson
     ApiGamesUser = Endpoint('api/games/user')
     ApiTeamArena = Endpoint('api/team/arena')
@@ -174,7 +175,7 @@ class Api:
                 time.sleep(60)
             return r
 
-    def get_ndjson(self, api, url, token, Accept="application/x-ndjson"):
+    def get_ndjson(self, api, url, token, params=None, Accept="application/x-ndjson"):
         if VERBOSE >= 3:
             print(f"request {datetime.now(tz=tz.tzutc()):%H:%M:%S.%f}: {url}")
         with api.lock:
@@ -184,7 +185,7 @@ class Api:
             with Api.ndjson_lock:
                 try:
                     t1_utc = datetime.now(tz=tz.tzutc())
-                    r = Api.requests_session.get(url, allow_redirects=True, headers=headers)
+                    r = Api.requests_session.get(url, allow_redirects=True, headers=headers, params=params)
                     if api.name != ApiType.ApiGamesUser.name:
                         Api.check_delay("GET", url, t1_utc)
                 except requests.exceptions.ChunkedEncodingError as exception:

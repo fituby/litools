@@ -90,7 +90,7 @@ $(document).ready(function() {
         country_name = country in names ? names[country] : country.toUpperCase();
         if (country_name.charAt(0) == '_')
           country_name = country_name.substr(1);
-        return country ? '<abbr class="pr-2" title="' + country_name + '" style="text-decoration:none;"><img src="https://lichess1.org/assets/______0/images/flags/' + country + '.png" style="max-width:30px;"></abbr>' : "";
+        return country ? '<abbr class="pr-2" title="' + country_name + '" style="text-decoration:none;"><img src="https://lichess1.org/assets/______0/flags/' + country + '.png" style="max-width:30px;"></abbr>' : "";
       }
     },{
       "targets": [4],
