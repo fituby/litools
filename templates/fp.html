@@ -231,10 +231,10 @@ function update_color(val) {
 }
 
 function select_variant(var_id) {
-  if ($(`#${var_id}`).is(".btn-success"))
-    $(`#${var_id}`).removeClass("btn-success");
+  if ($(`#${var_id}`).is(".btn-outline-success"))
+    $(`#${var_id}`).removeClass("btn-outline-success");
   else
-    $(`#${var_id}`).addClass("btn-success");
+    $(`#${var_id}`).addClass("btn-outline-success");
   update_analyze();
 }
 
@@ -260,11 +260,11 @@ function set_analyze(enabled) {
 }
 
 function get_selected_variants() {
-  const all_variants = ["ultraBullet", "bullet", "blitz", "rapid", "classical", "correspondence", "chess960",
-                        "crazyhouse", "antichess", "atomic", "horde", "kingOfTheHill", "racingKings", "threeCheck"];
+  const all_variants = ["ultrabullet", "bullet", "blitz", "rapid", "classical", "correspondence", "chess960",
+                        "crazyhouse", "antichess", "atomic", "horde", "kingofthehill", "racingkings", "threecheck"];
   var variants = [];
   for (const var_id of all_variants) {
-    if ($(`#${var_id}`).is(".btn-success"))
+    if ($(`#${var_id}`).is(".btn-outline-success"))
       variants.push(var_id);
   }
   if (!variants.length)

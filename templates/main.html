@@ -29,21 +29,6 @@
         </div>
       </div>
       {% endif %}
-      {% if mod.is_boost() %}
-      <div class="card border-warning m-2" style="min-width:400px;">
-        <div class="card-body">
-          <a href="/boost" class="stretched-link" style="text-decoration:none;">
-            <h4 class="card-title text-warning text-center">Sandbag/Boost</h4>
-          </a>
-          <p class="card-text">Analyzing the last N games of the player whose name is entered in the top field.</p>
-           <ul>
-             <li>Enter the user's name or paste a link to their profile.</li>
-             <li>To add relevant information to the notes field to the right, click the corresponding buttons in the tables.</li>
-             <li>To warn or mark the player, click the appropriate button at the top right.</li>
-          </ul>
-        </div>
-      </div>
-      {% endif %}
       {% if mod.is_alt() %}
       <div class="card border-danger m-2" style="min-width:400px;">
         <div class="card-body">
@@ -56,6 +41,21 @@
             <li>Alternatively, you can copy a few rows directly from the user table and paste them (everything except usernames will be removed).</li>
             <li>The more players and the greater the number of games, the longer you have to wait for the results.</li>
             <li>Rate limits for APIs don't allow to get full data on more than 4 players in 1 minute (additional data can be requested manually).</li>
+          </ul>
+        </div>
+      </div>
+      {% endif %}
+      {% if mod.is_boost() %}
+      <div class="card border-warning m-2" style="min-width:400px;">
+        <div class="card-body">
+          <a href="/boost" class="stretched-link" style="text-decoration:none;">
+            <h4 class="card-title text-warning text-center">Sandbag/Boost</h4>
+          </a>
+          <p class="card-text">Analyzing the last N games of the player whose name is entered in the top field.</p>
+           <ul>
+             <li>Enter the user's name or paste a link to their profile.</li>
+             <li>To add relevant information to the notes field to the right, click the corresponding buttons in the tables.</li>
+             <li>To warn or mark the player, click the appropriate button at the top right.</li>
           </ul>
         </div>
       </div>

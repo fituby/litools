@@ -65,6 +65,8 @@ variants_desc2 = {
 }
 variants1 = {var_id.lower(): VariantDesc(var_id, var_name) for var_id, var_name in variants_desc1.items()}
 variants2 = {var_id.lower(): VariantDesc(var_id, var_name) for var_id, var_name in variants_desc2.items()}
+variant_ids = list(variants1.keys())
+variant_ids.extend(list(variants2.keys()))
 
 
 class Status(IntEnum):
@@ -372,8 +374,7 @@ def analyze_footprints(mod, variants, username, num_games, date_begin, date_end,
             raise Exception("No variant specified")
         var_list = variants.split(",")
         for var in var_list:
-            if var not in ["ultraBullet", "bullet", "blitz", "rapid", "classical", "correspondence", "chess960",
-                           "crazyhouse", "antichess", "atomic", "horde", "kingOfTheHill", "racingKings", "threeCheck"]:
+            if var not in variant_ids:
                 raise Exception("Wrong variant specified")
         if not isinstance(username, str):
             raise Exception("Wrong username")
@@ -445,7 +446,10 @@ def task_completed(mod_id, result):
 
 
 def task_failed(mod_id, error):
-    log(f"ERROR: Failed task requested by {mod_id}: {error}")
+    username = "Unknown user"
+    if mod_id in similarities:
+        username = similarities[mod_id].username
+    log(f"ERROR: Failed task for {username}: {error}")
     set_progress(mod_id, Status.ERROR)
 
 
