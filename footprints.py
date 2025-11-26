@@ -65,8 +65,8 @@ variants_desc2 = {
 }
 variants1 = {var_id.lower(): VariantDesc(var_id, var_name) for var_id, var_name in variants_desc1.items()}
 variants2 = {var_id.lower(): VariantDesc(var_id, var_name) for var_id, var_name in variants_desc2.items()}
-variant_ids = list(variants1.keys())
-variant_ids.extend(list(variants2.keys()))
+variant_ids = list(variants_desc1.keys())
+variant_ids.extend(list(variants_desc2.keys()))
 
 
 class Status(IntEnum):

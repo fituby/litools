@@ -64,18 +64,18 @@
   <div class="d-flex flex-row justify-content-center align-items-baseline px-1">
     <table><tbody>
       <tr>
-        {% for var1_id, variant in variants1.items() %}
-        <td><button id="{{var1_id|safe}}" class="d-flex align-items-center btn w-100 pr-2" onclick="select_variant('{{var1_id|safe}}');">
-          {{variant.flair25|safe}}
-          <span class="ml-2">{{variant.name|safe}}</span>
+        {% for var1_id, variant1 in variants1.items() %}
+        <td><button id="{{variant1.id|safe}}" class="d-flex align-items-center btn w-100 pr-2" onclick="select_variant('{{variant1.id|safe}}');">
+          {{variant1.flair25|safe}}
+          <span class="ml-2">{{variant1.name|safe}}</span>
         </button></td>
         {% endfor %}
       </tr>
       <tr>
-        {% for var2_id, variant in variants2.items() %}
-        <td><button id="{{var2_id|safe}}" class="d-flex align-items-center btn w-100 pr-2" onclick="select_variant('{{var2_id|safe}}');">
-          {{variant.flair25|safe}}
-          <span class="ml-2">{{variant.name|safe}}</span>
+        {% for var2_id, variant2 in variants2.items() %}
+        <td><button id="{{variant2.id|safe}}" class="d-flex align-items-center btn w-100 pr-2" onclick="select_variant('{{variant2.id|safe}}');">
+          {{variant2.flair25|safe}}
+          <span class="ml-2">{{variant2.name|safe}}</span>
         </button></td>
         {% endfor %}
       </tr>
@@ -260,8 +260,8 @@ function set_analyze(enabled) {
 }
 
 function get_selected_variants() {
-  const all_variants = ["ultrabullet", "bullet", "blitz", "rapid", "classical", "correspondence", "chess960",
-                        "crazyhouse", "antichess", "atomic", "horde", "kingofthehill", "racingkings", "threecheck"];
+  const all_variants = ["ultraBullet", "bullet", "blitz", "rapid", "classical", "correspondence", "chess960",
+                        "crazyhouse", "antichess", "atomic", "horde", "kingOfTheHill", "racingKings", "threeCheck"];
   var variants = [];
   for (const var_id of all_variants) {
     if ($(`#${var_id}`).is(".btn-outline-success"))
