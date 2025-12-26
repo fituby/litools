@@ -19,7 +19,7 @@ from chat import ChatAnalysis
 from alt import Alts
 from footprints import analyze_footprints, cancel_footprints, get_footprints, variants1, variants2
 from mod import Mod, ModInfo, View
-from elements import get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s
+from elements import get_client_id, get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s
 from elements import log, log_exception, log_read
 from database import Mods, Authentication
 from consts import *
@@ -662,7 +662,7 @@ def login():
             query_delete_old_states.execute()
             Authentication.create(state=state, verifier=verifier, expiresAt=now_tz + timedelta(hours=1))
         params = {'response_type': 'code',
-                  'client_id': CLIENT_ID,
+                  'client_id': get_client_id(),
                   'redirect_uri': f'{get_uri()}{AUTH_ENDPOINT}',
                   'scope': 'web:mod',
                   'code_challenge_method': 'S256',
@@ -723,7 +723,7 @@ def oauth2_callback():
                 'code': code,
                 'code_verifier': verifier,
                 'redirect_uri': f'{get_uri()}{AUTH_ENDPOINT}',
-                'client_id': CLIENT_ID}
+                'client_id': get_client_id()}
         r = requests.post(f"https://lichess.org/api/token", headers=headers, json=data)
         if r.status_code != 200:
             try:

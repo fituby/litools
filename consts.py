@@ -1,4 +1,4 @@
-LITOOLS_VERSION = "v1.6.2"
+LITOOLS_VERSION = "v1.6.3"
 
 # Chat
 CHAT_TOURNAMENT_FINISHED_AGO = 24 * 60  # [min]
@@ -92,7 +92,6 @@ ALT_UPDATE_PERIOD = 30 * 60  # seconds
 ALT_MAX_PERIOD_FOR_GAMES = 2*365  # days
 
 # Authentication
-CLIENT_ID = "litools"
 AUTH_ENDPOINT = "/oauth2"
 UPDATE_INTERVAL_MODS_SEEN_AT = 1 * 60  # [s]
 UPDATE_INTERVAL_MOD_PERMS = 24 * 60 * 60  # [s]

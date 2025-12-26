@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from dateutil import tz
 import json
-from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, shorten, add_timeout_msg, get_user_comm_href
+from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, get_client_id, shorten, add_timeout_msg, get_user_comm_href
 from elements import log, log_exception, Error500
 from chat_re import ReUser, Lang
 from chat_message import Message
@@ -165,7 +165,7 @@ class Tournament:
                         self.last_update = db_messages[-1].time
                     new_messages = self.add_messages(db_messages, can_be_old=bool(self.messages))
                 self.is_sync_with_db = True
-            headers = {'User-Agent': CLIENT_ID}
+            headers = {'User-Agent': f"{get_client_id()}/{LITOOLS_VERSION}"}
             token = None
             url = self.link if self.link else f"https://lichess.org/{self.get_endpoint()}/{self.id}"
             if url and self.t_type == TournType.Study:

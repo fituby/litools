@@ -142,6 +142,10 @@ def get_uri():
     return os.getenv("APP_URL", "http://localhost:5000")
 
 
+def get_client_id():
+    return os.getenv("CLIENT_ID", "litools")
+
+
 def get_embed_lichess():
     return os.getenv("EMBED_LICHESS", "False") == "True"
 
