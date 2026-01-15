@@ -1,4 +1,4 @@
-LITOOLS_VERSION = "v1.6.4"
+LITOOLS_VERSION = "v1.6.5"
 
 # Chat
 CHAT_TOURNAMENT_FINISHED_AGO = 24 * 60  # [min]
@@ -31,7 +31,7 @@ CHAT_MAX_NUM_OLD_MSGS = 2500
 CHAT_MSGS_LIFETIME = 2 * 365  # days
 CHAT_FREQUENT_MSGS_MIN_SCORE = [15, 30]
 CHAT_BEGINNING_MESSAGES_TEXT = '"name":"Chat room","lines":['
-CHAT_END_MESSAGES_TEXT = '],"resourceId":'
+CHAT_END_MESSAGES_TEXT = '],"resourceType":'
 TOURNEY_STANDING_BEGINNING_TEXT = '"standing":{"page":1,"players":['
 TOURNEY_STANDING_ENDING_TEXT = ']},"socketVersion":'
 HR = '<hr class="my-0" style="border-top:dotted 2px;"/>'
