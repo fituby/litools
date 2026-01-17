@@ -570,7 +570,7 @@ def process_game(args):
                     d = json.load(f)
             else:
                 url = "https://explorer.lichess.ovh/lichess"
-                r = mod.api.get(ApiType.ApiUser, url, token=mod.token, params=params, allow_redirects=True)
+                r = mod.api.get(ApiType.ExplorerLichess, url, token=mod.token, params=params, allow_redirects=True)
                 if r.status_code != 200:
                     msg = f"status {r.status_code}"
                     raise Exception(msg)

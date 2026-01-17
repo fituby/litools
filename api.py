@@ -35,7 +35,7 @@ class ApiType:
     ApiTournament = Endpoint('api/tournament')
     TournamentId = Endpoint('tournament', API_TOURNEY_PAGE_DELAY)
     PlayerTop = Endpoint('player/top')
-    ExplorerLichess = Endpoint('explorer/lichess')
+    ExplorerLichess = Endpoint('explorer/lichess', 2.0)
     # Get ndjson
     ApiGamesUser = Endpoint('api/games/user')
     ApiTeamArena = Endpoint('api/team/arena')

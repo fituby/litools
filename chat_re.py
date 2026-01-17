@@ -1242,6 +1242,10 @@ Lang.Spam: [
        reason=Reason.Spam, info="Messi"),
     Re(r'cr7', 10,
        reason=Reason.Spam, info="Cristiano Ronaldo"),
+    Re(r'(6|six)[-_\+\\\/\s]+(7|seven)', 30,
+       reason=Reason.Spam, info="6 7"),
+    Re(r'(6|six)[_\W]{0,}(7|seven)', 10, is_separate_word=False,
+       reason=Reason.Spam, info="67"),
 ]
 }
 
