@@ -30,8 +30,6 @@ tournament_teams = [
     "lichess-king-of-the-hill",
     "lichess-racing-kings",
     "lichess-three-check",
-    "team-chessable",
-    "persian-empire",
     "dark-horse",
     "sc-turm-illingen",
     "chessscoutinfo-team"
