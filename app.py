@@ -18,8 +18,9 @@ from leaderboard import update_leaderboard
 from chat import ChatAnalysis
 from alt import Alts
 from footprints import analyze_footprints, cancel_footprints, get_footprints, variants1, variants2
+from search import search_users
 from mod import Mod, ModInfo, View
-from elements import get_client_id, get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s
+from elements import get_client_id, get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s, close_account
 from elements import log, log_exception, log_read
 from database import Mods, Authentication
 from consts import *
@@ -484,6 +485,47 @@ def get_fp_data():
         return get_footprints(mod)
     except:
         return Response(status=400)
+
+
+@app.route('/search/', methods=['GET'])
+@app.route('/search', methods=['GET'])
+def create_search():
+    try:
+        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
+    except:
+        return make_response(redirect('/login'))
+    resp = make_response(render_template('/search.html', mod=mod, view=mod.view, icon=""))
+    return resp
+
+
+@app.route('/search', methods=['POST'])
+def query_search():
+    try:
+        mod = get_mod(request.cookies, update_seenAt=True)
+    except:
+        return Response(status=400)
+    query = request.form.get("query", None)
+    if not query:
+        return make_response({'data': [], 'error': 'No query provided'})
+    match_type = request.form.get("match_type", "regex")
+    data = search_users(query, mod, match_type)
+    return make_response(data)
+
+
+@app.route('/mod/close_account', methods=['POST'])
+def close_account_route():
+    try:
+        mod = get_mod(request.cookies)
+    except:
+        return Response(status=400)
+    user = request.form.get("user", None)
+    if not user:
+        return make_response({'error': 'No user provided'})
+    is_ok = close_account(user, mod)
+    if is_ok:
+        return make_response({'status': 'success'})
+    else:
+        return make_response({'error': 'Failed to close account'})
 
 
 @app.route('/set_mode/<mode>', methods=['POST'])

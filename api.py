@@ -43,6 +43,7 @@ class ApiType:
     ApiBroadcast = Endpoint('api/broadcast')
     ApiTournamentResults = Endpoint('api/tournament/results')
     ApiSwissResults = Endpoint('api/swiss/results')
+    ModSearch = Endpoint('mod/search')
     # Post
     ApiUserNote_Post = Endpoint('api/user/note:post')
     ApiWarn = Endpoint('api/warn')
@@ -53,6 +54,7 @@ class ApiType:
     ModWarn = Endpoint('mod/warn')
     ModKid = Endpoint('mod/kid')
     ModTroll = Endpoint('mod/troll')
+    ModCloseAccount = Endpoint('mod/close-account')
     ApiUsers = Endpoint('api/users')
     # Delete
     ApiToken_Delete = Endpoint('api/token:delete')
