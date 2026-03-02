@@ -362,7 +362,7 @@ Lang.En: [
        reason=Reason.Offensive, info="dyke"),
     Re(r'easy', exclude_tournaments=[TournType.Study],
        reason=Reason.Offensive, info="easy"),
-    Re(r'ez', exclude_tournaments=[TournType.Study],
+    Re(r'ez+', exclude_tournaments=[TournType.Study],
        reason=Reason.Offensive, info="easy"),
     Re(r'engine', exclude_tournaments=[TournType.Study],
        reason=Reason.Shaming, info="engine"),
@@ -626,7 +626,7 @@ Lang.Ru: [
     Re(r"я\s(д[еи]бил|дурак|придурок|даун|лопух|лох|лошара|лузер|идиот|отморозок)", 2,
        reason=Reason.Spam, info="я дебил"),
     # Ru
-    Re(r'(|на|по|ни|до|недо)(х|к)у(й\w*|ю|ям?|ем?|и|ев|ями?|ях|йня|йло|йла|йлу)', 40,
+    Re(r'(|на|по|ни|до|недо)(х|к)у(й\w*|[еёë]в\w*|ю|ях?|ем?|и|ями?)', 40,
        ban=-3, reason=Reason.Offensive, info="хуй"),
     Re(r'(на|по)хунь', 40,
        reason=Reason.Offensive, info="нахуй"),
