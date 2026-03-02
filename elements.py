@@ -1525,6 +1525,22 @@ def mark_booster(username, mod):
     return False
 
 
+def close_account(username, mod):
+    try:
+        url = f"https://lichess.org/mod/{username}/close"
+        r = mod.api.post(ApiType.ModCloseAccount, url, token=mod.token)
+        if r.status_code == 200:
+            log(f'CLOSE ACCOUNT: @{username}', True, True, 2)
+            add_note(username, "Closed for username", mod)
+            return True
+        else:
+            log(f'ERROR when closing account: @{username} {r.status_code}', True, True, 1)
+            return False
+    except Exception as exception:
+        log_exception(exception)
+    return False
+
+
 class WarningStats:
     def __init__(self):
         self.active = 0

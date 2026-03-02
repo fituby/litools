@@ -1,0 +1,371 @@
+{% extends 'layout.html' %}
+
+{% block main %}
+<div class="container mt-2">
+    <div class="justify-content-around">
+        <div class="position-relative mt-5 mb-2">
+            <div class="position-absolute top-0 start-0 row align-items-baseline">
+                <p class="pr-2 m-0">Mode</p>
+                <div class="btn-group btn-group-toggle">
+                    <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
+                    <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
+                    <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
+                </div>
+            </div>
+            <h4 class="text-center text-primary my-2">User Search</h4>
+        </div>
+        <div class="row justify-content-center mb-3">
+            <div class="col-12 col-md-8 col-lg-6">
+                <form id="search_form" onsubmit="doSearch(); return false;">
+                    <div class="input-group">
+                        <div class="input-group-prepend">
+                            <select id="match_type" class="custom-select"
+                                style="max-width: 120px; border-top-right-radius: 0; border-bottom-right-radius: 0;">
+                                <option value="regex" selected>Regex</option>
+                                <option value="exact">Exact</option>
+                                <option value="leet">Leet/Sub</option>
+                            </select>
+                        </div>
+                        <input type="text" id="search_query" class="form-control" placeholder="Enter search pattern"
+                            autofocus />
+                        <div class="input-group-append">
+                            <button id="search_btn" class="btn btn-primary" type="submit">
+                                <i class="fas fa-search"></i> Search
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                <small class="text-muted mt-1 d-block">
+                    <code>regex</code>: standard regex &bull;
+                    <code>exact</code>: exact string match &bull;
+                    <code>leet</code>: leetspeak match
+                </small>
+            </div>
+            <div class="col-12 col-md-4 col-lg-3 d-flex align-items-center justify-content-end mt-2 mt-md-0">
+                <button id="review_btn" class="btn btn-info" onclick="toggleReview()">Review Flagged (<span
+                        id="flag_count">0</span>)</button>
+            </div>
+        </div>
+
+        <div id="review_panel" class="mb-4" style="display:none;">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="m-0 text-white">Review Flagged Usernames</h5>
+                    <button class="btn btn-danger btn-sm" onclick="closeBatchObvious()">Close All Obvious</button>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-sm table-dark table-hover mb-0" id="review_table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Flag</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div id="search_error" class="text-center text-danger mb-2" style="display:none;"></div>
+        <div id="search_spinner" class="text-center mb-3" style="display:none;">
+            <div class="spinner-border text-primary" role="status">
+                <span class="sr-only">Searching...</span>
+            </div>
+            <p class="text-muted mt-1">Searching... This may take a while for broad patterns.</p>
+        </div>
+        <div id="search_results" style="display:none;">
+            <div class="row justify-content-center">
+                <div class="column flex-grow-1" style="max-width: 1200px;">
+                    <table id="search_table"
+                        class="table table-sm table-striped table-hover text-center text-nowrap mb-5">
+                        <thead>
+                            <tr>
+                                <th style="cursor:default;">Player <i class="fas fa-sort text-muted"></i></th>
+                                <th class="d-none d-lg-table-cell" style="cursor:default;">Flair <i
+                                        class="fas fa-sort text-muted"></i></th>
+                                <th style="cursor:default;">Flag <i class="fas fa-sort text-muted"></i></th>
+                                <th style="cursor:default;"># Games <i class="fas fa-sort text-muted"></i></th>
+                                <th style="cursor:default;">Online <i class="fas fa-sort text-muted"></i></th>
+                                <th class="text-left" style="cursor:default;">Created <i
+                                        class="fas fa-sort text-muted"></i></th>
+                                <th style="cursor:default;">Status <i class="fas fa-sort text-muted"></i></th>
+                                <th style="cursor:default;">Actions <i class="fas fa-sort text-muted"></i></th>
+                            </tr>
+                        </thead>
+                    </table>
+                    <p id="search_count" class="text-muted text-center"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    var flags = {};
+    var searchTable = null;
+
+    $(document).ready(function () {
+        update_mode({{ view.mode | safe }}, false);
+    if (window.matchMedia)
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if ($('#mode_0').is('.active'))
+                update_mode(event.matches ? -1 : -2);
+        });
+    $("body").tooltip({ selector: '[data-toggle=tooltip]' });
+    $("#loadOverlay").css("display", "none");
+    $("#mainOverlay").css("display", "block");
+});
+
+    function doSearch() {
+        var query = $('#search_query').val().trim();
+        var match_type = $('#match_type').val();
+        if (!query) return;
+        $('#search_error').hide();
+        $('#search_results').hide();
+        $('#search_spinner').show();
+        $('#search_btn').prop('disabled', true);
+
+        if (searchTable) {
+            searchTable.destroy();
+            $('#search_table tbody').empty();
+            searchTable = null;
+        }
+
+        $.ajax({
+            url: '/search',
+            type: 'POST',
+            data: { query: query, match_type: match_type },
+            success: function (result) {
+                $('#search_spinner').hide();
+                $('#search_btn').prop('disabled', false);
+                if (result.error) {
+                    $('#search_error').text(result.error).show();
+                    return;
+                }
+                var data = result.data || [];
+                $('#search_count').text(data.length + ' user' + (data.length !== 1 ? 's' : '') + ' found');
+                $('#search_results').show();
+                searchTable = $('#search_table').DataTable({
+                    "searching": true, "paging": true, "pageLength": 50, "info": false,
+                    "data": data,
+                    "order": [[3, "desc"]],
+                    "createdRow": function (row, data, dataIndex) {
+                        var username = data[0];
+                        var flag = flags[username];
+                        if (flag === 'obvious') $(row).addClass('table-danger');
+                        else if (flag === 'borderline') $(row).addClass('table-warning');
+                    },
+                    columnDefs: [
+                        {
+                            "targets": [0],
+                            "className": "text-left align-middle",
+                            "data": null,
+                            "render": function (data, type, row, meta) {
+                                var username = data[0];
+                                var badges = '';
+                                if (data[9]) badges += ' <span class="badge badge-danger" title="TOS Violation">TOS</span>';
+                                if (data[10]) badges += ' <span class="badge badge-secondary" title="Disabled">Closed</span>';
+                                if (data[11]) badges += ' <span class="badge badge-success" title="Patron">Patron</span>';
+                                if (data[12]) badges += ' <span class="badge badge-info" title="Verified">Verified</span>';
+                                if (type != 'display') return username;
+                                return '<a href="https://lichess.org/@/' + username.toLowerCase() + '" target="_blank">' + username + '</a>' + badges;
+                            }
+                        },
+                        {
+                            "targets": [1],
+                            "className": "d-none d-lg-table-cell align-middle py-0",
+                            "data": null,
+                            "render": function (data, type, row, meta) {
+                                if (type != 'display') return data[2];
+                                return data[2] ? '<abbr class="pr-2" title="' + data[3] + '" style="text-decoration:none;"><img src="https://lichess1.org/assets/______0/flair/img/' + data[2] + '.webp" style="max-width:30px;"></abbr>' : "";
+                            }
+                        },
+                        {
+                            "targets": [2],
+                            "className": "align-middle py-0",
+                            "data": null,
+                            "render": function (data, type, row, meta) {
+                                var country = data[1];
+                                if (type != 'display')
+                                    return !country.length ? 'zz' : (country.charAt(0) == '_') ? 'zy' + country.substr(1) : country;
+                                if (!country.length) return '';
+                                return '<abbr class="pr-2" title="' + country + '" style="text-decoration:none;"><img src="https://lichess1.org/assets/______0/flags/' + country + '.png" style="max-width:30px;"></abbr>';
+                            }
+                        },
+                        {
+                            "targets": [3],
+                            "className": "text-right align-middle pr-3",
+                            "data": null,
+                            "render": function (data, type, row, meta) {
+                                if (type != 'display') return -data[4];
+                                return '<span class="text-muted">' + data[4].toLocaleString('en-US').replace(/,/g, '&nbsp;') + '</span>';
+                            }
+                        },
+                        {
+                            "targets": [4],
+                            "className": "text-left align-middle py-0",
+                            "data": null,
+                            "render": function (data, type, row, meta) {
+                                if (type != 'display') return data[5];
+                                return '<abbr class="pr-2" title="' + data[5] + '" style="text-decoration:none;">' + data[6] + '</abbr>';
+                            }
+                        },
+                        {
+                            "targets": [5],
+                            "className": "text-left align-middle pr-3",
+                            "data": null,
+                            "render": function (data, type, row, meta) {
+                                if (type != 'display') return data[7];
+                                return '<abbr class="pr-2" title="' + data[7] + '" style="text-decoration:none;">' + data[8] + '</abbr>';
+                            }
+                        },
+                        {
+                            "targets": [6],
+                            "className": "align-middle",
+                            "data": null,
+                            "render": function (data, type, row, meta) {
+                                var status = [];
+                                if (data[9]) status.push('TOS');
+                                if (data[10]) status.push('Closed');
+                                if (type != 'display') return status.join(',') || 'ok';
+                                return status.length ? '<span class="text-danger">' + status.join(', ') + '</span>' : '<span class="text-success">OK</span>';
+                            }
+                        },
+                        {
+                            "targets": [7],
+                            "className": "align-middle",
+                            "data": null,
+                            "orderable": false,
+                            "render": function (data, type, row, meta) {
+                                var username = data[0];
+                                return '<button onclick="setFlag(\'' + username + '\', \'obvious\')" class="btn btn-sm btn-outline-danger mr-1 px-2 py-0">Obv</button>' +
+                                    '<button onclick="setFlag(\'' + username + '\', \'borderline\')" class="btn btn-sm btn-outline-warning mr-1 px-2 py-0">Bord</button>' +
+                                    '<button onclick="setFlag(\'' + username + '\', null)" class="btn btn-sm btn-outline-secondary px-2 py-0">Clear</button>';
+                            }
+                        }],
+                });
+                $('.col-sm-12.col-md-6').removeClass('col-md-6');
+            },
+            error: function (xhr) {
+                $('#search_spinner').hide();
+                $('#search_btn').prop('disabled', false);
+                if (xhr.status === 400)
+                    $('#search_error').text('Authentication required. Please log in again.').show();
+                else
+                    $('#search_error').text('Search failed. Status: ' + xhr.status).show();
+            }
+        });
+    }
+
+    function setFlag(username, type) {
+        if (type === null) {
+            delete flags[username];
+        } else {
+            flags[username] = type;
+        }
+        updateReviewUI();
+        if (searchTable) {
+            searchTable.rows().every(function () {
+                var d = this.data();
+                if (d[0] === username) {
+                    var tr = $(this.node());
+                    tr.removeClass('table-danger table-warning');
+                    if (type === 'obvious') tr.addClass('table-danger');
+                    if (type === 'borderline') tr.addClass('table-warning');
+                }
+            });
+        }
+    }
+
+    function updateReviewUI() {
+        var count = Object.keys(flags).length;
+        $('#flag_count').text(count);
+        var tbody = $('#review_table tbody').empty();
+        for (var username in flags) {
+            var type = flags[username];
+            var badge = type === 'obvious' ? '<span class="badge badge-danger">Obvious</span>' : '<span class="badge badge-warning text-dark">Borderline</span>';
+            var tr = $('<tr>').append(
+                $('<td>').html('<a class="text-info" href="https://lichess.org/@/' + username.toLowerCase() + '" target="_blank">' + username + '</a>'),
+                $('<td>').html(badge),
+                $('<td>').html(
+                    '<button class="btn btn-sm btn-danger mr-1 px-2 py-0" onclick="closeAccount(\'' + username + '\', this)">Close</button>' +
+                    '<button class="btn btn-sm btn-secondary px-2 py-0" onclick="setFlag(\'' + username + '\', null)">Unflag</button>'
+                )
+            );
+            tbody.append(tr);
+        }
+    }
+
+    function toggleReview() {
+        $('#review_panel').toggle();
+    }
+
+    function closeAccount(username, btnSrc) {
+        if (!confirm('Are you sure you want to CLOSE account ' + username + '?')) return;
+        performClose(username, btnSrc);
+    }
+
+    function performClose(username, btnSrc) {
+        if (btnSrc) {
+            $(btnSrc).prop('disabled', true).text('Closing...');
+        }
+        $.post('/mod/close_account', { user: username }, function (data) {
+            if (data && data.error) {
+                alert('Failed to close ' + username + ': ' + data.error);
+                if (btnSrc) $(btnSrc).prop('disabled', false).text('Close');
+            } else {
+                if (btnSrc) $(btnSrc).removeClass('btn-danger').addClass('btn-success').text('Closed');
+                setFlag(username, null);
+            }
+        }).fail(function (err) {
+            alert('Request failed for ' + username);
+            if (btnSrc) $(btnSrc).prop('disabled', false).text('Close');
+        });
+    }
+
+    function closeBatchObvious() {
+        var targets = [];
+        for (var username in flags) {
+            if (flags[username] === 'obvious') {
+                targets.push(username);
+            }
+        }
+        if (targets.length === 0) return;
+        if (!confirm('Are you sure you want to CLOSE ALL ' + targets.length + ' obvious accounts?')) return;
+
+        var i = 0;
+        function next() {
+            if (i >= targets.length) return;
+            var u = targets[i++];
+            $.post('/mod/close_account', { user: u }, function (data) {
+                if (!data || !data.error) setFlag(u, null);
+                next();
+            }).fail(function () {
+                next();
+            });
+        }
+        next();
+    }
+
+    function update_mode(val, to_request = true) {
+        if (val == 0)
+            val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
+        for (var i = 0; i < 3; i++) {
+            if (val == i || (val < 0 && i == 0))
+                $(`#mode_${i}`).addClass("active");
+            else
+                $(`#mode_${i}`).removeClass("active");
+        }
+        if (to_request && val != "{{view.mode}}") {
+            setCookie('theme_mode', val);
+            $.ajax({ url: `/set_mode/${val}`, type: "post" });
+            window.location.reload();
+        }
+    }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.20/js/jquery.dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.20/js/dataTables.bootstrap4.min.js"></script>
+{% endblock %}
