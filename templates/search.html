@@ -149,7 +149,7 @@
                 $('#search_count').text(data.length + ' user' + (data.length !== 1 ? 's' : '') + ' found');
                 $('#search_results').show();
                 searchTable = $('#search_table').DataTable({
-                    "searching": true, "paging": true, "pageLength": 50, "info": false,
+                    "searching": true, "paging": false, "pageLength": 100, "info": false,
                     "data": data,
                     "order": [[3, "desc"]],
                     "createdRow": function (row, data, dataIndex) {
@@ -247,7 +247,10 @@
                             }
                         }],
                 });
-                $('.col-sm-12.col-md-6').removeClass('col-md-6');
+                $('#search_table_wrapper .col-sm-12.col-md-6:empty').hide();
+                $('#search_table_wrapper .col-sm-12.col-md-6').removeClass('col-md-6').addClass('col-md-4');
+                $('#search_table_filter label').addClass("d-flex align-items-baseline");
+                $('#search_table_filter label input').addClass("ml-2");
             },
             error: function (xhr) {
                 $('#search_spinner').hide();
@@ -291,7 +294,7 @@
                 $('<td>').html('<a class="text-info" href="https://lichess.org/@/' + username.toLowerCase() + '" target="_blank">' + username + '</a>'),
                 $('<td>').html(badge),
                 $('<td>').html(
-                    '<button id=`btn_close_${username}` class="btn btn-sm btn-danger mr-1 px-2 py-0" onclick="closeAccount(\'' + username + '\')">Close</button>' +
+                    `<button id="btn_close_${username}" class="btn btn-sm btn-danger mr-1 px-2 py-0" onclick="closeAccount(\'' + username + '\')">Close</button>` +
                     '<button class="btn btn-sm btn-secondary px-2 py-0" onclick="setFlag(\'' + username + '\', null)">Unflag</button>'
                 )
             );
@@ -312,13 +315,14 @@
         if (!usernames.length)
             return;
         let username = usernames.shift();
-        $(`btn_close_${username}`).prop('disabled', true).text('Closing...');
+        $(`#btn_close_${username}`).prop('disabled', true).text('Closing...');
+        $(`#btn_close_${username}`).closest('tr').addClass("table-primary");
         $.post('/mod/close_account', { user: username }, function (data) {
             if (data && data.error) {
                 alert('Failed to close ' + username + ': ' + data.error);
-                $(`btn_close_${username}`).prop('disabled', false).text('Close');
+                $(`#btn_close_${username}`).prop('disabled', false).text('Close');
             } else {
-                $(`btn_close_${username}`).removeClass('btn-danger').addClass('btn-success').text('Closed');
+                $(`#btn_close_${username}`).removeClass('btn-danger').addClass('btn-success').text('Closed');
                 setFlag(username, null);
                 $('#search_table').DataTable().rows(function(idx, data, node) {
                     return data[0] === username;
@@ -327,7 +331,7 @@
             }
         }).fail(function (err) {
             alert('Request failed for ' + username);
-            $(`btn_close_${username}`).prop('disabled', false).text('Close');
+            $(`#btn_close_${username}`).prop('disabled', false).text('Close');
         });
     }
 
