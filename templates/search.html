@@ -291,7 +291,7 @@
                 $('<td>').html('<a class="text-info" href="https://lichess.org/@/' + username.toLowerCase() + '" target="_blank">' + username + '</a>'),
                 $('<td>').html(badge),
                 $('<td>').html(
-                    '<button class="btn btn-sm btn-danger mr-1 px-2 py-0" onclick="closeAccount(\'' + username + '\', this)">Close</button>' +
+                    '<button id=`btn_close_${username}` class="btn btn-sm btn-danger mr-1 px-2 py-0" onclick="closeAccount(\'' + username + '\')">Close</button>' +
                     '<button class="btn btn-sm btn-secondary px-2 py-0" onclick="setFlag(\'' + username + '\', null)">Unflag</button>'
                 )
             );
@@ -303,51 +303,45 @@
         $('#review_panel').toggle();
     }
 
-    function closeAccount(username, btnSrc) {
+    function closeAccount(username) {
         if (!confirm('Are you sure you want to CLOSE account ' + username + '?')) return;
-        performClose(username, btnSrc);
+        performClose([username]);
     }
 
-    function performClose(username, btnSrc) {
-        if (btnSrc) {
-            $(btnSrc).prop('disabled', true).text('Closing...');
-        }
+    function performClose(usernames) {
+        if (!usernames.length)
+            return;
+        let username = usernames.shift();
+        $(`btn_close_${username}`).prop('disabled', true).text('Closing...');
         $.post('/mod/close_account', { user: username }, function (data) {
             if (data && data.error) {
                 alert('Failed to close ' + username + ': ' + data.error);
-                if (btnSrc) $(btnSrc).prop('disabled', false).text('Close');
+                $(`btn_close_${username}`).prop('disabled', false).text('Close');
             } else {
-                if (btnSrc) $(btnSrc).removeClass('btn-danger').addClass('btn-success').text('Closed');
+                $(`btn_close_${username}`).removeClass('btn-danger').addClass('btn-success').text('Closed');
                 setFlag(username, null);
+                $('#search_table').DataTable().rows(function(idx, data, node) {
+                    return data[0] === username;
+                }).remove().draw();
+                performClose(usernames);
             }
         }).fail(function (err) {
             alert('Request failed for ' + username);
-            if (btnSrc) $(btnSrc).prop('disabled', false).text('Close');
+            $(`btn_close_${username}`).prop('disabled', false).text('Close');
         });
     }
 
     function closeBatchObvious() {
-        var targets = [];
-        for (var username in flags) {
-            if (flags[username] === 'obvious') {
-                targets.push(username);
-            }
-        }
-        if (targets.length === 0) return;
-        if (!confirm('Are you sure you want to CLOSE ALL ' + targets.length + ' obvious accounts?')) return;
+        var targets = Object.keys(flags).filter(key => flags[key] === "obvious");
+        var names = targets.slice(0, 20).join(", ");
+        if (targets.length === 0)
+            return;
+        if (targets.length > 20)
+            names += ", etc.";
+        if (!confirm('Are you sure you want to CLOSE ALL ' + targets.length + ' obvious accounts?\n\n' + names))
+            return;
 
-        var i = 0;
-        function next() {
-            if (i >= targets.length) return;
-            var u = targets[i++];
-            $.post('/mod/close_account', { user: u }, function (data) {
-                if (!data || !data.error) setFlag(u, null);
-                next();
-            }).fail(function () {
-                next();
-            });
-        }
-        next();
+        performClose(targets);
     }
 
     function update_mode(val, to_request = true) {
