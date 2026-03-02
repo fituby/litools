@@ -11,9 +11,9 @@
   {% if mod %}
   <div class="col my-3">
     {{mod.status_info()|safe}}
-    <div class="d-flex flex-wrap">
+    <div class="card-deck">
       {% if mod.is_chat() %}
-      <div class="card border-success m-2" style="width:18.5%; min-width:200px;">
+      <div class="card border-success m-2" style="min-width:400px;">
         <div class="card-body">
           <a href="/chat" class="stretched-link" style="text-decoration:none;">
             <h4 class="card-title text-success text-center">Public Chats</h4>
@@ -32,7 +32,7 @@
       </div>
       {% endif %}
       {% if mod.is_alt() %}
-      <div class="card border-danger m-2" style="width:18.5%; min-width:200px;">
+      <div class="card border-danger m-2" style="min-width:400px;">
         <div class="card-body">
           <a href="/alt" class="stretched-link" style="text-decoration:none;">
             <h4 class="card-title text-danger text-center">Alts</h4>
@@ -50,24 +50,23 @@
         </div>
       </div>
       {% endif %}
-      {% if mod.is_boost() %}
-      <div class="card border-warning m-2" style="width:18.5%; min-width:200px;">
+      {% if mod.is_mod() %}
+      <div class="card border-warning m-2" style="min-width:400px;">
         <div class="card-body">
-          <a href="/boost" class="stretched-link" style="text-decoration:none;">
-            <h4 class="card-title text-warning text-center">Sandbag/Boost</h4>
+          <a href="/search" class="stretched-link" style="text-decoration:none;">
+            <h4 class="card-title text-warning text-center">User Search</h4>
           </a>
-          <p class="card-text">Analyzing the last N games of the player whose name is entered in the top field.</p>
+          <p class="card-text">Search for users by regex pattern on their username.</p>
           <ul>
-            <li>Enter the user's name or paste a link to their profile.</li>
-            <li>To add relevant information to the notes field to the right, click the corresponding buttons in the
-              tables.</li>
-            <li>To warn or mark the player, click the appropriate button at the top right.</li>
+            <li><code>regex</code> — standard regex e.g. <code>how|ar[dy]</code></li>
+            <li><code>exact</code> — exact match of the pattern e.g. <code>howard</code></li>
+            <li><code>leet</code> — leetspeak match e.g. <code>h0w4rd</code></li>
           </ul>
         </div>
       </div>
       {% endif %}
       {% if mod.is_mod() %}
-      <div class="card border-success m-2" style="width:18.5%; min-width:200px;">
+      <div class="card border-success m-2" style="min-width:400px;">
         <div class="card-body">
           <a href="/comms" class="stretched-link" style="text-decoration:none;">
             <h4 class="card-title text-success text-center">Public Comms</h4>
@@ -82,7 +81,7 @@
       </div>
       {% endif %}
       {% if mod.is_alt() %}
-      <div class="card border-danger m-2" style="width:18.5%; min-width:200px;">
+      <div class="card border-danger m-2" style="min-width:400px;">
         <div class="card-body">
           <a href="/fp" class="stretched-link" style="text-decoration:none;">
             <h4 class="card-title text-danger text-center">Footprints</h4>
@@ -96,22 +95,23 @@
         </div>
       </div>
       {% endif %}
-      {% if mod.is_mod() %}
-      <div class="card border-primary m-2" style="width:18.5%; min-width:200px;">
+      {% if mod.is_boost() %}
+      <div class="card border-warning m-2" style="min-width:400px;">
         <div class="card-body">
-          <a href="/search" class="stretched-link" style="text-decoration:none;">
-            <h4 class="card-title text-primary text-center">User Search</h4>
+          <a href="/boost" class="stretched-link" style="text-decoration:none;">
+            <h4 class="card-title text-warning text-center">Sandbag/Boost</h4>
           </a>
-          <p class="card-text">Search for users by regex pattern on their username.</p>
+          <p class="card-text">Analyzing the last N games of the player whose name is entered in the top field.</p>
           <ul>
-            <li><code>regex</code> — standard regex e.g. <code>how|ar[dy]</code></li>
-            <li><code>exact</code> — exact match of the pattern e.g. <code>howard</code></li>
-            <li><code>leet</code> — leetspeak match e.g. <code>h0w4rd</code></li>
+            <li>Enter the user's name or paste a link to their profile.</li>
+            <li>To add relevant information to the notes field to the right, click the corresponding buttons in the
+              tables.</li>
+            <li>To warn or mark the player, click the appropriate button at the top right.</li>
           </ul>
         </div>
       </div>
       {% endif %}
-      <div class="card border-info m-2" style="width:18.5%; min-width:200px;">
+      <div class="card border-info m-2" style="min-width:400px;">
         <div class="card-body">
           <a href="/lb/{{variant}}" class="stretched-link" style="text-decoration:none;">
             <h4 class="card-title text-info text-center">Leaderboards</h4>
