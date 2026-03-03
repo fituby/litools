@@ -14,14 +14,15 @@
             </div>
             <h4 class="text-center text-primary my-2">User Search</h4>
         </div>
-        <div class="row justify-content-center my-3">
-            <div class="col-12 col-md-8 col-lg-6">
+        <div class="row justify-content-center mt-5 mb-3">
+            <div class="col-12 col-md-9 col-lg-9">
                 <form id="search_form" onsubmit="doSearch(); return false;">
                     <div class="input-group">
                         <div class="input-group-prepend">
                             <select id="match_type" class="custom-select"
                                 style="max-width: 120px; border-top-right-radius: 0; border-bottom-right-radius: 0;">
                                 <option value="regex" selected>Regex</option>
+                                <option value="fast-regex">Fast Regex</option>
                                 <option value="exact">Exact</option>
                                 <option value="leet">Leet/Sub</option>
                             </select>
@@ -36,12 +37,13 @@
                     </div>
                 </form>
                 <small class="text-muted mt-1 d-block">
-                    <code>regex</code>: standard regex &bull;
-                    <code>exact</code>: exact string match &bull;
-                    <code>leet</code>: leetspeak match
+                    <code class="ml-2">regex</code>: standard regex
+                    <code class="ml-2">fast-regex</code>: start-of-line regex
+                    <code class="ml-3">exact</code>: exact string match
+                    <code class="ml-3">leet</code>: leetspeak match
                 </small>
             </div>
-            <div class="col-12 col-md-4 col-lg-3 d-flex align-items-center justify-content-end mt-2 mt-md-0">
+            <div class="col-12 col-md-3 col-lg-3 d-flex align-items-center justify-content-end mt-2 mt-md-0">
                 <button id="review_btn" class="btn btn-info" onclick="toggleReview()">Review Flagged (<span
                         id="flag_count">0</span>)</button>
             </div>
@@ -84,7 +86,7 @@
                                 <th style="cursor:default;">Player <i class="fas fa-sort text-muted"></i></th>
                                 <th class="d-none d-lg-table-cell" style="cursor:default;">Flair <i
                                         class="fas fa-sort text-muted"></i></th>
-                                <th style="cursor:default;">Flag <i class="fas fa-sort text-muted"></i></th>
+                                <th class="d-none d-lg-table-cell" style="cursor:default;">Flag <i class="fas fa-sort text-muted"></i></th>
                                 <th style="cursor:default;"># Games <i class="fas fa-sort text-muted"></i></th>
                                 <th style="cursor:default;">Online <i class="fas fa-sort text-muted"></i></th>
                                 <th class="text-left" style="cursor:default;">Created <i
@@ -109,19 +111,24 @@
 
     $(document).ready(function () {
         update_mode({{ view.mode | safe }}, false);
-    if (window.matchMedia)
-        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
-            if ($('#mode_0').is('.active'))
-                update_mode(event.matches ? -1 : -2);
-        });
-    $("body").tooltip({ selector: '[data-toggle=tooltip]' });
-    $("#loadOverlay").css("display", "none");
-    $("#mainOverlay").css("display", "block");
-});
+        if (window.matchMedia)
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+                if ($('#mode_0').is('.active'))
+                    update_mode(event.matches ? -1 : -2);
+            });
+        $("body").tooltip({ selector: '[data-toggle=tooltip]' });
+        $("#loadOverlay").css("display", "none");
+        $("#mainOverlay").css("display", "block");
+    });
 
     function doSearch() {
         var query = $('#search_query').val().trim();
         var match_type = $('#match_type').val();
+        if (match_type == "fast-regex") {
+            if (!query.startsWith('^'))
+                query = '^' + query;
+            match_type = "regex";
+        }
         if (!query) return;
         $('#search_error').hide();
         $('#search_results').hide();
@@ -151,13 +158,7 @@
                 searchTable = $('#search_table').DataTable({
                     "searching": true, "paging": false, "pageLength": 100, "info": false,
                     "data": data,
-                    "order": [[3, "desc"]],
-                    "createdRow": function (row, data, dataIndex) {
-                        var username = data[0];
-                        var flag = flags[username];
-                        if (flag === 'obvious') $(row).addClass('table-danger');
-                        else if (flag === 'borderline') $(row).addClass('table-warning');
-                    },
+                    "order": [[3, "desc"], [4, "asc"]],
                     columnDefs: [
                         {
                             "targets": [0],
@@ -171,7 +172,9 @@
                                 if (data[11]) badges += ' <span class="badge badge-success" title="Patron">Patron</span>';
                                 if (data[12]) badges += ' <span class="badge badge-info" title="Verified">Verified</span>';
                                 if (type != 'display') return username;
-                                return '<a href="https://lichess.org/@/' + username.toLowerCase() + '" target="_blank">' + username + '</a>' + badges;
+                                var flag = flags[username];
+                                var c = (flag === 'obvious') ? "text-danger" : (flag === 'borderline') ? "text-warning" : "";
+                                return `<a id="userlink_${username}" class="${c}" href="https://lichess.org/@/${username.toLowerCase()}" target="_blank">${username}</a>` + badges;
                             }
                         },
                         {
@@ -185,7 +188,7 @@
                         },
                         {
                             "targets": [2],
-                            "className": "align-middle py-0",
+                            "className": "d-none d-lg-table-cell align-middle py-0",
                             "data": null,
                             "render": function (data, type, row, meta) {
                                 var country = data[1];
@@ -241,9 +244,12 @@
                             "orderable": false,
                             "render": function (data, type, row, meta) {
                                 var username = data[0];
-                                return '<button onclick="setFlag(\'' + username + '\', \'obvious\')" class="btn btn-sm btn-outline-danger mr-1 px-2 py-0">Obv</button>' +
-                                    '<button onclick="setFlag(\'' + username + '\', \'borderline\')" class="btn btn-sm btn-outline-warning mr-1 px-2 py-0">Bord</button>' +
-                                    '<button onclick="setFlag(\'' + username + '\', null)" class="btn btn-sm btn-outline-secondary px-2 py-0">Clear</button>';
+                                let flag = flags[username];
+                                let class_obv = (flag === 'obvious') ? "btn-danger" : "btn-outline-danger";
+                                let class_bord = (flag === 'borderline') ? "btn-warning" : "btn-outline-warning";
+                                return `<button id="btn_obvious_${username}" onclick="setFlag('${username}', 'obvious')" class="btn btn-sm ${class_obv} mr-1 px-2 py-0">Obv</button>
+                                        <button id="btn_borderline_${username}" onclick="setFlag('${username}', 'borderline')" class="btn btn-sm ${class_bord} mr-1 px-2 py-0">Bord</button>
+                                        <button id="btn_null_${username}" onclick="setFlag('${username}', null)" class="btn btn-sm btn-outline-secondary px-2 py-0">Clear</button>`;
                             }
                         }],
                 });
@@ -251,6 +257,8 @@
                 $('#search_table_wrapper .col-sm-12.col-md-6').removeClass('col-md-6').addClass('col-md-4');
                 $('#search_table_filter label').addClass("d-flex align-items-baseline");
                 $('#search_table_filter label input').addClass("ml-2");
+                if ($('#review_panel').is(":visible"))
+                    toggleReview();
             },
             error: function (xhr) {
                 $('#search_spinner').hide();
@@ -264,23 +272,21 @@
     }
 
     function setFlag(username, type) {
-        if (type === null) {
-            delete flags[username];
-        } else {
+        let btn = $(`#btn_${type}_${username}`);
+        let c = (type === 'obvious') ? "danger" : "warning";
+        let is_set = btn.is(`.btn-${c}`);
+        $(`#btn_obvious_${username}`).removeClass('btn-danger').addClass('btn-outline-danger');
+        $(`#btn_borderline_${username}`).removeClass('btn-warning').addClass('btn-outline-warning');
+        $(`#userlink_${username}`).removeClass('text-danger').removeClass('text-warning');
+        if (!is_set && ['obvious', 'borderline'].includes(type)) {
             flags[username] = type;
+            btn.removeClass(`btn-outline-${c}`).addClass(`btn-${c}`);
+            let link_class = (type === 'obvious') ? "text-danger" : (type === 'borderline') ? "text-warning" : "";
+            $(`#userlink_${username}`).addClass(`${link_class}`);
+        } else {
+            delete flags[username];
         }
         updateReviewUI();
-        if (searchTable) {
-            searchTable.rows().every(function () {
-                var d = this.data();
-                if (d[0] === username) {
-                    var tr = $(this.node());
-                    tr.removeClass('table-danger table-warning');
-                    if (type === 'obvious') tr.addClass('table-danger');
-                    if (type === 'borderline') tr.addClass('table-warning');
-                }
-            });
-        }
     }
 
     function updateReviewUI() {
@@ -294,8 +300,8 @@
                 $('<td>').html('<a class="text-info" href="https://lichess.org/@/' + username.toLowerCase() + '" target="_blank">' + username + '</a>'),
                 $('<td>').html(badge),
                 $('<td>').html(
-                    `<button id="btn_close_${username}" class="btn btn-sm btn-danger mr-1 px-2 py-0" onclick="closeAccount(\'' + username + '\')">Close</button>` +
-                    '<button class="btn btn-sm btn-secondary px-2 py-0" onclick="setFlag(\'' + username + '\', null)">Unflag</button>'
+                    `<button id="btn_close_${username}" class="btn btn-sm btn-danger mr-1 px-2 py-0" onclick="closeAccount('${username}')">Close</button>
+                     <button class="btn btn-sm btn-secondary px-2 py-0" onclick="setFlag('${username}', null)">Unflag</button>`
                 )
             );
             tbody.append(tr);
@@ -304,6 +310,10 @@
 
     function toggleReview() {
         $('#review_panel').toggle();
+        if ($('#review_btn').is('.btn-info'))
+            $('#review_btn').removeClass('btn-info').addClass('btn-outline-info');
+        else
+            $('#review_btn').removeClass('btn-outline-info').addClass('btn-info');
     }
 
     function closeAccount(username) {
@@ -338,8 +348,12 @@
     function closeBatchObvious() {
         var targets = Object.keys(flags).filter(key => flags[key] === "obvious");
         var names = targets.slice(0, 20).join(", ");
-        if (targets.length === 0)
+        if (targets.length == 0)
             return;
+        if (targets.length == 1) {
+             closeAccount(targets[0]);
+             return;
+        }
         if (targets.length > 20)
             names += ", etc.";
         if (!confirm('Are you sure you want to CLOSE ALL ' + targets.length + ' obvious accounts?\n\n' + names))
