@@ -38,7 +38,7 @@
                 </form>
                 <small class="text-muted mt-1 d-block">
                     <code class="ml-2">regex</code>: standard regex
-                    <code class="ml-2">fast-regex</code>: start-of-line regex
+                    <code class="ml-3">fast-regex</code>: start-of-line regex
                     <code class="ml-3">exact</code>: exact string match
                     <code class="ml-3">leet</code>: leetspeak match
                 </small>
@@ -83,16 +83,16 @@
                         class="table table-sm table-striped table-hover text-center text-nowrap mb-5">
                         <thead>
                             <tr>
-                                <th style="cursor:default;">Player <i class="fas fa-sort text-muted"></i></th>
+                                <th style="cursor:default;">Actions</th>
                                 <th class="d-none d-lg-table-cell" style="cursor:default;">Flair <i
                                         class="fas fa-sort text-muted"></i></th>
                                 <th class="d-none d-lg-table-cell" style="cursor:default;">Flag <i class="fas fa-sort text-muted"></i></th>
+                                <th style="cursor:default;">Player <i class="fas fa-sort text-muted"></i></th>
                                 <th style="cursor:default;"># Games <i class="fas fa-sort text-muted"></i></th>
                                 <th style="cursor:default;">Online <i class="fas fa-sort text-muted"></i></th>
                                 <th class="text-left" style="cursor:default;">Created <i
                                         class="fas fa-sort text-muted"></i></th>
                                 <th style="cursor:default;">Status <i class="fas fa-sort text-muted"></i></th>
-                                <th style="cursor:default;">Actions <i class="fas fa-sort text-muted"></i></th>
                             </tr>
                         </thead>
                     </table>
@@ -158,23 +158,21 @@
                 searchTable = $('#search_table').DataTable({
                     "searching": true, "paging": false, "pageLength": 100, "info": false,
                     "data": data,
-                    "order": [[3, "desc"], [4, "asc"]],
+                    "order": [[4, "desc"], [5, "asc"]],
                     columnDefs: [
                         {
                             "targets": [0],
-                            "className": "text-left align-middle",
+                            "className": "align-middle",
                             "data": null,
+                            "orderable": false,
                             "render": function (data, type, row, meta) {
                                 var username = data[0];
-                                var badges = '';
-                                if (data[9]) badges += ' <span class="badge badge-danger" title="TOS Violation">TOS</span>';
-                                if (data[10]) badges += ' <span class="badge badge-secondary" title="Disabled">Closed</span>';
-                                if (data[11]) badges += ' <span class="badge badge-success" title="Patron">Patron</span>';
-                                if (data[12]) badges += ' <span class="badge badge-info" title="Verified">Verified</span>';
-                                if (type != 'display') return username;
-                                var flag = flags[username];
-                                var c = (flag === 'obvious') ? "text-danger" : (flag === 'borderline') ? "text-warning" : "";
-                                return `<a id="userlink_${username}" class="${c}" href="https://lichess.org/@/${username.toLowerCase()}" target="_blank">${username}</a>` + badges;
+                                let flag = flags[username];
+                                let class_obv = (flag === 'obvious') ? "btn-danger" : "btn-outline-danger";
+                                let class_bord = (flag === 'borderline') ? "btn-warning" : "btn-outline-warning";
+                                return `<button id="btn_obvious_${username}" onclick="setFlag('${username}', 'obvious')" class="btn btn-sm ${class_obv} mr-1 px-2 py-0">Obv</button>
+                                        <button id="btn_borderline_${username}" onclick="setFlag('${username}', 'borderline')" class="btn btn-sm ${class_bord} mr-1 px-2 py-0">Bord</button>
+                                        <button id="btn_null_${username}" onclick="setFlag('${username}', null)" class="btn btn-sm btn-outline-secondary px-2 py-0">Clear</button>`;
                             }
                         },
                         {
@@ -200,6 +198,23 @@
                         },
                         {
                             "targets": [3],
+                            "className": "text-left align-middle",
+                            "data": null,
+                            "render": function (data, type, row, meta) {
+                                var username = data[0];
+                                var badges = '';
+                                if (data[9]) badges += ' <span class="badge badge-danger" title="TOS Violation">TOS</span>';
+                                if (data[10]) badges += ' <span class="badge badge-secondary" title="Disabled">Closed</span>';
+                                if (data[11]) badges += ' <span class="badge badge-success" title="Patron">Patron</span>';
+                                if (data[12]) badges += ' <span class="badge badge-info" title="Verified">Verified</span>';
+                                if (type != 'display') return username;
+                                var flag = flags[username];
+                                var c = (flag === 'obvious') ? "text-danger" : (flag === 'borderline') ? "text-warning" : "";
+                                return `<a id="userlink_${username}" class="${c}" href="https://lichess.org/@/${username.toLowerCase()}" target="_blank">${username}</a>` + badges;
+                            }
+                        },
+                        {
+                            "targets": [4],
                             "className": "text-right align-middle pr-3",
                             "data": null,
                             "render": function (data, type, row, meta) {
@@ -208,7 +223,7 @@
                             }
                         },
                         {
-                            "targets": [4],
+                            "targets": [5],
                             "className": "text-left align-middle py-0",
                             "data": null,
                             "render": function (data, type, row, meta) {
@@ -217,7 +232,7 @@
                             }
                         },
                         {
-                            "targets": [5],
+                            "targets": [6],
                             "className": "text-left align-middle pr-3",
                             "data": null,
                             "render": function (data, type, row, meta) {
@@ -226,7 +241,7 @@
                             }
                         },
                         {
-                            "targets": [6],
+                            "targets": [7],
                             "className": "align-middle",
                             "data": null,
                             "render": function (data, type, row, meta) {
@@ -235,21 +250,6 @@
                                 if (data[10]) status.push('Closed');
                                 if (type != 'display') return status.join(',') || 'ok';
                                 return status.length ? '<span class="text-danger">' + status.join(', ') + '</span>' : '<span class="text-success">OK</span>';
-                            }
-                        },
-                        {
-                            "targets": [7],
-                            "className": "align-middle",
-                            "data": null,
-                            "orderable": false,
-                            "render": function (data, type, row, meta) {
-                                var username = data[0];
-                                let flag = flags[username];
-                                let class_obv = (flag === 'obvious') ? "btn-danger" : "btn-outline-danger";
-                                let class_bord = (flag === 'borderline') ? "btn-warning" : "btn-outline-warning";
-                                return `<button id="btn_obvious_${username}" onclick="setFlag('${username}', 'obvious')" class="btn btn-sm ${class_obv} mr-1 px-2 py-0">Obv</button>
-                                        <button id="btn_borderline_${username}" onclick="setFlag('${username}', 'borderline')" class="btn btn-sm ${class_bord} mr-1 px-2 py-0">Bord</button>
-                                        <button id="btn_null_${username}" onclick="setFlag('${username}', null)" class="btn btn-sm btn-outline-secondary px-2 py-0">Clear</button>`;
                             }
                         }],
                 });
