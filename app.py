@@ -417,12 +417,13 @@ def query_comms():
     except:
         return Response(status=400)
     data = request.form.to_dict()
-    username = data.get("username", None)
-    text = data.get("text", None)
+    username = data.get("username", "").strip()
+    text = data.get("text", "").strip()
+    tournId = data.get("tournId", "").strip()
     date_begin = data.get("date_begin", None)
     date_end = data.get("date_end", None)
     num_msgs = data.get("num_msgs", '100')
-    msgs = chat.msgs_query(username, text, date_begin, date_end, num_msgs, mod)
+    msgs = chat.msgs_query(username, text, tournId, date_begin, date_end, num_msgs, mod)
     if msgs is None:
         return Response(status=401)
     resp = make_response(msgs)

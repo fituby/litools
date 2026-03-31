@@ -22,6 +22,9 @@
               <option value="1000" title="maximum 1000 messages">1,000 messages</option>
               <option value="2000" title="maximum 2000 messages">2,000 messages</option>
               <option value="5000" title="maximum 5000 messages">5,000 messages</option>
+              <option value="10000" title="maximum 10k messages">10,000 messages</option>
+              <option value="20000" title="maximum 20k messages">20,000 messages</option>
+              <option value="50000" title="maximum 50k messages">50,000 messages</option>
             </select>
           </td>
         </tr>
@@ -36,13 +39,17 @@
           <td class="w-100"><input id="date_end" class="w-100" type="date" value="" onchange="values_changed(event);"></td>
         </tr>
       </tbody></table>
-      <table class="col-4"><tbody>
+      <table class="col-5"><tbody>
         <tr>
           <td class="py-1 pr-2">Text:</td>
           <td><input id="text" class="w-100" type="text" placeholder="" onchange="values_changed(event);"></td>
         </tr>
-        <tr><td colspan="2">* Text is case insensitive. Time is in UTC.</td></tr>
+        <tr>
+          <td class="py-1 pr-2">Tournament ID:</td>
+          <td><input id="tournId" class="w-100" type="text" placeholder="" onchange="values_changed(event);"></td>
+        </tr>
       </tbody></table>
+      <p class="mt-2">* Text is case insensitive. Time is in UTC.</p>
   </div>
   <div class="d-flex flex-row flex-wrap justify-content-around my-2">
     <div class="flex-column flex-grow-1 mx-3">
@@ -89,19 +96,37 @@ $(document).ready(function() {
   $("#mainOverlay").css("display","block");
   $("#username").on('keyup', values_changed);
   $("#text").on('keyup', values_changed);
+  $("#tournId").on('keyup', values_changed);
   $("#username").on('keypress', data_entered);
   $("#text").on('keypress', data_entered);
+  $("#tournId").on('keypress', data_entered);
   jQuery(function($){
     $('#username').bind('paste', function(event){
       var data = event.originalEvent.clipboardData.getData('text/plain');
       if (data.startsWith("https://lichess.org/@/")) {
         event.preventDefault();
-        var i2 = data.indexOf('?');
-        var username = (i2 < 0) ? data : data.substr(0, i2);
-        var i1 = username.lastIndexOf('/');
+        let i2 = data.indexOf('?');
+        let username = (i2 < 0) ? data : data.substr(0, i2);
+        let i1 = username.lastIndexOf('/');
         username = username.substr(i1 + 1).trim();
         if (username)
           $('#username').val(username);
+      }
+    });
+  });
+  jQuery(function($){
+    $('#tournId').bind('paste', function(event){
+      var data = event.originalEvent.clipboardData.getData('text/plain');
+      if (data.startsWith("https://lichess.org/tournament/") ||
+          data.startsWith("https://lichess.org/swiss/") ||
+          data.startsWith("https://lichess.org/broadcast/")) {
+        event.preventDefault();
+        let i2 = data.indexOf('#');
+        let tournId = (i2 < 0) ? data : data.substr(0, i2);
+        let i1 = tournId.lastIndexOf('/');
+        tournId = tournId.substr(i1 + 1).trim();
+        if (tournId)
+          $('#tournId').val(tournId);
       }
     });
   });
@@ -157,7 +182,7 @@ $(document).ready(function() {
   $('#msgs_table_wrapper').addClass("d-none");
 });
 function values_changed(e) {
-  if ($('#username').val().length >= 2 || $('#date_begin').val().length || $('#date_end').val().length || $('#text').val().length)
+  if ($('#username').val().length >= 2 || $('#date_begin').val().length || $('#date_end').val().length || $('#text').val().length || $('#tournId').val().length)
     $('#go').removeAttr("disabled");
   else
     $('#go').attr("disabled", "");
@@ -174,7 +199,7 @@ function find_msgs() {
     url: `/comms`,
     type: "post",
     data: {username: $('#username').val(), text: $('#text').val(), num_msgs: $('#num_msgs').val(),
-      date_begin: $('#date_begin').val(), date_end: $('#date_end').val()}
+           tournId: $('#tournId').val(), date_begin: $('#date_begin').val(), date_end: $('#date_end').val()}
   }).done(function(data, textStatus, jqXHR) {
     $('#msgs_table').removeClass("d-none");
     $('#msgs_table_wrapper').removeClass("d-none");

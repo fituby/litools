@@ -1001,7 +1001,7 @@ class ChatAnalysis:
             ret_data.update(self.cache_selected_data[mod.id])
             return ret_data
 
-    def msgs_query(self, username, text, date_begin, date_end, num_msgs, mod):
+    def msgs_query(self, username, text, tournId, date_begin, date_end, num_msgs, mod):
         if not mod.is_mod():
             return None
         order_by = [Messages.time, Messages.id] if date_begin and not date_end else [-Messages.time, -Messages.id]
@@ -1012,9 +1012,11 @@ class ChatAnalysis:
             date_end = datetime.strptime(f"{date_end}T23:59", '%Y-%m-%dT%H:%M')
             where &= Messages.time <= date_end
         if username:
-            where &= Messages.username.collate('NOCASE') == username.strip()
+            where &= Messages.username.collate('NOCASE') == username
         if text:
-            where &= Messages.text.contains(text.strip()).collate('NOCASE')
+            where &= Messages.text.contains(text).collate('NOCASE')
+        if tournId:
+            where &= Messages.tournament.collate('NOCASE') == tournId
         try:
             limit = int(num_msgs)
         except:
