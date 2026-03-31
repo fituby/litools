@@ -107,7 +107,8 @@ class Api:
     def check_delay(tag, url, t1_utc):
         now_utc = datetime.now(tz=tz.tzutc())
         dt = (now_utc - t1_utc).total_seconds()
-        if dt >= 10:
+        t_long = 30 if url.startswith("https://lichess.org/mod/search") else 15
+        if dt >= t_long:
             short_url = url[19:] if url.startswith("https://lichess.org") else url
             log(f"...{dt:.1f}s to {tag} {short_url}", True)
 
