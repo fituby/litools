@@ -466,16 +466,16 @@ class ChatAnalysis:
                 warning = ModAction.warnings.get(subject_tag)
                 if warning:
                     if subject_tag == "kidMode":
-                        # TODO: check if kidMode is set already (after?)
-                        is_set = self.api_kidMode(username, mod, False)
-                        if is_set:
-                            self.api_warn(username, warning, mod, check_updates=False)
                         if to_add_note:
                             user = self.users[mod.id].get(username)
                             if user:
                                 bio = html.unescape(user.profile.bio)
                                 if bio:
                                     self.send_note(f'Bio: {bio}', username, mod)
+                        # TODO: check if kidMode is set already (after?)
+                        is_set = self.api_kidMode(username, mod, False)
+                        if is_set:
+                            self.api_warn(username, warning, mod, check_updates=False)
                     elif subject_tag in ModAction.warnings:
                         self.api_warn(username, warning, mod)
                     else:

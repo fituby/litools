@@ -10,7 +10,7 @@ from consts import BOOST_RING_TOOL
 
 
 class Mod:
-    login_button = f'<a href="/login" class="btn btn-lg btn-primary>Log in</a>'
+    login_button = f'<a href="/login" class="btn btn-lg btn-primary">Log in</a>'
     auth_lock = Lock()
 
     @staticmethod
