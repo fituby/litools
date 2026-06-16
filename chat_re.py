@@ -1150,6 +1150,8 @@ Lang.Spam: [
            ban=-1, reason=Reason.Spam, info="[link] Rickrolling"),
     ReLink(r'(https?:\/\/|)(www\.)?(youtube\.com\/watch|youtu.be)[\?\/][-\w\(\)@:%\+\.~#\?&\/=]*jSWpJpSqNL4', 60,
            ban=-1, reason=Reason.Spam, info="[link] Rickrolling"),
+    ReLink(r'(https?:\/\/|)(www\.)?(youtube\.com\/watch|youtu.be)[\?\/][-\w\(\)@:%\+\.~#\?&\/=]*QDia3e12czc', 60,
+           ban=-1, reason=Reason.Spam, info="[link] Rickrolling"),
     ReLink(r'(https?:\/\/|)(www\.)?(youtube\.com\/watch|youtu.be)[\?\/][-\w\(\)@:%\+\.~#\?&\/=]*RoozSjudh0I', 60,
            ban=-1, reason=Reason.Spam, info="[link] Spam"),
     ReLink(r'https?:\/\/(www\.)?(youtu|youtube|twitch|instagram)[-\w@:%\.\+~#=]*\.\w{1,6}\b[-\w\(\)@:%\+\.~#\?&\/=]*', 40,
