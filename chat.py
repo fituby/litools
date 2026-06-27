@@ -53,7 +53,7 @@ class ChatAnalysis:
         self.last_tournaments_update: datetime = None
         self.errors = []
         self.warnings = []
-        self.i_update_frequency = 1  # len(API_CHAT_REFRESH_PERIOD) - 1
+        self.i_update_frequency = IDX_NO_PAGE_UPDATE  # len(API_CHAT_REFRESH_PERIOD) - 1
         self.reset_multi_messages = set()
         self.update_count = 0
         self.tournament_groups = {"monitored": True, "started": True, "created": True, "finished": True}
