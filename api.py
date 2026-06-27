@@ -63,7 +63,8 @@ class Api:
     ndjson_lock = Lock()
 
     transport = httpx.HTTPTransport(retries=5, http2=True)
-    httpx_client = httpx.Client(transport=transport)
+    timeout = httpx.Timeout(60.0, connect=5.0)
+    httpx_client = httpx.Client(transport=transport, timeout=timeout)
 
     def __init__(self):
         self.api_times = defaultdict(list)
@@ -118,7 +119,9 @@ class Api:
                 t1_utc = datetime.now(tz=tz.tzutc())
                 r = Api.httpx_client.get(url, follow_redirects=True, headers=headers, **kwargs)
                 Api.check_delay("GET", url, t1_utc)
-            except (httpx.ReadError, httpx.ProtocolError) as exception:
+            except httpx.ReadError:
+                log(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
+            except httpx.ProtocolError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
                 raise exception
@@ -140,7 +143,9 @@ class Api:
                 t1_utc = datetime.now(tz=tz.tzutc())
                 r = Api.httpx_client.post(url, headers=headers, **kwargs)
                 Api.check_delay("POST", url, t1_utc)
-            except (httpx.ReadError, httpx.ProtocolError) as exception:
+            except httpx.ReadError:
+                log(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
+            except httpx.ProtocolError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
                 raise exception
@@ -162,7 +167,9 @@ class Api:
                 t1_utc = datetime.now(tz=tz.tzutc())
                 r = Api.httpx_client.delete(url, headers=headers, **kwargs)
                 Api.check_delay("DELETE", url, t1_utc)
-            except (httpx.ReadError, httpx.ProtocolError) as exception:
+            except httpx.ReadError:
+                log(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
+            except httpx.ProtocolError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
                 raise exception
@@ -189,7 +196,9 @@ class Api:
                     r = Api.httpx_client.get(url, follow_redirects=True, headers=headers, params=params)
                     if api.name != ApiType.ApiGamesUser.name:
                         Api.check_delay("GET", url, t1_utc)
-                except (httpx.ReadError, httpx.ProtocolError) as exception:
+                except httpx.ReadError:
+                    log(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f}: {url}")
+                except httpx.ProtocolError as exception:
                     log_exception(exception, to_print=False)
                     time.sleep(6)
                     raise exception
