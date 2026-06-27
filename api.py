@@ -1,5 +1,4 @@
-import requests
-from requests.adapters import HTTPAdapter, Retry
+import httpx
 import json
 from collections import defaultdict
 import time
@@ -63,9 +62,8 @@ class ApiType:
 class Api:
     ndjson_lock = Lock()
 
-    requests_session = requests.Session()
-    retries = Retry(total=5, backoff_factor=0.1)
-    requests_session.mount('https://lichess.org/', HTTPAdapter(max_retries=retries))
+    transport = httpx.HTTPTransport(retries=5, http2=True)
+    httpx_client = httpx.Client(transport=transport)
 
     def __init__(self):
         self.api_times = defaultdict(list)
@@ -118,9 +116,9 @@ class Api:
             kwargs.pop('headers', None)
             try:
                 t1_utc = datetime.now(tz=tz.tzutc())
-                r = Api.requests_session.get(url, headers=headers, **kwargs)
+                r = Api.httpx_client.get(url, follow_redirects=True, headers=headers, **kwargs)
                 Api.check_delay("GET", url, t1_utc)
-            except requests.exceptions.ChunkedEncodingError as exception:
+            except (httpx.ReadError, httpx.ProtocolError) as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
                 raise exception
@@ -140,9 +138,9 @@ class Api:
             kwargs.pop('headers', None)
             try:
                 t1_utc = datetime.now(tz=tz.tzutc())
-                r = Api.requests_session.post(url, headers=headers, **kwargs)
+                r = Api.httpx_client.post(url, headers=headers, **kwargs)
                 Api.check_delay("POST", url, t1_utc)
-            except requests.exceptions.ChunkedEncodingError as exception:
+            except (httpx.ReadError, httpx.ProtocolError) as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
                 raise exception
@@ -162,9 +160,9 @@ class Api:
             kwargs.pop('headers', None)
             try:
                 t1_utc = datetime.now(tz=tz.tzutc())
-                r = Api.requests_session.delete(url, headers=headers, **kwargs)
+                r = Api.httpx_client.delete(url, headers=headers, **kwargs)
                 Api.check_delay("DELETE", url, t1_utc)
-            except requests.exceptions.ChunkedEncodingError as exception:
+            except (httpx.ReadError, httpx.ProtocolError) as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
                 raise exception
@@ -188,10 +186,10 @@ class Api:
             with Api.ndjson_lock:
                 try:
                     t1_utc = datetime.now(tz=tz.tzutc())
-                    r = Api.requests_session.get(url, allow_redirects=True, headers=headers, params=params)
+                    r = Api.httpx_client.get(url, follow_redirects=True, headers=headers, params=params)
                     if api.name != ApiType.ApiGamesUser.name:
                         Api.check_delay("GET", url, t1_utc)
-                except requests.exceptions.ChunkedEncodingError as exception:
+                except (httpx.ReadError, httpx.ProtocolError) as exception:
                     log_exception(exception, to_print=False)
                     time.sleep(6)
                     raise exception
