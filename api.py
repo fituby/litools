@@ -63,6 +63,7 @@ class Api:
     ndjson_lock = Lock()
 
     transport = httpx.HTTPTransport(retries=5, http2=True)
+    transport._pool._max_streams = 1000  # server limit: 2000
     timeout = httpx.Timeout(60.0, connect=5.0)
     httpx_client = httpx.Client(transport=transport, timeout=timeout)
 
@@ -120,7 +121,7 @@ class Api:
                 r = Api.httpx_client.get(url, follow_redirects=True, headers=headers, **kwargs)
                 Api.check_delay("GET", url, t1_utc)
             except httpx.ReadError:
-                log(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
+                raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
             except httpx.ProtocolError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
@@ -144,7 +145,7 @@ class Api:
                 r = Api.httpx_client.post(url, headers=headers, **kwargs)
                 Api.check_delay("POST", url, t1_utc)
             except httpx.ReadError:
-                log(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
+                raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
             except httpx.ProtocolError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
@@ -168,7 +169,7 @@ class Api:
                 r = Api.httpx_client.delete(url, headers=headers, **kwargs)
                 Api.check_delay("DELETE", url, t1_utc)
             except httpx.ReadError:
-                log(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
+                raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
             except httpx.ProtocolError as exception:
                 log_exception(exception, to_print=False)
                 time.sleep(6)
@@ -197,7 +198,7 @@ class Api:
                     if api.name != ApiType.ApiGamesUser.name:
                         Api.check_delay("GET", url, t1_utc)
                 except httpx.ReadError:
-                    log(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f}: {url}")
+                    raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f}: {url}")
                 except httpx.ProtocolError as exception:
                     log_exception(exception, to_print=False)
                     time.sleep(6)
