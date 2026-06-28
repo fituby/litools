@@ -62,10 +62,12 @@ class ApiType:
 class Api:
     ndjson_lock = Lock()
 
+    MAX_REQUESTS_PER_CONNECTION = 1000  # server limit: 2000
     transport = httpx.HTTPTransport(retries=5, http2=True)
-    transport._pool._max_streams = 1000  # server limit: 2000
+    transport._pool._max_streams = MAX_REQUESTS_PER_CONNECTION
     timeout = httpx.Timeout(60.0, connect=5.0)
     httpx_client = httpx.Client(transport=transport, timeout=timeout)
+    request_counter = 0
 
     def __init__(self):
         self.api_times = defaultdict(list)
@@ -104,6 +106,13 @@ class Api:
         return headers
 
     @staticmethod
+    def check_client():
+        if Api.request_counter >= Api.MAX_REQUESTS_PER_CONNECTION:
+            Api.httpx_client.close()
+            Api.httpx_client = httpx.Client(transport=Api.transport, timeout=Api.timeout)
+            Api.request_counter = 0
+
+    @staticmethod
     def check_delay(tag, url, t1_utc):
         now_utc = datetime.now(tz=tz.tzutc())
         dt = (now_utc - t1_utc).total_seconds()
@@ -117,9 +126,11 @@ class Api:
             headers = self.prepare(api, url, token, "GET", **kwargs)
             kwargs.pop('headers', None)
             try:
+                Api.check_client()
                 t1_utc = datetime.now(tz=tz.tzutc())
                 r = Api.httpx_client.get(url, follow_redirects=True, headers=headers, **kwargs)
                 Api.check_delay("GET", url, t1_utc)
+                Api.request_counter += 1
             except httpx.ReadError:
                 raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
             except httpx.ProtocolError as exception:
@@ -141,9 +152,11 @@ class Api:
             headers = self.prepare(api, url, token, "POST", **kwargs)
             kwargs.pop('headers', None)
             try:
+                Api.check_client()
                 t1_utc = datetime.now(tz=tz.tzutc())
                 r = Api.httpx_client.post(url, headers=headers, **kwargs)
                 Api.check_delay("POST", url, t1_utc)
+                Api.request_counter += 1
             except httpx.ReadError:
                 raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
             except httpx.ProtocolError as exception:
@@ -165,9 +178,11 @@ class Api:
             headers = self.prepare(api, url, token, "DELETE", **kwargs)
             kwargs.pop('headers', None)
             try:
+                Api.check_client()
                 t1_utc = datetime.now(tz=tz.tzutc())
                 r = Api.httpx_client.delete(url, headers=headers, **kwargs)
                 Api.check_delay("DELETE", url, t1_utc)
+                Api.request_counter += 1
             except httpx.ReadError:
                 raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
             except httpx.ProtocolError as exception:
@@ -193,10 +208,12 @@ class Api:
                        'Authorization': f"Bearer {token}"}
             with Api.ndjson_lock:
                 try:
+                    Api.check_client()
                     t1_utc = datetime.now(tz=tz.tzutc())
                     r = Api.httpx_client.get(url, follow_redirects=True, headers=headers, params=params)
                     if api.name != ApiType.ApiGamesUser.name:
                         Api.check_delay("GET", url, t1_utc)
+                    Api.request_counter += 1
                 except httpx.ReadError:
                     raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f}: {url}")
                 except httpx.ProtocolError as exception:
