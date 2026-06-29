@@ -45,11 +45,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   deploy:
-    if: ${{ github.ref == 'refs/heads/master' }}
+    if: github.ref_name == github.event.repository.default_branch
     needs: build
     runs-on: ubuntu-latest
     steps:
       - name: deploy
         env:
           DEPLOY_WEBHOOK_URL: ${{ secrets.DEPLOY_WEBHOOK_URL }}
-        run: curl -X POST $DEPLOY_WEBHOOK_URL
+        run: curl -s -w "%{http_code}" --fail-with-body -X POST $DEPLOY_WEBHOOK_URL
