@@ -136,7 +136,7 @@ class ChatAnalysis:
         except:
             self.add_error("ERROR at {now_utc:%Y-%m-%d %H:%M} UTC in update_tournaments")
 
-    def update_chats(self, non_mod, auto_mod=None):
+    def update_chats(self, room_mod, auto_mod=None):
         if self.errors or self.i_update_frequency == IDX_NO_PAGE_UPDATE:
             return
         now_utc = datetime.now(tz=tz.tzutc())
@@ -156,7 +156,7 @@ class ChatAnalysis:
                         update_period = tourn.update_period(now_utc)
                         if self.update_count % update_period != hash_num % update_period:
                             continue
-                self.update_chat(tourn_id, non_mod, auto_mod, now_utc)
+                self.update_chat(tourn_id, room_mod, auto_mod, now_utc)
         except Exception as exception:
             log_exception(exception)
             self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", True, 2)
@@ -167,13 +167,13 @@ class ChatAnalysis:
         self.prepare_reports()
         self.get_tournaments()
 
-    def update_chat(self, tourn_id, non_mod, auto_mod=None, now_utc=None):
+    def update_chat(self, tourn_id, room_mod, auto_mod=None, now_utc=None):
         if now_utc is None:
             now_utc = datetime.now(tz=tz.tzutc())
         tourn = self.tournaments[tourn_id]
         if tourn.is_just_added:
             tourn.is_just_added = False
-        new_messages, deleted_messages = tourn.download(self.msg_lock, now_utc, non_mod)
+        new_messages, deleted_messages = tourn.download(self.msg_lock, now_utc, room_mod)
         with self.msg_lock:
             if not new_messages and tourn.is_error_404_too_long(now_utc) and not tourn.has_sus_messages():
                 del self.tournaments[tourn_id]
@@ -591,13 +591,13 @@ class ChatAnalysis:
         except Exception as exception:
             log_exception(exception)
 
-    def refresh_selected(self, mod, non_mod, auto_mod):
+    def refresh_selected(self, mod, room_mod, auto_mod):
         now_utc = datetime.now(tz=tz.tzutc())
         msg_id = self.selected_msg_id[mod.id]
         if msg_id:
             tourn_id = self.tournament_messages.get(msg_id)
             if tourn_id:
-                self.update_chat(tourn_id, non_mod, auto_mod, now_utc)
+                self.update_chat(tourn_id, room_mod, auto_mod, now_utc)
                 self.state_reports += 1
                 #self.get_tournaments()  # -- uncomment out to update #messages in the tounaments list
         # Uncomment out to update only the selected tournament:
@@ -904,7 +904,7 @@ class ChatAnalysis:
         self.state_tournaments += 1
         return self.get_tournaments(active_tournaments)
 
-    def add_tournament(self, page, non_mod, auto_mod=None):
+    def add_tournament(self, page, non_mod, room_mod, auto_mod=None):
         str_lichess = "https://lichess.org/"
         if page:
             page = page.strip()
@@ -954,7 +954,7 @@ class ChatAnalysis:
                                 }
                         self.tournaments[tourn_id] = Tournament(data, TournType.Study, link=page, is_monitored=True)
                 self.tournaments[tourn_id].is_just_added = True
-                self.update_chat(tourn_id, non_mod, auto_mod)
+                self.update_chat(tourn_id, room_mod, auto_mod)
                 self.state_tournaments += 1
                 self.state_reports += 1
         return self.get_tournaments()

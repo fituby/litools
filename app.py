@@ -20,7 +20,8 @@ from alt import Alts
 from footprints import analyze_footprints, cancel_footprints, get_footprints, variants1, variants2
 from search import search_users
 from mod import Mod, ModInfo, View
-from elements import get_client_id, get_host, get_port, get_num_threads, get_embed_lichess, get_token, get_uri, delta_s, close_account
+from elements import get_client_id, get_host, get_port, get_num_threads, get_embed_lichess
+from elements import get_token, get_room_token, get_uri, delta_s, close_account
 from elements import log, log_exception, log_read
 from database import Mods, Authentication
 from consts import *
@@ -42,6 +43,8 @@ chat = ChatAnalysis()
 auto_mod_token = get_token()
 auto_mod = Mod(auto_mod_token) if auto_mod_token else None
 non_mod = Mod("")
+room_mod_token = get_room_token()
+room_mod = Mod(room_mod_token) if room_mod_token else non_mod
 mod_cache = {}
 re_state = re.compile(r'[\w-]')
 
@@ -277,7 +280,7 @@ def chat_refresh_selected():
         mod = get_mod(request.cookies, update_seenAt=True)
     except:
         return Response(status=400)
-    resp = make_response(chat.refresh_selected(mod, non_mod, auto_mod))
+    resp = make_response(chat.refresh_selected(mod, room_mod, auto_mod))
     return resp
 
 
@@ -351,7 +354,7 @@ def chat_add_tournament():
     except:
         return Response(status=400)
     page = request.form.get("page", "")
-    data = chat.add_tournament(page, non_mod)  # add `, auto_mod` to auto time out after adding a tournament
+    data = chat.add_tournament(page, non_mod, room_mod)  # add `, auto_mod` to auto time out after adding a tournament
     data.update(chat.get_all(mod))
     resp = make_response(data)
     return resp
@@ -547,7 +550,7 @@ def chat_loop():
         if chat.wait_refresh_tournaments():
             chat.update_tournaments(non_mod)
         chat.wait_refresh_chats()
-        chat.update_chats(non_mod, auto_mod)
+        chat.update_chats(room_mod, auto_mod)
         if chat.update_count >= last_update_count + 100:
             last_update_count = chat.update_count
             chat.clear_messages_database()

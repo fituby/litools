@@ -122,6 +122,22 @@ def get_token():
     return token
 
 
+def get_room_token():
+    room_token = os.getenv("ROOM_TOKEN")
+    if not room_token:
+        path_token = os.getenv("ROOM_TOKEN_PATH")
+        if path_token:
+            try:
+                with open(path_token, "r") as file:
+                    room_token = file.read()
+            except:
+                pass
+    if room_token:
+        log("using room token", to_print=True, to_save=True)
+        return room_token
+    return ""
+
+
 def get_db():
     return os.getenv("DB_FILE", "./db/litools.sqlite")
 

@@ -146,7 +146,7 @@ class Tournament:
     def get_endpoint(self):
         return "tournament" if self.t_type == TournType.Arena else "swiss" if self.t_type == TournType.Swiss else ""
 
-    def download(self, msg_lock, now_utc, non_mod):
+    def download(self, msg_lock, now_utc, room_mod):
         new_messages = []
         deleted_messages = []
         if self.errors or self.is_error_404_recently(now_utc):
@@ -166,11 +166,14 @@ class Tournament:
                     new_messages = self.add_messages(db_messages, can_be_old=bool(self.messages))
                 self.is_sync_with_db = True
             headers = {'User-Agent': "litools"}
-            token = None
-            url = self.link if self.link else f"https://lichess.org/{self.get_endpoint()}/{self.id}"
-            if url and self.t_type == TournType.Study:
-                url = f"{url}#players"
-            r = non_mod.api.get(ApiType.TournamentId, url, token=token, headers=headers)
+            if room_mod.token:
+                url = f"https://lichess.org/api/room/{self.id}/chat"
+                r = room_mod.api.get(ApiType.ApiRoomChat, url, token=room_mod.token)
+            else:
+                url = self.link if self.link else f"https://lichess.org/{self.get_endpoint()}/{self.id}"
+                if url and self.t_type == TournType.Study:
+                    url = f"{url}#players"
+                r = room_mod.api.get(ApiType.TournamentId, url, token=None, headers=headers)
             if r.status_code != 200:
                 if r.status_code >= 500:
                     if self.errors_500 and self.errors_500[-1].is_ongoing():
@@ -187,7 +190,10 @@ class Tournament:
                 self.errors_500[-1].complete(now_utc)
             delay = None if self.last_update is None else deltaseconds(now_utc, self.last_update)
             with msg_lock:
-                newest_messages, deleted_messages = self.process_messages(r.text, now_utc, delay)
+                if room_mod.token:
+                    newest_messages, deleted_messages = self.process_room_messages(r, now_utc, delay)
+                else:
+                    newest_messages, deleted_messages = self.process_tourn_messages(r.text, now_utc, delay)
                 Tournament.update_db(newest_messages)
             new_messages.extend(newest_messages)
             self.last_update = now_utc
@@ -206,7 +212,34 @@ class Tournament:
         self.reports = self.get_info(now_utc)
         self.process_frequent_data(now_utc, reset_multi_messages)
 
-    def process_messages(self, text, now_utc, delay):
+    def process_room_messages(self, r, now_utc, delay):
+        deleted_messages = self.delete_old_messages(CHAT_MAX_NUM_OLD_MSGS if self.keep_max_messages else CHAT_MAX_NUM_MSGS)
+        data = r.json()
+        data_users = data.get('users', {})
+        data_lines = data.get('lines', [])
+        # Update users and flairs
+        users = {}
+        for user_id, d in data_users.items():
+            user_name = d['name']
+            users[user_id] = user_name
+            flair = d.get('flair')
+            if flair:
+                self.user_flairs[user_name] = flair
+        # Add messages
+        messages = []
+        for line in data_lines:
+            user_name = users.get(line['user']) or line['user']
+            d = {
+                'u': user_name,
+                't': line['text'],
+                'r': line.get('r', False),
+                'd': line.get('d', False)
+            }
+            messages.append(Message(d, self, now_utc, delay))
+        new_messages = self.add_messages(messages, can_be_old=True)
+        return new_messages, deleted_messages
+
+    def process_tourn_messages(self, text, now_utc, delay):
         i1 = text.find(CHAT_BEGINNING_MESSAGES_TEXT)
         if i1 < 0:
             return [], []
@@ -217,16 +250,15 @@ class Tournament:
         deleted_messages = self.delete_old_messages(CHAT_MAX_NUM_OLD_MSGS if self.keep_max_messages else CHAT_MAX_NUM_MSGS)
         text_json = text[i1:i2 + 1]
         data = json.loads(text_json)
-        self.update_flairs(data)
-        messages = [Message(d, self, now_utc, delay) for d in data]
-        new_messages = self.add_messages(messages, can_be_old=True)
-        return new_messages, deleted_messages
-
-    def update_flairs(self, data):
+        # Update flairs
         for d in data:
             flair = d.get('f', "")
             if flair:
                 self.user_flairs[d['u']] = flair
+        # Add messages
+        messages = [Message(d, self, now_utc, delay) for d in data]
+        new_messages = self.add_messages(messages, can_be_old=True)
+        return new_messages, deleted_messages
 
     def delete_old_messages(self, max_num_msgs=CHAT_MAX_NUM_MSGS):
         deleted_messages = []
