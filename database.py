@@ -2,7 +2,7 @@ from peewee import *
 from elements import get_db
 
 
-db = SqliteDatabase(get_db())
+db = SqliteDatabase(get_db(), pragmas={'timeout': 20})
 
 
 class Mods(Model):

@@ -1,4 +1,4 @@
-LITOOLS_VERSION = "v1.8.1"
+LITOOLS_VERSION = "v1.8.2"
 
 # Chat
 CHAT_TOURNAMENT_FINISHED_AGO = 24 * 60  # [min]
@@ -35,7 +35,7 @@ CHAT_END_MESSAGES_TEXT = '],"resourceType":'
 TOURNEY_STANDING_BEGINNING_TEXT = '"standing":{"page":1,"players":['
 TOURNEY_STANDING_ENDING_TEXT = ']},"socketVersion":'
 HR = '<hr class="my-0" style="border-top:dotted 2px;"/>'
-CHAT_UPDATE_SWISS = False  # loading messages from swiss tourneys doesn't work at the moment anyway
+CHAT_UPDATE_SWISS = True
 DO_AUTO_TIMEOUTS = False
 LOG_RESET_MSGS = False
 MULTI_MSG_MIN_TIMEOUT_SCORE = 300
