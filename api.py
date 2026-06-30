@@ -33,6 +33,7 @@ class ApiType:
     ApiSwiss = Endpoint('api/swiss')
     ApiTournament = Endpoint('api/tournament')
     TournamentId = Endpoint('tournament', API_TOURNEY_PAGE_DELAY)
+    ApiRoomChat = Endpoint('/api/room/chat', API_TOURNEY_PAGE_DELAY)
     PlayerTop = Endpoint('player/top')
     ExplorerLichess = Endpoint('explorer/lichess', 2.0)
     # Get ndjson
