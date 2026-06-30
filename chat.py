@@ -1168,7 +1168,7 @@ def get_current_tournaments(non_mod):
     arenas = []
     for teamId in tournament_teams:
         url = f"https://lichess.org/api/team/{teamId}/arena"
-        data = non_mod.api.get_ndjson(ApiType.ApiTeamArena, url, non_mod.token, Accept="application/nd-json")
+        data = non_mod.api.get_ndjson(ApiType.ApiTeamArena, url, non_mod.token)
         arenas.extend(data)
     # Arena
     url = "https://lichess.org/api/tournament"
@@ -1190,7 +1190,7 @@ def get_current_tournaments(non_mod):
     swiss_ids = set()
     for teamId in tournament_teams:
         url = f"https://lichess.org/api/team/{teamId}/swiss"
-        swiss_data = non_mod.api.get_ndjson(ApiType.ApiTeamSwiss, url, non_mod.token, Accept="application/nd-json")
+        swiss_data = non_mod.api.get_ndjson(ApiType.ApiTeamSwiss, url, non_mod.token, params={'max': 300})
         for swiss in swiss_data:
             try:
                 if swiss['id'] not in swiss_ids:
@@ -1202,7 +1202,7 @@ def get_current_tournaments(non_mod):
                 log_exception(exception)
     # Broadcast
     url = f"https://lichess.org/api/broadcast?nb={NUM_RECENT_BROADCASTS_TO_FETCH}"
-    broadcast_data = non_mod.api.get_ndjson(ApiType.ApiBroadcast, url, non_mod.token, Accept="application/nd-json")
+    broadcast_data = non_mod.api.get_ndjson(ApiType.ApiBroadcast, url, non_mod.token)
     for broadcast in broadcast_data:
         try:
             broadcast_name = broadcast['tour']['name']

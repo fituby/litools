@@ -60,15 +60,38 @@ class ApiType:
     ApiToken_Delete = Endpoint('api/token:delete')
 
 
+MAX_REQUESTS_PER_CONNECTION = 500  # server limit: 1000/2000
+MAX_RETRIES = 2
+
+
+class Client:
+    def __init__(self):
+        self.client_lock = Lock()
+        transport = httpx.HTTPTransport(retries=5, http2=True)
+        transport._pool._max_streams = MAX_REQUESTS_PER_CONNECTION
+        timeout = httpx.Timeout(60.0, connect=5.0)
+        self.httpx = httpx.Client(transport=transport, timeout=timeout)
+        self.request_counter = 0
+
+    def check(self, force_restart=False):
+        if force_restart:
+            print(f"Restarting connection: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f}")
+        with self.client_lock:
+            if force_restart or (self.request_counter >= MAX_REQUESTS_PER_CONNECTION):
+                self.httpx.close()
+                transport = httpx.HTTPTransport(retries=5, http2=True)
+                transport._pool._max_streams = MAX_REQUESTS_PER_CONNECTION
+                timeout = httpx.Timeout(60.0, connect=5.0)
+                self.httpx = httpx.Client(transport=transport, timeout=timeout)
+                self.request_counter = 0
+
+    def restart(self):
+        self.check(force_restart=True)
+
+
 class Api:
     ndjson_lock = Lock()
-
-    MAX_REQUESTS_PER_CONNECTION = 1000  # server limit: 2000
-    transport = httpx.HTTPTransport(retries=5, http2=True)
-    transport._pool._max_streams = MAX_REQUESTS_PER_CONNECTION
-    timeout = httpx.Timeout(60.0, connect=5.0)
-    httpx_client = httpx.Client(transport=transport, timeout=timeout)
-    request_counter = 0
+    clients = {}
 
     def __init__(self):
         self.api_times = defaultdict(list)
@@ -107,13 +130,6 @@ class Api:
         return headers
 
     @staticmethod
-    def check_client():
-        if Api.request_counter >= Api.MAX_REQUESTS_PER_CONNECTION:
-            Api.httpx_client.close()
-            Api.httpx_client = httpx.Client(transport=Api.transport, timeout=Api.timeout)
-            Api.request_counter = 0
-
-    @staticmethod
     def check_delay(tag, url, t1_utc):
         now_utc = datetime.now(tz=tz.tzutc())
         dt = (now_utc - t1_utc).total_seconds()
@@ -122,82 +138,121 @@ class Api:
             short_url = url[19:] if url.startswith("https://lichess.org") else url
             log(f"...{dt:.1f}s to {tag} {short_url}", True)
 
+    @staticmethod
+    def get_client(key):
+        client = Api.clients.get(key)
+        if client:
+            return client
+        client = Client()
+        Api.clients[key] = client
+        return client
+
     def get(self, api: Endpoint, url, token=None, **kwargs):
         with api.lock:
             headers = self.prepare(api, url, token, "GET", **kwargs)
             kwargs.pop('headers', None)
-            try:
-                Api.check_client()
-                t1_utc = datetime.now(tz=tz.tzutc())
-                r = Api.httpx_client.get(url, follow_redirects=True, headers=headers, **kwargs)
-                Api.check_delay("GET", url, t1_utc)
-                Api.request_counter += 1
-            except httpx.ReadError:
-                raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
-            except httpx.ProtocolError as exception:
-                log_exception(exception, to_print=False)
-                time.sleep(6)
-                raise exception
-            except Exception as exception:
-                print(f"Error for {url}")
-                print("Waiting 5s...")
-                time.sleep(5)
-                raise exception
-            if r.status_code == 429:
-                log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
-                time.sleep(60)
+            client = Api.get_client(token)
+            for repeat in range(MAX_RETRIES):
+                try:
+                    client.check()
+                    t1_utc = datetime.now(tz=tz.tzutc())
+                    r = client.httpx.get(url, follow_redirects=True, headers=headers, **kwargs)
+                    Api.check_delay("GET", url, t1_utc)
+                    client.request_counter += 1
+                    if r.status_code == 429:
+                        log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
+                        time.sleep(60)
+                    else:
+                        break
+                except httpx.ReadError:
+                    if repeat < MAX_RETRIES - 1:
+                        client.restart()
+                        continue
+                    raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} GET: {url}")
+                except httpx.ProtocolError as exception:
+                    log_exception(exception, to_print=False)
+                    time.sleep(6)
+                    if repeat < MAX_RETRIES - 1:
+                        client.restart()
+                        continue
+                    raise exception
+                except Exception as exception:
+                    print(f"Error for {url}")
+                    print("Waiting 5s...")
+                    time.sleep(5)
+                    raise exception
             return r
 
     def post(self, api: Endpoint, url, token=None, **kwargs):
         with api.lock:
             headers = self.prepare(api, url, token, "POST", **kwargs)
             kwargs.pop('headers', None)
-            try:
-                Api.check_client()
-                t1_utc = datetime.now(tz=tz.tzutc())
-                r = Api.httpx_client.post(url, headers=headers, **kwargs)
-                Api.check_delay("POST", url, t1_utc)
-                Api.request_counter += 1
-            except httpx.ReadError:
-                raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
-            except httpx.ProtocolError as exception:
-                log_exception(exception, to_print=False)
-                time.sleep(6)
-                raise exception
-            except Exception as exception:
-                print(f"Error for {url}")
-                print("Waiting 5s...")
-                time.sleep(5)
-                raise exception
-            if r.status_code == 429:
-                log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
-                time.sleep(60)
+            client = Api.get_client(token)
+            for repeat in range(MAX_RETRIES):
+                try:
+                    client.check()
+                    t1_utc = datetime.now(tz=tz.tzutc())
+                    r = client.httpx.post(url, headers=headers, **kwargs)
+                    Api.check_delay("POST", url, t1_utc)
+                    client.request_counter += 1
+                    if r.status_code == 429:
+                        log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
+                        time.sleep(60)
+                    else:
+                        break
+                except httpx.ReadError:
+                    if repeat < MAX_RETRIES - 1:
+                        client.restart()
+                        continue
+                    raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} POST: {url}")
+                except httpx.ProtocolError as exception:
+                    log_exception(exception, to_print=False)
+                    time.sleep(6)
+                    if repeat < MAX_RETRIES - 1:
+                        client.restart()
+                        continue
+                    raise exception
+                except Exception as exception:
+                    print(f"Error for {url}")
+                    print("Waiting 5s...")
+                    time.sleep(5)
+                    raise exception
             return r
 
     def delete(self, api: Endpoint, url, token=None, **kwargs):
         with api.lock:
             headers = self.prepare(api, url, token, "DELETE", **kwargs)
             kwargs.pop('headers', None)
-            try:
-                Api.check_client()
-                t1_utc = datetime.now(tz=tz.tzutc())
-                r = Api.httpx_client.delete(url, headers=headers, **kwargs)
-                Api.check_delay("DELETE", url, t1_utc)
-                Api.request_counter += 1
-            except httpx.ReadError:
-                raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
-            except httpx.ProtocolError as exception:
-                log_exception(exception, to_print=False)
-                time.sleep(6)
-                raise exception
-            except Exception as exception:
-                print(f"Error for {url}")
-                print("Waiting 5s...")
-                time.sleep(5)
-                raise exception
-            if r.status_code == 429:
-                log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
-                time.sleep(60)
+            client = Api.get_client(token)
+            for repeat in range(MAX_RETRIES):
+                try:
+                    client.check()
+                    t1_utc = datetime.now(tz=tz.tzutc())
+                    r = client.httpx.delete(url, headers=headers, **kwargs)
+                    Api.check_delay("DELETE", url, t1_utc)
+                    client.request_counter += 1
+                    if r.status_code == 429:
+                        log(f"ERROR: Status 429: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
+                        time.sleep(60)
+                    else:
+                        break
+                except httpx.ReadError:
+                    if repeat < MAX_RETRIES - 1:
+                        client.restart()
+                        continue
+                    raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f} DELETE: {url}")
+                except httpx.ProtocolError as exception:
+                    log_exception(exception, to_print=False)
+                    time.sleep(6)
+                    if repeat < MAX_RETRIES - 1:
+                        client.restart()
+                        continue
+                    raise exception
+                except Exception as exception:
+                    print(f"Error for {url}")
+                    print("Waiting 5s...")
+                    time.sleep(5)
+                    raise exception
             return r
 
     def get_ndjson(self, api, url, token, params=None, Accept="application/x-ndjson"):
@@ -208,28 +263,38 @@ class Api:
             headers = {'Accept': Accept,
                        'Authorization': f"Bearer {token}"}
             with Api.ndjson_lock:
-                try:
-                    Api.check_client()
-                    t1_utc = datetime.now(tz=tz.tzutc())
-                    r = Api.httpx_client.get(url, follow_redirects=True, headers=headers, params=params)
-                    if api.name != ApiType.ApiGamesUser.name:
-                        Api.check_delay("GET", url, t1_utc)
-                    Api.request_counter += 1
-                except httpx.ReadError:
-                    raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f}: {url}")
-                except httpx.ProtocolError as exception:
-                    log_exception(exception, to_print=False)
-                    time.sleep(6)
-                    raise exception
-                except Exception as exception:
-                    print(f"Error for {url}")
-                    print("Waiting 5s...")
-                    time.sleep(5)
-                    raise exception
-                if r.status_code == 429:
-                    if VERBOSE >= 3:
-                        log(f"ERROR: Status 429: waiting 60s... {datetime.now():%H:%M:%S.%f} {url}")
-                    time.sleep(60)
+                client = Api.get_client(token)
+                for repeat in range(MAX_RETRIES):
+                    try:
+                        client.check()
+                        t1_utc = datetime.now(tz=tz.tzutc())
+                        r = client.httpx.get(url, follow_redirects=True, headers=headers, params=params)
+                        if api.name != ApiType.ApiGamesUser.name:
+                            Api.check_delay("GET", url, t1_utc)
+                        client.request_counter += 1
+                        if r.status_code == 429:
+                            if VERBOSE >= 3:
+                                log(f"ERROR: Status 429: waiting 60s... {datetime.now():%H:%M:%S.%f} {url}")
+                            time.sleep(60)
+                        else:
+                            break
+                    except httpx.ReadError:
+                        if repeat < MAX_RETRIES - 1:
+                            client.restart()
+                            continue
+                        raise Exception(f"Timeout: {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M:%S.%f}: {url}")
+                    except httpx.ProtocolError as exception:
+                        log_exception(exception, to_print=False)
+                        if repeat < MAX_RETRIES - 1:
+                            client.restart()
+                            continue
+                        time.sleep(6)
+                        raise exception
+                    except Exception as exception:
+                        print(f"Error for {url}")
+                        print("Waiting 5s...")
+                        time.sleep(5)
+                        raise exception
         if VERBOSE >= 4:
             print(f"finish {datetime.now(tz=tz.tzutc()):%H:%M:%S.%f}: {url}")
         if r.status_code != 200:

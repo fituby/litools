@@ -165,11 +165,11 @@ class Tournament:
                         self.last_update = db_messages[-1].time
                     new_messages = self.add_messages(db_messages, can_be_old=bool(self.messages))
                 self.is_sync_with_db = True
-            headers = {'User-Agent': "litools"}
             if room_mod.token:
                 url = f"https://lichess.org/api/room/{self.id}/chat"
                 r = room_mod.api.get(ApiType.ApiRoomChat, url, token=room_mod.token)
             else:
+                headers = {'User-Agent': "litools"}
                 url = self.link if self.link else f"https://lichess.org/{self.get_endpoint()}/{self.id}"
                 if url and self.t_type == TournType.Study:
                     url = f"{url}#players"

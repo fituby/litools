@@ -2,8 +2,7 @@ from datetime import datetime
 from dateutil import tz
 from enum import IntEnum
 from threading import Lock
-from elements import decode_string, read_notes, datetime_to_abbr_ago, datetime_to_abbr_in, log_exception
-from elements import load_mod_log, load_timeout_log, get_mod_log
+from elements import decode_string, read_notes, datetime_to_abbr_ago, datetime_to_abbr_in, log_exception, load_timeout_log
 from database import Mods
 from api import Api, ApiType
 from consts import BOOST_RING_TOOL
