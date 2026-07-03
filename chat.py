@@ -51,6 +51,7 @@ class ChatAnalysis:
         #self.user_messages = defaultdict(dict)
         self.last_refresh: datetime = None
         self.last_tournaments_update: datetime = None
+        self.last_teams_update: datetime = None
         self.errors = []
         self.warnings = []
         self.i_update_frequency = 1  # len(API_CHAT_REFRESH_PERIOD) - 1
@@ -109,7 +110,7 @@ class ChatAnalysis:
         try:
             if self.tournament_groups["monitored"] or self.tournament_groups["started"] \
                     or self.tournament_groups["created"]:
-                active_tournaments = {t.id: t for t in get_current_tournaments(non_mod)}
+                active_tournaments = {t.id: t for t in self.get_current_tournaments(non_mod)}
                 for tourn_id in list(self.tournaments.keys()):
                     if tourn_id in active_tournaments:
                         self.tournaments[tourn_id].update(active_tournaments[tourn_id])
@@ -1162,58 +1163,61 @@ class ChatAnalysis:
             with self.msg_lock:
                 Messages.delete().where(Messages.time < old_dt).execute()
 
-
-def get_current_tournaments(non_mod):
-    # Arenas of official teams
-    arenas = []
-    for teamId in tournament_teams:
-        url = f"https://lichess.org/api/team/{teamId}/arena"
-        data = non_mod.api.get_ndjson(ApiType.ApiTeamArena, url, non_mod.token)
-        arenas.extend(data)
-    # Arena
-    url = "https://lichess.org/api/tournament"
-    r = non_mod.api.get(ApiType.ApiTournament, url, token=None)
-    if r.status_code != 200:
-        raise Exception(f"ERROR /api/tournament: Status Code {r.status_code}")
-    data = r.json()
-    arenas.extend([*data['created'], *data['started'], *data['finished']])
-    tournaments = []
-    now_utc = datetime.now(tz=tz.tzutc())
-    arena_ids = set()
-    for arena in arenas:
-        if arena['id'] not in arena_ids:
-            arena_ids.add(arena['id'])
-            tourn = Tournament(arena, TournType.Arena)
-            if tourn.is_active(now_utc):
-                tournaments.append(tourn)
-    # Swiss
-    swiss_ids = set()
-    for teamId in tournament_teams:
-        url = f"https://lichess.org/api/team/{teamId}/swiss"
-        swiss_data = non_mod.api.get_ndjson(ApiType.ApiTeamSwiss, url, non_mod.token, params={'max': 300})
-        for swiss in swiss_data:
+    def get_current_tournaments(self, non_mod):
+        now_utc = datetime.now(tz=tz.tzutc())
+        do_teams_update = (not self.last_teams_update) or (delta_s(now_utc, self.last_teams_update) >= PERIOD_UPDATE_TEAMS)
+        self.last_teams_update = now_utc
+        arenas = []
+        # Arenas of official teams
+        if do_teams_update:
+            for teamId in tournament_teams:
+                url = f"https://lichess.org/api/team/{teamId}/arena"
+                data = non_mod.api.get_ndjson(ApiType.ApiTeamArena, url, non_mod.token)
+                arenas.extend(data)
+        # Arena
+        url = "https://lichess.org/api/tournament"
+        r = non_mod.api.get(ApiType.ApiTournament, url, token=None)
+        if r.status_code != 200:
+            raise Exception(f"ERROR /api/tournament: Status Code {r.status_code}")
+        data = r.json()
+        arenas.extend([*data['created'], *data['started'], *data['finished']])
+        tournaments = []
+        arena_ids = set()
+        for arena in arenas:
+            if arena['id'] not in arena_ids:
+                arena_ids.add(arena['id'])
+                tourn = Tournament(arena, TournType.Arena)
+                if tourn.is_active(now_utc):
+                    tournaments.append(tourn)
+        # Swiss
+        if do_teams_update:
+            swiss_ids = set()
+            for teamId in tournament_teams:
+                url = f"https://lichess.org/api/team/{teamId}/swiss"
+                swiss_data = non_mod.api.get_ndjson(ApiType.ApiTeamSwiss, url, non_mod.token, params={'max': 300})
+                for swiss in swiss_data:
+                    try:
+                        if swiss['id'] not in swiss_ids:
+                            swiss_ids.add(swiss['id'])
+                            tourn = Tournament(swiss, TournType.Swiss)
+                            if tourn.is_active(now_utc):
+                                tournaments.append(tourn)
+                    except Exception as exception:
+                        log_exception(exception)
+        # Broadcast
+        url = f"https://lichess.org/api/broadcast?nb={NUM_RECENT_BROADCASTS_TO_FETCH}"
+        broadcast_data = non_mod.api.get_ndjson(ApiType.ApiBroadcast, url, non_mod.token)
+        for broadcast in broadcast_data:
             try:
-                if swiss['id'] not in swiss_ids:
-                    swiss_ids.add(swiss['id'])
-                    tourn = Tournament(swiss, TournType.Swiss)
+                broadcast_name = broadcast['tour']['name']
+                for r in broadcast['rounds']:
+                    r['createdBy'] = "lichess"
+                    r['nbPlayers'] = 0
+                    r['name'] = f"{r['name']} | {broadcast_name}"
+                    r['status'] = "finished" if r.get('finished') else "unknown"
+                    tourn = Tournament(r, TournType.Study, r.get('url', f"https://lichess.org/broadcast/-/-/{r['id']}"))
                     if tourn.is_active(now_utc):
                         tournaments.append(tourn)
             except Exception as exception:
                 log_exception(exception)
-    # Broadcast
-    url = f"https://lichess.org/api/broadcast?nb={NUM_RECENT_BROADCASTS_TO_FETCH}"
-    broadcast_data = non_mod.api.get_ndjson(ApiType.ApiBroadcast, url, non_mod.token)
-    for broadcast in broadcast_data:
-        try:
-            broadcast_name = broadcast['tour']['name']
-            for r in broadcast['rounds']:
-                r['createdBy'] = "lichess"
-                r['nbPlayers'] = 0
-                r['name'] = f"{r['name']} | {broadcast_name}"
-                r['status'] = "finished" if r.get('finished') else "unknown"
-                tourn = Tournament(r, TournType.Study, r.get('url', f"https://lichess.org/broadcast/-/-/{r['id']}"))
-                if tourn.is_active(now_utc):
-                    tournaments.append(tourn)
-        except Exception as exception:
-            log_exception(exception)
-    return tournaments
+        return tournaments
