@@ -61,14 +61,18 @@ class ApiType:
 
 
 MAX_REQUESTS_PER_CONNECTION = 500  # server limit: 1000/2000
-MAX_RETRIES = 2
+MAX_RETRIES = 5
 
 
 class Client:
     def __init__(self):
         self.client_lock = Lock()
-        transport = httpx.HTTPTransport(retries=5, http2=True)
-        transport._pool._max_streams = MAX_REQUESTS_PER_CONNECTION
+        limits = httpx.Limits(
+            max_connections=100,
+            max_keepalive_connections=10,
+            keepalive_expiry=5.0
+        )
+        transport = httpx.HTTPTransport(retries=5, http2=True, limits=limits)
         timeout = httpx.Timeout(60.0, connect=5.0)
         self.httpx = httpx.Client(transport=transport, timeout=timeout)
         self.request_counter = 0
@@ -79,8 +83,12 @@ class Client:
         with self.client_lock:
             if force_restart or (self.request_counter >= MAX_REQUESTS_PER_CONNECTION):
                 self.httpx.close()
-                transport = httpx.HTTPTransport(retries=5, http2=True)
-                transport._pool._max_streams = MAX_REQUESTS_PER_CONNECTION
+                limits = httpx.Limits(
+                    max_connections=100,
+                    max_keepalive_connections=10,
+                    keepalive_expiry=5.0
+                )
+                transport = httpx.HTTPTransport(retries=5, http2=True, limits=limits)
                 timeout = httpx.Timeout(60.0, connect=5.0)
                 self.httpx = httpx.Client(transport=transport, timeout=timeout)
                 self.request_counter = 0
