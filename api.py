@@ -33,8 +33,8 @@ class ApiType:
     ApiSwiss = Endpoint('api/swiss')
     ApiTournament = Endpoint('api/tournament')
     TournamentId = Endpoint('tournament', API_TOURNEY_PAGE_DELAY)
-    ApiRoomChat = Endpoint('/api/room/chat', API_TOURNEY_PAGE_DELAY)
-    PlayerTop = Endpoint('player/top')
+    ApiRoomChat = Endpoint('api/room/chat', API_TOURNEY_PAGE_DELAY)
+    PlayerTop = Endpoint('api/player/top')
     ExplorerLichess = Endpoint('explorer/lichess', 2.0)
     # Get ndjson
     ApiGamesUser = Endpoint('api/games/user')
@@ -283,8 +283,7 @@ class Api:
                             Api.check_delay("GET", url, t1_utc)
                         client.request_counter += 1
                         if r.status_code == 429:
-                            if VERBOSE >= 3:
-                                log(f"ERROR: Status 429: waiting 60s... {datetime.now():%H:%M:%S.%f} {url}")
+                            log(f"ERROR: Status 429: waiting 60s... {datetime.now():%H:%M:%S.%f} {url}")
                             time.sleep(60)
                         else:
                             break
@@ -308,12 +307,12 @@ class Api:
         if VERBOSE >= 4:
             print(f"finish {datetime.now(tz=tz.tzutc()):%H:%M:%S.%f}: {url}")
         if r.status_code != 200:
-            try:
-                i1 = url.find(".org/")
-                i2 = url.rfind("/")
-                endpoint = url[i1 + 4:i2 + 1]
-            except:
+            i1 = url.find(".org/")
+            if i1 < 0:
                 endpoint = url
+            else:
+                i2 = url.rfind("/")
+                endpoint = url[i1 + 4:] if i2 - i1 < 10 else url[i1 + 4:i2 + 1]
             raise Exception(f"{endpoint}: Status code = {r.status_code}")
         content = r.content.decode("utf-8")
         lines = content.split("\n")[:-1]

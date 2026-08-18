@@ -29,11 +29,11 @@ def update_leaderboard(mod, var):
         if delta.total_seconds() < LB_UPDATE_PERIOD:
             return leaderboard[variant], lb_last_update[variant], variant_name
     leaderboard[variant] = []
-    url = f"https://lichess.org/player/top/200/{variant}"
+    url = f"https://lichess.org/api/player/top/200/{variant}"
     headers = {"Accept": "application/vnd.lichess.v3+json"}
     users = mod.api.get(ApiType.PlayerTop, url, token=None, headers=headers)
     if users.status_code != 200:
-        log(f"WARNING: {users.status_code} Status Code for /player/top/200/{variant}", to_print=True, to_save=True)
+        log(f"WARNING: {users.status_code} Status Code for /api/player/top/200/{variant}", to_print=True, to_save=True)
     users_json = users.json()
     ids = [user['id'] for user in users_json['users']]
     url = "https://lichess.org/api/users"
