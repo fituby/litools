@@ -710,7 +710,7 @@ def login():
         params = {'response_type': 'code',
                   'client_id': get_client_id(),
                   'redirect_uri': f'{get_uri()}{AUTH_ENDPOINT}',
-                  'scope': 'web:mod',
+                  'scope': 'web:mod note:write',
                   'code_challenge_method': 'S256',
                   'code_challenge': challenge,
                   'state': state}
