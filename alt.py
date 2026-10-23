@@ -221,7 +221,7 @@ class Alt:
             examples = []
             step = max(1, (len(games) - 1) // NUM_EXAMPLE_GAMES)
             for i in range(len(games) - 1, -1, -step):
-                game_url = f"https://lichess.org/{games[i]['id']}"
+                game_url = f"https://lichess.org/game/{games[i]['id']}"
                 link = f'<a href="{game_url}" class="mx-1" target="_blank">{len(examples) + 1}</a>'
                 examples.append(link)
                 if len(examples) >= NUM_EXAMPLE_GAMES:
@@ -579,8 +579,8 @@ class Alts:
                     #step = max(1, (len(overlapping_games) - 1) // NUM_EXAMPLE_GAMES)
                     #for i in range(len(overlapping_games) - 1, -1, -step):
                     for og in sorted(overlapping_games, key=lambda g: g.interval_s, reverse=True):
-                        game1_url = f"https://lichess.org/{og.my_game['id']}"
-                        game2_url = f"https://lichess.org/{og.opp_game['id']}"
+                        game1_url = f"https://lichess.org/game/{og.my_game['id']}"
+                        game2_url = f"https://lichess.org/game/{og.opp_game['id']}"
                         link1 = f'<a href="{game1_url}" target="_blank">{len(examples) + 1}</a>'
                         link2 = f'<a href="{game2_url}" target="_blank">{len(examples) + 1}</a>'
                         interval = deltainterval(og.interval_s, show_seconds=True, short=True)
