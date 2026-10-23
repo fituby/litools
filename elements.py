@@ -12,7 +12,7 @@ import base64
 import struct
 from itertools import chain
 from pygal.style import DarkStyle
-from api import ApiType
+from api import ApiType, get_client_id
 from consts import *
 
 
@@ -156,10 +156,6 @@ def get_num_threads():
 
 def get_uri():
     return os.getenv("APP_URL", "http://localhost:5000")
-
-
-def get_client_id():
-    return os.getenv("CLIENT_ID", "litools")
 
 
 def get_embed_lichess():

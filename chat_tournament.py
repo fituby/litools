@@ -169,11 +169,10 @@ class Tournament:
                 url = f"https://lichess.org/api/room/{self.id}/chat"
                 r = room_mod.api.get(ApiType.ApiRoomChat, url, token=room_mod.token)
             else:
-                headers = {'User-Agent': "litools"}
                 url = self.link if self.link else f"https://lichess.org/{self.get_endpoint()}/{self.id}"
                 if url and self.t_type == TournType.Study:
                     url = f"{url}#players"
-                r = room_mod.api.get(ApiType.TournamentId, url, token=None, headers=headers)
+                r = room_mod.api.get(ApiType.TournamentId, url, token=None)
             if r.status_code != 200:
                 if r.status_code >= 500:
                     if self.errors_500 and self.errors_500[-1].is_ongoing():

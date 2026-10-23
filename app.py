@@ -20,6 +20,7 @@ from alt import Alts
 from footprints import analyze_footprints, cancel_footprints, get_footprints, variants1, variants2
 from search import search_users
 from mod import Mod, ModInfo, View
+from api import get_user_agent
 from elements import get_client_id, get_host, get_port, get_num_threads, get_embed_lichess
 from elements import get_token, get_room_token, get_uri, delta_s, close_account
 from elements import log, log_exception, log_read
@@ -754,7 +755,7 @@ def oauth2_callback():
         if re_state.sub("", code):
             log_bad_request("malformed code")
             raise Exception(f"Wrongs code='{state}'.")
-        headers = {'Content-Type': 'application/json'}
+        headers = {'Content-Type': 'application/json', 'User-Agent': get_user_agent()}
         verifier = ""
         with Mod.auth_lock:
             try:

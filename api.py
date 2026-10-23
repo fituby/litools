@@ -7,7 +7,7 @@ from dateutil import tz
 import traceback
 import os
 from threading import Lock
-from consts import API_TOURNEY_PAGE_DELAY, VERBOSE
+from consts import API_TOURNEY_PAGE_DELAY, VERBOSE, LITOOLS_VERSION
 
 
 class Endpoint:
@@ -64,17 +64,29 @@ MAX_REQUESTS_PER_CONNECTION = 500  # server limit: 1000/2000
 MAX_RETRIES = 5
 
 
+def get_client_id():
+    return os.getenv("CLIENT_ID", "litools")
+
+
+def get_user_agent():
+    return f"{get_client_id()}/{LITOOLS_VERSION[1:]}"
+
+
+def create_httpx_client():
+    limits = httpx.Limits(
+        max_connections=100,
+        max_keepalive_connections=10,
+        keepalive_expiry=5.0
+    )
+    transport = httpx.HTTPTransport(retries=5, http2=True, limits=limits)
+    timeout = httpx.Timeout(60.0, connect=5.0)
+    return httpx.Client(transport=transport, timeout=timeout, headers={'User-Agent': get_user_agent()})
+
+
 class Client:
     def __init__(self):
         self.client_lock = Lock()
-        limits = httpx.Limits(
-            max_connections=100,
-            max_keepalive_connections=10,
-            keepalive_expiry=5.0
-        )
-        transport = httpx.HTTPTransport(retries=5, http2=True, limits=limits)
-        timeout = httpx.Timeout(60.0, connect=5.0)
-        self.httpx = httpx.Client(transport=transport, timeout=timeout)
+        self.httpx = create_httpx_client()
         self.request_counter = 0
 
     def check(self, force_restart=False):
@@ -83,14 +95,7 @@ class Client:
         with self.client_lock:
             if force_restart or (self.request_counter >= MAX_REQUESTS_PER_CONNECTION):
                 self.httpx.close()
-                limits = httpx.Limits(
-                    max_connections=100,
-                    max_keepalive_connections=10,
-                    keepalive_expiry=5.0
-                )
-                transport = httpx.HTTPTransport(retries=5, http2=True, limits=limits)
-                timeout = httpx.Timeout(60.0, connect=5.0)
-                self.httpx = httpx.Client(transport=transport, timeout=timeout)
+                self.httpx = create_httpx_client()
                 self.request_counter = 0
 
     def restart(self):
