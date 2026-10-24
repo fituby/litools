@@ -152,7 +152,7 @@ class Similarities:
             if not self.curr_game or not self.curr_move or self.curr_move_num is None:
                 return ""
             side = "" if self.curr_side == chess.WHITE else "/black"
-            game_link = f"https://lichess.org/{self.curr_game}{side}#{self.curr_move_num}"
+            game_link = f"https://lichess.org/game/{self.curr_game}{side}#{self.curr_move_num}"
             return game_link
 
     def moves_processed(self):

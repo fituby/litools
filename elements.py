@@ -1330,7 +1330,7 @@ class ModAction:
 
     def get_full_action(self):
         if self.action == "cheatDetected" and self.details.startswith("game "):
-            return f'<a class="text-info" href="https://lichess.org/{self.details[5:]}" ' \
+            return f'<a class="text-info" href="https://lichess.org/game/{self.details[5:]}" ' \
                    f'target="_blank">{self.get_action()}</a>'
         if self.details:
             style = f' style="text-decoration:none;"' if self.is_warning() else ""
