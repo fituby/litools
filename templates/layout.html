@@ -10,68 +10,27 @@
   <meta name="theme-color" content="{{view.theme_color|safe}}" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no" />
   <link rel="stylesheet" href="https://bootswatch.com/4/{{view.theme|safe}}/bootstrap.min.css" crossorigin="anonymous" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.2/css/all.min.css" />
-  <style type="text/css">.selectee:hover{background-color: rgba(128,128,128,0.25);}</style>
-  <style type="text/css">.selected-msgA{border-width: 3px !important;}</style>
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js" type="text/javascript"></script>
-{% block scripts %}{% endblock %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
-<script src="{{url_for('static', filename='bootstrap.min.js')}}" type="text/javascript"></script>
-<script>
-function setCookie(name, value, days=3650) {
-  var expires = "";
-  if (days) {
-      var date = new Date();
-      date.setTime(date.getTime() + (days*24*60*60*1000));
-      expires = "; expires=" + date.toUTCString();
-  }
-  document.cookie = name + "=" + (value || "")  + expires + "; path=/;samesite=strict";
-}
-function getCookie(name) {
-  var cookies = document.cookie.split(';');
-  for (var i = 0; i < cookies.length; i++) {
-    var c = cookies[i].trimStart();
-    if (c.indexOf(name + "=") == 0)
-      return c.substring(name.length + 1, c.length);
-  }
-  return null;
-}
-function copyTextToClipboard(text) {
-  var textArea = document.createElement("textarea");
-  textArea.style.position = 'fixed';
-  textArea.style.top = 0;
-  textArea.style.left = 0;
-  textArea.style.width = '2em';
-  textArea.style.height = '2em';
-  textArea.style.padding = 0;
-  textArea.style.border = 'none';
-  textArea.style.outline = 'none';
-  textArea.style.boxShadow = 'none';
-  textArea.style.background = 'transparent';
-  textArea.value = text;
-  document.body.appendChild(textArea);
-  textArea.focus();
-  textArea.select();
-  try {
-    var successful = document.execCommand('copy');
-  } catch (err) {
-    console.log('Oops, unable to copy');
-  }
-  document.body.removeChild(textArea);
-}
-function userlink(username) {
-  if (!username)
-    return "";
-  return `<a href="https://lichess.org/@/${username}" target="_blank">${username}</a>`;
-}
-</script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+  <style>
+    .selectee:hover {background-color: rgba(128,128,128,0.25);}
+    .selected-msgA {border-width: 3px !important;}
+    .abbr-plain {text-decoration: none; cursor: inherit;}
+    th {cursor: default;}
+    #loadOverlay {background-color: {{view.theme_color|safe}}; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000;}
+    #mainOverlay {display: none;}
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
+  <script src="{{url_for('static', filename='bootstrap.min.js')}}"></script>
+  <script src="{{url_for('static', filename='common.js')}}"></script>
+  {% block libs %}{% endblock %}
+  {% block scripts %}{% endblock %}
 </head>
-<body>
-  <div id="loadOverlay" style="background-color:{{view.theme_color|safe}}; position:absolute; top:0px; left:0px; width:100%; height:100%; z-index:2000;"></div>
-  <div id="mainOverlay" style="display:none;">
+<body data-mode="{{view.mode}}">
+  <div id="loadOverlay"></div>
+  <div id="mainOverlay">
   {% include 'nav.html' %}
   {% block main %}{% endblock %}
-  {% include 'footer.html' %}
   </div>
 </body>
 </html>

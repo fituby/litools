@@ -148,21 +148,12 @@
 
 {% block scripts %}
 <script>
-  $(document).ready(function () {
-    $("#loadOverlay").css("display", "none");
-    $("#mainOverlay").css("display", "block");
-  });
-
-  function revoke_token(obj) {
-    var token_hash = $(obj).closest('tr').attr('id');
+  function revoke_token(button) {
+    const row = $(button).closest('tr');
+    const token_hash = row.attr('id');
     if (token_hash)
-      $.ajax({
-        url: `/revoke_token/${token_hash}`,
-        type: "delete",
-        success: function (result) {
-          $(obj).closest('tr').remove();
-        }
-      });
+      $.ajax({url: `/revoke_token/${encodeURIComponent(token_hash)}`, type: "delete"})
+        .done(() => row.remove());
   }
 </script>
 {% endblock %}

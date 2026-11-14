@@ -1,0 +1,26 @@
+{% macro mode_buttons(btn_class="") %}
+<div class="btn-group btn-group-toggle">
+  <button id="mode_0" class="btn btn-secondary {{btn_class}}" type="button" onclick="update_mode(0);">Auto</button>
+  <button id="mode_1" class="btn btn-secondary {{btn_class}}" type="button" onclick="update_mode(1);">Dark</button>
+  <button id="mode_2" class="btn btn-secondary {{btn_class}}" type="button" onclick="update_mode(2);">Light</button>
+</div>
+{% endmacro %}
+
+{% macro mode_setting(wrapper_class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2") %}
+<div class="{{wrapper_class}}">
+  <p class="pr-2 m-0">Mode</p>
+  {{ mode_buttons() }}
+</div>
+{% endmacro %}
+
+{% macro datatables() %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net/1.13.11/jquery.dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net-bs4/1.13.11/dataTables.bootstrap4.min.js"></script>
+{% endmacro %}
+
+{% macro spinner(id, text, cls="d-none justify-content-center align-items-center my-3", text_id=None) %}
+<div id="{{id}}" class="{{cls}}">
+  <div class="spinner-border text-secondary" role="status"></div>
+  <span{% if text_id %} id="{{text_id}}"{% endif %} class="ml-3 text-secondary text-truncate">{{text|safe}}</span>
+</div>
+{% endmacro %}

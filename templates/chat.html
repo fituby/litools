@@ -227,7 +227,6 @@
   function is_clickable() {
     return (new Date().getTime()) >= last_update + 1000;
   }
-  const sleeping = ms => new Promise(res => setTimeout(res, ms));
   async function refresh(to_wait=1000) {
     if (to_wait > 0)
       await sleeping(to_wait);
