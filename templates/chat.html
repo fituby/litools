@@ -1,4 +1,5 @@
 {% extends 'layout.html' %}
+{% from 'macros.html' import mode_buttons %}
 
 {% block main %}
 <div class="container-fluid m-0 px-2" style="max-width:96vw">
@@ -23,19 +24,15 @@
             <div class="card-body p-0">
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
                 <p class="pr-2 m-0">Mode</p>
-                <div class="btn-group btn-group-toggle">
-                  <button id="mode_0" class="btn btn-secondary py-1" onclick="update_mode(0);">Auto</button>
-                  <button id="mode_1" class="btn btn-secondary py-1" onclick="update_mode(1);">Dark</button>
-                  <button id="mode_2" class="btn btn-secondary py-1" onclick="update_mode(2);">Light</button>
-                </div>
+                {{ mode_buttons("py-1") }}
               </div>
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
                 <p class="pr-2 m-0">Update</p>
                 <div class="btn-group btn-group-toggle">
-                  <button id="update_frequency_1" class="btn btn-secondary py-1" onclick="update_frequency(1);">Fast</button>
-                  <button id="update_frequency_2" class="btn btn-secondary py-1" onclick="update_frequency(2);">Medium</button>
-                  <button id="update_frequency_3" class="btn btn-secondary py-1" onclick="update_frequency(3);">Slow</button>
-                  <button id="update_frequency_0" class="btn btn-secondary py-1" onclick="update_frequency(0);">Never</button>
+                  <button id="update_frequency_1" class="btn btn-secondary py-1" type="button" onclick="update_frequency(1);">Fast</button>
+                  <button id="update_frequency_2" class="btn btn-secondary py-1" type="button" onclick="update_frequency(2);">Medium</button>
+                  <button id="update_frequency_3" class="btn btn-secondary py-1" type="button" onclick="update_frequency(3);">Slow</button>
+                  <button id="update_frequency_0" class="btn btn-secondary py-1" type="button" onclick="update_frequency(0);">Never</button>
                 </div>
               </div>
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
@@ -50,15 +47,11 @@
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
                 <span class="pr-2 m-0">Languages</span>
                 <div class="btn-group btn-group-toggle">
-                  <button id="filter_lang_1" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(1);"><abbr title="English" style="text-decoration:none;cursor:inherit;">En</abbr></button>
-                  <button id="filter_lang_2" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(2);"><abbr title="Russian" style="text-decoration:none;cursor:inherit;">Ru</abbr></button>
-                  <button id="filter_lang_3" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(3);"><abbr title="German" style="text-decoration:none;cursor:inherit;">De</abbr></button>
-                  <button id="filter_lang_4" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(4);"><abbr title="Spanish" style="text-decoration:none;cursor:inherit;">Es</abbr></button>
-                  <button id="filter_lang_5" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(5);"><abbr title="Italian" style="text-decoration:none;cursor:inherit;">It</abbr></button>
-                  <button id="filter_lang_6" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(6);"><abbr title="Hindi" style="text-decoration:none;cursor:inherit;">Hi</abbr></button>
-                  <button id="filter_lang_7" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(7);"><abbr title="French" style="text-decoration:none;cursor:inherit;">Fr</abbr></button>
-                  <button id="filter_lang_8" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(8);"><abbr title="Turkish" style="text-decoration:none;cursor:inherit;">Tr</abbr></button>
-                  <button id="filter_lang_0" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs(0);"><abbr title="Spam, links, etc." style="text-decoration:none;cursor:inherit;">Spam</abbr></button>
+                  {% for i, name, abbr in [(1, "English", "En"), (2, "Russian", "Ru"), (3, "German", "De"), (4, "Spanish", "Es"),
+                                           (5, "Italian", "It"), (6, "Hindi", "Hi"), (7, "French", "Fr"), (8, "Turkish", "Tr"),
+                                           (0, "Spam, links, etc.", "Spam")] %}
+                  <button id="filter_lang_{{i}}" class="btn btn-success py-1 px-2" type="button" onclick="filter_langs({{i}});"><abbr title="{{name}}" class="abbr-plain">{{abbr}}</abbr></button>
+                  {% endfor %}
                 </div>
               </div>
             </div>
@@ -178,357 +171,304 @@
     </div>
   </div>
 </div>
-{#<div class="container-fluid px-0">
-  <iframe id="embed_frame" class="container-fluid px-0" style="min-width:60vw; min-height:96vh;" src="https://lichess.org/mod/public-chat" allowtransparency="true" frameborder="0"></iframe>
-</div>#}
 {% endblock %}
 
 {% block scripts %}
   <script>
-  $(document).ready(function() {
-    update_mode({{view.mode|safe}}, false);
-    if (window.matchMedia)
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
-        if ($('#mode_0').is('.active'))
-          update_mode(event.matches ? -1 : -2);
-      });
-    $("#tournament_link").on('keypress', tournament_entered);
-    update_frequency({{update_frequency}}, false);
+  const UPDATE_PERIODS = [1, 5, 25, 60];  // seconds, indexed by update frequency (0 = "Never")
+  const SCORE_FILTERS = [0, 20, 40, 60];
+  const NUM_LANGS = 9;
+  const TOURNAMENT_TABS = ["tournaments", "started", "created", "finished"];
+  const ERROR_RETRY_MS = 5000;
+
+  let notes_user = "";
+  let notes_msgs = [];
+  let state_tournaments = 0;
+  let state_reports = 0;
+  const hidden_msgs = new Set();
+  const deleted_mmsgs = {};  // multi-message id -> time it was dismissed
+  let last_update = Date.now();
+  let is_reviewed = false;
+  let update_frequency_val = {{ update_frequency|tojson }};
+  let next_report_id_to_select = 0;
+
+  $(function() {
+    onEnter("#tournament_link", add_tournament);
+    update_frequency(update_frequency_val);
     filter_score(0, false);
     reset_langs();
     $("#switchAutoSelect").prop('checked', is_autoselect());
     $("#switchHideFlairs").prop('checked', !is_flairs());
-    $("#tournament_settings").css("display","none");
-    $("#dubious_messages").css("display","none");
-    $("#multiline_messages").css("display","none");
-    $("#loadOverlay").css("display","none");
-    $("#mainOverlay").css("display","block");
+    $("#tournament_settings, #dubious_messages, #multiline_messages").hide();
     clear_notes();
-    refresh(0);
+    refresh_loop();
   });
-  var notes_user = "";
-  var notes_msgs = [];
-  var state_tournaments = 0;
-  var state_reports = 0;
-  var hidden_msgs = new Set();
-  var deleted_mmsgs = {};
-  var last_update = new Date().getTime();
-  var is_reviewed = false;
-  var update_periods = [1, 5, 25, 60];
-  var update_period = update_periods[{{update_frequency}}];
-  var next_report_id_to_select = 0;
-  function tournament_entered(e) {
-    if (!e) e = window.event;
-    var keyCode = e.code || e.key;
-    if (keyCode == 'Enter') {
-      add_tournament();
-    }
-  }
+
+  // Prevents clicks on buttons that were just moved by an update.
   function is_clickable() {
-    return (new Date().getTime()) >= last_update + 1000;
+    return Date.now() >= last_update + 1000;
   }
-  async function refresh(to_wait=1000) {
-    if (to_wait > 0)
-      await sleeping(to_wait);
-    if ($('#update_frequency_0').is('.active')) {
-      refresh();
-    }
-    else {
-      await $.ajax({url: `/chat/update/${state_tournaments}`, type: "post"})
-        .done(function(data, textStatus, jqXHR) {
-          $.ajax({url: `/chat/process/${state_reports}`, type: "post"})
-            .done(function(data_chats, textStatus, jqXHR) {
-              if ($('#update_frequency_0').is('.active')) {
-                refresh();
-              }
-              else {
-                is_new = update_data(data_chats);
-                if (is_new) {
-                  var new_last_update = new Date().getTime();
-                  var delay = update_period * 1000 + last_update - new_last_update;
-                  last_update = new_last_update;
-                  refresh(delay);
-                }
-                else {
-                  refresh();
-                }
-              }
-            });
-          if (data['state_tournaments'] != 0)
-            $("#tournament_settings").css("display","block");
-          update_tournament_list(data);
-        });
+
+  function is_paused() {
+    return update_frequency_val == 0;
+  }
+
+  // Polls the tournament list and the reports. Errors (e.g. server restart) are retried instead of stopping the loop.
+  async function refresh_loop() {
+    let delay = 0;
+    for (;;) {
+      await sleeping(delay);
+      delay = 1000;
+      if (is_paused())
+        continue;
+      try {
+        const data = await $.post(`/chat/update/${state_tournaments}`);
+        if (data['state_tournaments'] != 0)
+          $("#tournament_settings").show();
+        update_tournament_list(data);
+        const data_chats = await $.post(`/chat/process/${state_reports}`);
+        if (!is_paused() && update_data(data_chats)) {
+          const now = Date.now();
+          delay = UPDATE_PERIODS[update_frequency_val] * 1000 + last_update - now;
+          last_update = now;
+        }
+      } catch (xhr) {
+        console.error("Chat update failed", xhr.status ?? xhr);
+        delay = ERROR_RETRY_MS;
+      }
     }
   }
+
   function update_data(data_chats) {
     if (data_chats['state_reports'] == state_reports)
       return false;
     state_reports = data_chats['state_reports'];
-    if (data_chats["reports"] || data_chats["multiline-reports"]) {
-      $("#dubious_messages").css("display","block");
-      $("#multiline_messages").css("display","block");
-      $("#clean_messages").removeClass("d-flex").addClass("d-none");
+    const has_reports = !!(data_chats["reports"] || data_chats["multiline-reports"]);
+    $("#dubious_messages, #multiline_messages").toggle(has_reports);
+    if (has_reports) {
       is_reviewed = true;
-      $("#chat_downloading").removeClass("d-flex").addClass("d-none");
-    } else {
-      $("#dubious_messages").css("display","none");
-      $("#multiline_messages").css("display","none");
-      if (is_reviewed)
-        $("#clean_messages").removeClass("d-none").addClass("d-flex");
+      setVisible("#clean_messages", false, "d-flex");
+      setVisible("#chat_downloading", false, "d-flex");
     }
+    else if (is_reviewed)
+      setVisible("#clean_messages", true, "d-flex");
     $('#chat_reports').html(data_chats["reports"]);
     $('#multiline_chat_reports').html(data_chats["multiline-reports"]);
-    $('#update_time').html(data_chats["time"]);
+    $('#update_time').text(data_chats["time"]);
     filter_out();
     set_selection(data_chats);
     filter_messages();
     update_flairs();
-    for (var msg_id of hidden_msgs) {
-      $(`#msgA${msg_id}`).css("display","none");
-      $(`#msgB${msg_id}`).css("display","none");
-    }
-    var to_delete = new Set();
-    for (var msg_id in deleted_mmsgs) {
-      $(`#mmsg${msg_id}`).css("display","none");
-      if (new Date().getTime() >= deleted_mmsgs[msg_id] + 300000)
-        to_delete.add(msg_id);
-    }
-    for (var msg_id of to_delete) {
-      delete deleted_mmsgs[msg_id];
+    for (const msg_id of hidden_msgs)
+      $(`#msgA${msg_id}, #msgB${msg_id}`).hide();
+    const now = Date.now();
+    for (const msg_id in deleted_mmsgs) {
+      $(`#mmsg${msg_id}`).hide();
+      if (now >= deleted_mmsgs[msg_id] + 300000)
+        delete deleted_mmsgs[msg_id];
     }
     return true;
   }
+
   function update_tournament_list(data) {
     if (data['state_tournaments'] == state_tournaments)
       return;
     state_tournaments = data['state_tournaments'];
-    $('#tournaments_tournaments').html(data['tournaments']);
-    $('#tournaments_created').html(data['created']);
-    $('#tournaments_started').html(data['started']);
-    $('#tournaments_finished').html(data['finished']);
+    for (const tab of TOURNAMENT_TABS)
+      $(`#tournaments_${tab}`).html(data[tab]);
   }
+
+  // Message ids are prefixed with the section letter: A = reports, B = multi-line reports, C = selected chat,
+  // F = selected user's messages, T = tournament.
+  function is_message_id(msg_id) {
+    return msg_id && msg_id.length > 1 && msg_id != "--" && !msg_id.startsWith('T');
+  }
+
   function hide_msg(msg_id, flag) {
-    if (!msg_id || msg_id.length <= 1 || msg_id == "--" || msg_id.startsWith('T'))
+    if (!is_message_id(msg_id))
       return;
     if (flag)
-      hidden_msgs.add(`${msg_id.substring(1)}`);
+      hidden_msgs.add(msg_id.substring(1));
     else
-      hidden_msgs.delete(`${msg_id.substring(1)}`);
+      hidden_msgs.delete(msg_id.substring(1));
   }
+
+  function post_and_update(url, data) {
+    return $.post(url, data).done(update_data);
+  }
+
   function set_ok(msg_id) {
-    //if (!is_clickable()) return;
-    var next_id = is_autoselect() ? get_next_report_id(msg_id) : null;
+    const next_id = is_autoselect() ? get_next_report_id(msg_id) : null;
     next_report_id_to_select = next_id;
     if (!msg_id.startsWith('C') && !msg_id.startsWith('F'))
-      $(`#msg${msg_id}`).css("display","none");
+      $(`#msg${msg_id}`).hide();
     hide_msg(msg_id, true);
-    $.ajax({url: `/chat/set_msg_ok/${msg_id}`, type: "post"})
-        .done(function(data_chats, textStatus, jqXHR) {
-          hide_msg(msg_id, false);
-          update_data(data_chats);
-          if (next_id && (next_id == next_report_id_to_select))
-            select_msg(next_id);
-        });
-  }
-  function timeout(msg_id, reason=0) {
-    if (reason == 0 && !is_clickable()) return;
-    //var next_id = null;
-    if (msg_id.startsWith('A') || msg_id.startsWith('C') || msg_id.startsWith('F')) {
-      //if (is_autoselect())
-      //  next_id = get_next_report_id(msg_id);
-      var m_id = msg_id.substring(1);
-      $(`#msgA${m_id}`).css("display","none");
-      $(`#msgC${m_id} .btn`).css("display","none");
-      $(`#msgF${m_id} .btn`).css("display","none");
-    }
-    hide_msg(msg_id, true);
-    $.ajax({url: `/chat/timeout/${msg_id}/${reason}`, type: "post"})
-      .done(function(data_chats, textStatus, jqXHR) {
+    $.post(`/chat/set_msg_ok/${msg_id}`)
+      .done(data_chats => {
         hide_msg(msg_id, false);
         update_data(data_chats);
-        //if (next_id)
-        //  select_msg(next_id);
+        if (next_id && next_id == next_report_id_to_select)
+          select_msg(next_id);
       });
   }
-  function timeout_multi(msg_id, reason=0) {
-    if (reason == 0 && !is_clickable()) return;
-    $(`#mmsg${msg_id}`).css("display","none");
-    $.ajax({url: `/chat/timeout_multi/${msg_id}/${reason}`, type: "post"})
-      .done(function(data_chats, textStatus, jqXHR) {
+
+  function timeout(msg_id, reason = 0) {
+    if (reason == 0 && !is_clickable())
+      return;
+    if (['A', 'C', 'F'].includes(msg_id[0])) {
+      const m_id = msg_id.substring(1);
+      $(`#msgA${m_id}`).hide();
+      $(`#msgC${m_id} .btn, #msgF${m_id} .btn`).hide();
+    }
+    hide_msg(msg_id, true);
+    $.post(`/chat/timeout/${msg_id}/${reason}`)
+      .done(data_chats => {
+        hide_msg(msg_id, false);
         update_data(data_chats);
       });
   }
+
+  function timeout_multi(msg_id, reason = 0) {
+    if (reason == 0 && !is_clickable())
+      return;
+    $(`#mmsg${msg_id}`).hide();
+    post_and_update(`/chat/timeout_multi/${msg_id}/${reason}`);
+  }
+
   function set_multi_ok(msg_id) {
-    if (!is_clickable()) return;
-    $(`#mmsg${msg_id}`).css("display","none");
-    deleted_mmsgs[msg_id] = new Date().getTime();
-    $.ajax({url: `/chat/set_multi_msg_ok/${msg_id}`, type: "post"});
+    if (!is_clickable())
+      return;
+    $(`#mmsg${msg_id}`).hide();
+    deleted_mmsgs[msg_id] = Date.now();
+    $.post(`/chat/set_multi_msg_ok/${msg_id}`);
   }
-  function warn(obj, username, subject) {
-    if (!is_clickable()) return;
+
+  function warn(button, username, subject) {
+    if (!is_clickable())
+      return;
     if (subject == "kidMode_Note")
-      $(obj).css("display","none");
+      $(button).hide();
     else
-      $('#warn-ban').css("display","none");
-    $.ajax({url: `/chat/warn/${username}/${subject}`, type: "post"})
-      .done(function(data_chats, textStatus, jqXHR) {
-        update_data(data_chats);
-      });
+      $('#warn-ban').hide();
+    post_and_update(`/chat/warn/${encodeURIComponent(username)}/${encodeURIComponent(subject)}`);
   }
+
   function clear_errors(tourn_id) {
-    $.ajax({url: `/chat/clear_errors/${tourn_id}`, type: "post"})
-      .done(function(data_chats, textStatus, jqXHR) {
-        update_data(data_chats);
-      });
+    post_and_update(`/chat/clear_errors/${tourn_id}`);
   }
-  function update_mode(val, to_request=true) {
-    if (val == 0)
-      val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
-    for (var i = 0; i < 3; i++) {
-      if (val == i || (val < 0 && i == 0))
-        $(`#mode_${i}`).addClass("active");
-      else
-        $(`#mode_${i}`).removeClass("active");
-    }
-    if (to_request && val != "{{view.mode}}") {
-      setCookie('theme_mode', val);
-      $.ajax({url: `/set_mode/${val}`, type: "post"});
-      location.reload();
-    }
+
+  function update_frequency(val) {
+    update_frequency_val = val;
+    for (let i = 0; i < UPDATE_PERIODS.length; i++)
+      $(`#update_frequency_${i}`).toggleClass("active", i == val);
   }
-  function update_frequency(val, to_request=true) {
-    for (var i = 0; i < 4; i++) {
-      if (val == i)
-        $(`#update_frequency_${i}`).addClass("active");
-      else
-        $(`#update_frequency_${i}`).removeClass("active");
-    }
-    update_period = update_periods[val];{#
-    if (to_request)
-      $.ajax({url: `/chat/set_update/${val}`, type: "post"});#}
-  }
+
   function is_autoselect() {
-    var autoselect = getCookie("msg_autoselect");
-    if (autoselect == null)
-      return false;
-    return autoselect;
+    return getBoolCookie("msg_autoselect", false);
   }
-  function update_autoselect(e) {
+
+  function update_autoselect(event) {
     setCookie('msg_autoselect', event.target.checked);
   }
+
   function is_flairs() {
-    var display_flairs = getCookie("msg_flairs");
-    if (display_flairs == null)
-      return true;
-    return display_flairs;
+    return getBoolCookie("msg_flairs", true);
   }
-  function update_hide_flairs(e) {
+
+  function update_hide_flairs(event) {
     setCookie('msg_flairs', !event.target.checked);
     update_flairs();
   }
+
   function update_flairs() {
-    if (is_flairs())
-      $('.user-flair').removeClass("d-none");
-    else
-      $('.user-flair').addClass("d-none");
+    $('.user-flair').toggleClass("d-none", !is_flairs());
   }
+
+  function visible_reports() {
+    return $("#chat_reports div[data-mscore]").filter((i, el) => parseInt(el.dataset.mscore) > 0 && el.style.display == 'block');
+  }
+
+  // Returns the id of the report after `msg_id` (wrapping around), to select it once `msg_id` is dismissed.
   function get_next_report_id(msg_id) {
-    var m_id = null;
-    if (msg_id.startsWith('A') || msg_id.startsWith('C') || msg_id.startsWith('F'))
-      m_id = msg_id.substring(1);
-    else
+    if (!['A', 'C', 'F'].includes(msg_id[0]))
       return null;
-    var reports = $("#chat_reports").find("div").filter(
-      function() {
-        return parseInt($(this).attr("data-mscore")) > 0 && this.style.display == 'block';
-      }
-    );
+    const reports = visible_reports();
     if (reports.length <= 1)
       return null;
-    var i = reports.index($(`#msgA${m_id}`));
+    const i = reports.index($(`#msgA${msg_id.substring(1)}`));
     if (i < 0)
       return null;
-    next_id = (i == reports.length - 1) ? reports[0].id : reports[i + 1].id;
-    if (next_id.length <= 4)
-      return null;
-    return next_id.substring(3);
+    const next_id = reports[(i + 1) % reports.length].id;
+    return next_id.length > 4 ? next_id.substring(3) : null;
   }
+
   function set_selection(data_chats) {
     $('#selected_messages').html(data_chats["selected-messages"]);
     $('#filtered_messages').html(data_chats["filtered-messages"]);
     $('#selected_tournament').html(data_chats["selected-tournament"]);
-    str_update = data_chats["selected-tournament-update"] ? `updated at ${data_chats["selected-tournament-update"]}` : "reload";
-    $('#selected_tournament_update').prop('title', str_update);
-    var username = data_chats["selected-user"];
+    const updated_at = data_chats["selected-tournament-update"];
+    $('#selected_tournament_update').prop('title', updated_at ? `updated at ${updated_at}` : "reload");
+    const username = data_chats["selected-user"];
     update_user_button(username);
-    user_link = username ? `<a class="text-success" href="https://lichess.org/@/${username.toLowerCase()}?mod" target="_blank">${username}</a>` : "the user";
-    $('#selected_user').html(user_link);
-    if (data_chats["selected-tournament"]) {
-      $('#selection_header').removeClass("d-none").addClass("d-flex");
-    } else {
-      $('#selection_header').removeClass("d-flex").addClass("d-none");
-    }
+    $('#selected_user').html(username ? userlink(username, {cls: "text-success", suffix: "?mod"}) : "the user");
+    setVisible('#selection_header', !!data_chats["selected-tournament"], "d-flex");
     update_user_info(data_chats);
     update_mod_notes(data_chats);
     update_mod_log(data_chats);
-    var sel_id = $("#selected_messages .selectee-center").attr('id');
-    var classes = "selected-msgA border border-success rounded";
+    const sel_id = $("#selected_messages .selectee-center").attr('id');
+    const classes = "selected-msgA border border-success rounded";
     $("#chat_reports .selected-msgA").removeClass(classes);
-    if (sel_id && sel_id.length > 4) {
+    if (sel_id && sel_id.length > 4)
       $(`#msgA${sel_id.substring(4)}`).addClass(classes);
-    }
   }
+
+  function set_section(selector, html, display_class) {
+    $(selector).html(html);
+    setVisible(selector, !!html, display_class);
+  }
+
   function update_user_info(data) {
-    $('#user-info').html(data["user-info"]);
-    if (data["user-info"])
-      $('#user-info').removeClass("d-none").addClass("d-block");
-    else
-      $('#user-info').removeClass("d-block").addClass("d-none");
-    $('#user-profile').html(data["user-profile"]);
-    if (data["user-profile"])
-      $('#user-profile').removeClass("d-none").addClass("d-block");
-    else
-      $('#user-profile').removeClass("d-block").addClass("d-none");
+    set_section('#user-info', data["user-info"], "d-block");
+    set_section('#user-profile', data["user-profile"], "d-block");
   }
+
   function update_mod_notes(data) {
-    $('#mod-notes').html(data["mod-notes"]);
-    if (data["mod-notes"])
-      $('#mod-notes').removeClass("d-none").addClass("d-flex");
-    else
-      $('#mod-notes').removeClass("d-flex").addClass("d-none");
+    set_section('#mod-notes', data["mod-notes"], "d-flex");
   }
+
   function update_mod_log(data) {
-    $('#mod-log').html(data["mod-log"]);
-    if (data["mod-log"])
-      $('#mod-log').removeClass("d-none").addClass("d-flex");
-    else
-      $('#mod-log').removeClass("d-flex").addClass("d-none");
+    set_section('#mod-log', data["mod-log"], "d-flex");
   }
+
   function add_to_notes(username, msg_id) {
-    var selection = $(`#msg${msg_id}`).attr("data-selection");
-    if (selection && !notes_msgs.includes(msg_id) && username != "lichess") {
-      var notes = $('#notes').val();
-      if (notes)
-        $('#notes').val((username != notes_user) ? selection : `${notes}\n${selection}`);
-      else
-        $('#notes').val(selection);
-      if (username == notes_user)
-        notes_msgs.push(msg_id);
-      else
-        notes_msgs = [msg_id];
-      notes_user = username;
-      update_username();
-      update_notes();
-    }
+    const selection = $(`#msg${msg_id}`).attr("data-selection");
+    if (!selection || notes_msgs.includes(msg_id) || username == "lichess")
+      return;
+    const notes = $('#notes').val();
+    $('#notes').val(notes && username == notes_user ? `${notes}\n${selection}` : selection);
+    if (username == notes_user)
+      notes_msgs.push(msg_id);
+    else
+      notes_msgs = [msg_id];
+    notes_user = username;
+    update_username();
+    update_notes();
   }
+
   function select_message(event, msg_id) {
-    event = event || window.event;
-    if (event && (event.target.tagName == "BUTTON" || event.target.tagName == "A") && msg_id != "--" && !msg_id.startsWith('T'))
+    const tag = event && event.target.tagName;
+    if ((tag == "BUTTON" || tag == "A") && is_message_id(msg_id))
       return;
     select_msg(msg_id);
   }
+
+  function msg_username(msg_id) {
+    const link = is_message_id(msg_id) ? $(`#msg${msg_id} a`)[0] : null;
+    return link ? link.text : "";
+  }
+
   function select_msg(msg_id) {
-    username = (msg_id == "--" || msg_id.startsWith('T') || $(`#msg${msg_id} a`).length == 0) ? "" : $(`#msg${msg_id} a`)[0].text;
+    const username = msg_username(msg_id);
     update_user_button(username);
     if (notes_user != username) {
       notes_msgs = [];
@@ -537,197 +477,163 @@
     }
     if (msg_id.startsWith('F'))
       add_to_notes(username, msg_id);
-    $.ajax({url: `/chat/select_message/${msg_id}`, type: "post"})
-      .done(function(data, textStatus, jqXHR) {
+    $.post(`/chat/select_message/${msg_id}`)
+      .done(data => {
         set_selection(data);
         filter_messages(!msg_id.startsWith('F'));
         update_flairs();
-        var active_element = $('#selected_messages .selectee-center');
-        if (active_element.length) {
-          active_element[0].scrollIntoView({block: "center"});
-          window.scrollTo(0, 0);
-        }
+        scrollToSelected('#selected_messages .selectee-center');
       });
   }
+
   function update_username() {
-    $('#notes_username').html(notes_user ? `<a class="text-success" href="https://lichess.org/@/${notes_user.toLowerCase()}?notes" target="_blank">${notes_user}</a>:` : "");
+    $('#notes_username').html(notes_user ? userlink(notes_user, {cls: "text-success", suffix: "?notes"}) + ":" : "");
   }
+
   function update_user_button(username) {
-    num_messages = $('#filtered_messages .selectee').length;
-    if (username && username.length > 10)
-      username = `${username.substring(0, 9)}&hellip;`
-    var text = username ? username : "Process";
+    const num_messages = $('#filtered_messages .selectee').length;
+    let text = "Process";
+    if (username)
+      text = username.length > 10 ? `${escapeHtml(username.substring(0, 9))}&hellip;` : escapeHtml(username);
     if (num_messages > 0)
       text = `<b>${num_messages}</b>: ${text}`;
     $('#abbr_filter_msgs').html(text);
   }
+
   function add_users_all_messages() {
-    $('#filtered_messages .selectee').each(function(i, el) {
-      if (el.id.startsWith('msgF') && $(`#${el.id} a`).length)
-        add_to_notes($(`#${el.id} a`)[0].text, el.id.substring(3));
+    $('#filtered_messages .selectee').each((i, el) => {
+      const link = $(el).find('a')[0];
+      if (el.id.startsWith('msgF') && link)
+        add_to_notes(link.text, el.id.substring(3));
     });
   }
+
   function prevent_click(event) {
-    event = event || window.event;
-    event.cancelBubble = true;
-    if (event.stopPropagation)
-      event.stopPropagation();
+    event.stopPropagation();
   }
-  function filter_score(val, to_filter=true) {
-    const filter_values = [0, 20, 40, 60];
-    for (const i of filter_values) {
-      if (val == i)
-        $(`#filter_score_${i}`).addClass("active");
-      else
-        $(`#filter_score_${i}`).removeClass("active");
-    }
+
+  function filter_score(val, to_filter = true) {
+    for (const i of SCORE_FILTERS)
+      $(`#filter_score_${i}`).toggleClass("active", val == i);
     if (to_filter)
       filter_out();
   }
+
   function get_score_to_filter() {
-    var val = 0;
-    if (!$('#filter_score_0').is('.active')) {
-      const filter_values = [20, 40, 60];
-      for (const i of filter_values) {
-        if ($(`#filter_score_${i}`).is('.active'))
-          val = i;
-      }
-    }
-    return val;
+    return SCORE_FILTERS.find(i => $(`#filter_score_${i}`).hasClass('active')) ?? 0;
   }
+
   function get_langs() {
-    var flags = 0;
-    for (var i = 0; i < 9; i++)
-      if ($(`#filter_lang_${i}`).is('.btn-success'))
-        flags |= 2 ** i;
+    let flags = 0;
+    for (let i = 0; i < NUM_LANGS; i++)
+      if ($(`#filter_lang_${i}`).hasClass('btn-success'))
+        flags |= 1 << i;
     return flags;
   }
-  function filter_langs(val) {
-    if ($(`#filter_lang_${val}`).is('.btn-success'))
-      $(`#filter_lang_${val}`).removeClass("btn-success").addClass("btn-secondary");
-    else
-      $(`#filter_lang_${val}`).removeClass("btn-secondary").addClass("btn-success");
-    var flags = get_langs();
-    setCookie('chat_langs', flags);
+
+  function filter_langs(i) {
+    $(`#filter_lang_${i}`).toggleClass("btn-success btn-secondary");
+    setCookie('chat_langs', get_langs());
     filter_out();
   }
-  function filter_out() {
-    var flags = get_langs();
-    var val = get_score_to_filter();
-    $("div").filter(function() {
-      return (parseInt($(this).attr("data-mscore")) < val) ||
-              ($(this).is("[data-langs]") && (parseInt($(this).attr("data-langs")) & flags) == 0);
-    }).css("display","none");
-    $("div").filter(function() {
-      return (parseInt($(this).attr("data-mscore")) >= val) &&
-              (!$(this).is("[data-langs]") || (parseInt($(this).attr("data-langs")) & flags));
-    }).css("display","block");
-  }
+
   function reset_langs() {
-    var flags = getCookie("chat_langs");
-    if (flags == null)
+    const flags = getCookie("chat_langs");
+    if (flags === null)
       return;
-    for (var i = 0; i < 9; i++)
-      if ((flags & (2 ** i)) == 0)
+    for (let i = 0; i < NUM_LANGS; i++)
+      if ((flags & (1 << i)) == 0)
         $(`#filter_lang_${i}`).removeClass("btn-success").addClass("btn-secondary");
   }
-  function filter_messages(to_reset=false) {
+
+  // Hides messages below the score filter or in deselected languages.
+  function filter_out() {
+    const flags = get_langs();
+    const min_score = get_score_to_filter();
+    $("div[data-mscore], div[data-langs]").each((i, el) => {
+      const score = parseInt(el.dataset.mscore);
+      const lang_ok = el.dataset.langs === undefined || (parseInt(el.dataset.langs) & flags) != 0;
+      if (score < min_score || !lang_ok)
+        el.style.display = "none";
+      else if (score >= min_score)
+        el.style.display = "block";
+    });
+  }
+
+  function filter_messages(to_reset = false) {
     if (to_reset)
       $('#btn_filter_msgs').removeClass("btn-success").addClass("btn-outline-success");
-    if ($('#btn_filter_msgs').hasClass("btn-success")) {
-      $('#abbr_filter_msgs').prop('title', "Show all chat messages");
-      $('#filtered_section').removeClass("d-none").addClass("d-block");
-      $('#selected_messages').removeClass("d-block").addClass("d-none");
-      var active_element = $('#filtered_section .selectee-center');
-      if (active_element.length) {
-        active_element[0].scrollIntoView({block: "center"});
-        window.scrollTo(0, 0);
-      }
-    } else {
-      $('#abbr_filter_msgs').prop('title', "Show only the selected user's messages");
-      $('#filtered_section').removeClass("d-block").addClass("d-none");
-      $('#selected_messages').removeClass("d-none").addClass("d-block");
-    }
+    const filtered = $('#btn_filter_msgs').hasClass("btn-success");
+    $('#abbr_filter_msgs').prop('title', filtered ? "Show all chat messages" : "Show only the selected user's messages");
+    setVisible('#filtered_section', filtered);
+    setVisible('#selected_messages', !filtered);
+    if (filtered)
+      scrollToSelected('#filtered_section .selectee-center');
   }
+
   function filter_toggle() {
-    if ($('#btn_filter_msgs').hasClass("btn-success"))
-      $('#btn_filter_msgs').removeClass("btn-success").addClass("btn-outline-success");
-    else
-      $('#btn_filter_msgs').removeClass("btn-outline-success").addClass("btn-success");
+    $('#btn_filter_msgs').toggleClass("btn-success btn-outline-success");
     filter_messages();
   }
+
   function refresh_selected() {
     $('#btn_refresh_selected').removeClass("btn-outline-secondary").addClass("btn-outline-info");
-    $.ajax({url: `/chat/refresh_selected`, type: "post"})
-      .done(function(data, textStatus, jqXHR) {
-        $('#btn_refresh_selected').removeClass("btn-outline-info").addClass("btn-outline-secondary");
+    $.post('/chat/refresh_selected')
+      .done(data => {
         update_data(data);
-        var active_element = $('#selected_messages .selectee-center');
-        if (active_element.length) {
-          active_element[0].scrollIntoView({block: "center"});
-          window.scrollTo(0, 0);
-        }
-      });
+        scrollToSelected('#selected_messages .selectee-center');
+      })
+      .always(() => $('#btn_refresh_selected').removeClass("btn-outline-info").addClass("btn-outline-secondary"));
   }
+
   function check_collapse(val) {
-    const collapse = ["tournaments", "started", "created", "finished"];
-    for (const i of collapse) {
-      if (i == val && !$(`#collapse_${val}`).hasClass("show"))
-        $(`#tab_${i}`).addClass("active");
-      else
-        $(`#tab_${i}`).removeClass("active");
-    }
+    for (const tab of TOURNAMENT_TABS)
+      $(`#tab_${tab}`).toggleClass("active", tab == val && !$(`#collapse_${val}`).hasClass("show"));
   }
+
   function set_tournament(tourn_id) {
-    checked = $(`#t_${tourn_id}`).is(':checked') ? 1 : 0;
-    $.ajax({url: `/chat/set_tournament/${tourn_id}/${checked}`, type: "post"});
+    const checked = $(`#t_${tourn_id}`).is(':checked') ? 1 : 0;
+    $.post(`/chat/set_tournament/${tourn_id}/${checked}`);
   }
+
   function set_tournament_group(group) {
-    checked = $(`#t_${group}`).is(':checked') ? 1 : 0;
-    $.ajax({url: `/chat/set_tournament_group/${group}/${checked}`, type: "post"})
-      .done(function(data, textStatus, jqXHR) {
-        update_tournament_list(data);
-      });
+    const checked = $(`#t_${group}`).is(':checked') ? 1 : 0;
+    $.post(`/chat/set_tournament_group/${group}/${checked}`).done(update_tournament_list);
   }
+
   function delete_tournament(tourn_id) {
     $(`#tt_${tourn_id}`).closest('div').remove();
-    $.ajax({url: `/chat/delete_tournament/${tourn_id}`, type: "post"})
-      .done(function(data, textStatus, jqXHR) {
-        update_tournament_list(data);
-      });
+    $.post(`/chat/delete_tournament/${tourn_id}`).done(update_tournament_list);
   }
+
   function add_tournament() {
-    var tournament_link = $("#tournament_link")[0].value;
-    $("#tournament_link")[0].value = "";
+    const tournament_link = $("#tournament_link").val();
+    $("#tournament_link").val("");
     $('#btn_add_tournament').removeClass("btn-primary").addClass("btn-info");
-    $.ajax({
-      url: "/chat/add_tournament",
-      type: "post",
-      data: {page: tournament_link}})
-        .done(function(data, textStatus, jqXHR) {
-          update_tournament_list(data);
-          update_data(data);
-        }).always(function() {
-          $('#btn_add_tournament').removeClass("btn-info").addClass("btn-primary");
-        });
+    $.post("/chat/add_tournament", {page: tournament_link})
+      .done(data => {
+        update_tournament_list(data);
+        update_data(data);
+      })
+      .always(() => $('#btn_add_tournament').removeClass("btn-info").addClass("btn-primary"));
   }
+
   function load_more(tourn_id) {
-    $('#btn-load-more-1').attr("disabled", "");
-    $('#btn-load-more-2').attr("disabled", "");
-    $.ajax({url: `/chat/load_more/${tourn_id}`, type: "post"})
-      .done(function(data, textStatus, jqXHR) {
+    $('#btn-load-more-1, #btn-load-more-2').prop("disabled", true);
+    $.post(`/chat/load_more/${tourn_id}`)
+      .done(data => {
         update_tournament_list(data);
         update_data(data);
       });
   }
+
   function update_notes() {
-    $("#notes")[0].style.height = "50px";
-    $("#notes")[0].style.height = (Math.max(40, $("#notes")[0].scrollHeight + 5)) + "px";
-    if ($('#notes').val())
-      $("#btn_notes").removeClass("d-none").addClass("d-flex");
-    else
-      $("#btn_notes").removeClass("d-flex").addClass("d-none");
+    const notes = $("#notes")[0];
+    notes.style.height = "50px";
+    notes.style.height = Math.max(40, notes.scrollHeight + 5) + "px";
+    setVisible("#btn_notes", !!notes.value, "d-flex");
   }
+
   function clear_notes() {
     $('#notes').val('');
     notes_user = "";
@@ -735,39 +641,27 @@
     update_username();
     update_notes();
   }
+
   function send_note() {
-    $.ajax({
-      url: `/chat/send_note`,
-      type: "post",
-      data: {note: $('#notes').val(), user: notes_user}})
-        .done(function(data, textStatus, jqXHR) {
-          if (data["mod-notes"]) {
-            if (notes_user && data["selected-user"] == notes_user) {
-              update_mod_notes(data);
-              update_user_info(data);
-            }
-            clear_notes();
+    $.post('/chat/send_note', {note: $('#notes').val(), user: notes_user})
+      .done(data => {
+        if (data["mod-notes"]) {
+          if (notes_user && data["selected-user"] == notes_user) {
+            update_mod_notes(data);
+            update_user_info(data);
           }
-        });
+          clear_notes();
+        }
+      });
   }
+
   function custom_timeout(reason) {
-    $.ajax({
-      url: `/chat/custom_timeout`,
-      type: "post",
-      data: {reason: reason, ids: notes_msgs}})
-        .done(function(data_chats, textStatus, jqXHR) {
-          update_data(data_chats);
-        });
+    post_and_update('/chat/custom_timeout', {reason: reason, ids: notes_msgs});
   }
+
   function show_settings(flag) {
-    if (flag) {
-      $('#hide_flairs').removeClass("d-none").addClass("d-block");
-      $('#autoselect_setting').removeClass("d-none").addClass("d-block");
-    }
-    else {
-      $('#hide_flairs').removeClass("d-block").addClass("d-none");
-      $('#autoselect_setting').removeClass("d-block").addClass("d-none");
-    }
+    setVisible('#hide_flairs', flag);
+    setVisible('#autoselect_setting', flag);
   }
   </script>
 {% endblock %}
