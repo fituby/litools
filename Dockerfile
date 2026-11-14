@@ -1,5 +1,7 @@
 FROM python:3.14.10-alpine3.24
 
+RUN apk add --no-cache btop
+
 RUN python -m ensurepip --upgrade && \
     pip install setuptools --upgrade
 
