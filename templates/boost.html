@@ -1,39 +1,28 @@
 {% extends 'layout.html' %}
+{% from 'macros.html' import mode_setting, spinner %}
 
 {% block main %}
-{% if embed_lichess %}
-<div class="container-fluid m-0 px-2 pb-5" style="max-width:96vw;min-height:60vh;">
-{% else %}
-<div class="container-fluid m-0 px-2 pb-3" style="max-width:96vw;min-height:97vh;">
-{% endif %}
+<div class="container-fluid m-0 px-2 {{'pb-5' if embed_lichess else 'pb-3'}}" style="max-width:96vw;min-height:{{'60vh' if embed_lichess else '97vh'}};">
   <div class="d-flex flex-row justify-content-center my-2">
     <div class="flex-col" style="width:420px;min-width:370px;max-width:500px;">
       <div class="d-flex flex-row justify-content-around mb-1">
-        <button class="btn text-secondary py-1 px-1" type="button" onclick="set_perf_types(0x3FFF);"><i class="fas fa-check"></i></button>
+        <button class="btn text-secondary py-1 px-1" type="button" title="Select all" onclick="set_perf_types(0x3FFF);"><i class="fas fa-check"></i></button>
         <div class="btn-group btn-group-toggle">
-          <button id="perf_type_0" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(0);"><abbr title="Ultra Bullet" style="text-decoration:none;cursor:inherit;">UB</abbr></button>
-          <button id="perf_type_1" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(1);"><abbr title="Bullet" style="text-decoration:none;cursor:inherit;">Bu</abbr></button>
-          <button id="perf_type_2" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(2);"><abbr title="Blitz" style="text-decoration:none;cursor:inherit;">Bl</abbr></button>
-          <button id="perf_type_3" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(3);"><abbr title="Rapid" style="text-decoration:none;cursor:inherit;">Ra</abbr></button>
-          <button id="perf_type_4" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(4);"><abbr title="Classical" style="text-decoration:none;cursor:inherit;">Cl</abbr></button>
-          <button id="perf_type_5" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(5);"><abbr title="Correspondence" style="text-decoration:none;cursor:inherit;">Co</abbr></button>
-          <button id="perf_type_7" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(7);"><abbr title="Chess 960" style="text-decoration:none;cursor:inherit;">C9</abbr></button>
-          <button id="perf_type_6" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(6);"><abbr title="Crazyhouse" style="text-decoration:none;cursor:inherit;">Zh</abbr></button>
-          <button id="perf_type_8" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(8);"><abbr title="King Of The Hill" style="text-decoration:none;cursor:inherit;">KH</abbr></button>
-          <button id="perf_type_9" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(9);"><abbr title="Three Check" style="text-decoration:none;cursor:inherit;">3+</abbr></button>
-          <button id="perf_type_10" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(10);"><abbr title="Antichess" style="text-decoration:none;cursor:inherit;">AC</abbr></button>
-          <button id="perf_type_11" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(11);"><abbr title="Atomic" style="text-decoration:none;cursor:inherit;">At</abbr></button>
-          <button id="perf_type_12" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(12);"><abbr title="Horde" style="text-decoration:none;cursor:inherit;">Ho</abbr></button>
-          <button id="perf_type_13" class="btn btn-success py-1 px-1" type="button" onclick="perf_types(13);"><abbr title="Racing Kings" style="text-decoration:none;cursor:inherit;">RK</abbr></button>
+          {% for i, name, abbr in [(0, "Ultra Bullet", "UB"), (1, "Bullet", "Bu"), (2, "Blitz", "Bl"), (3, "Rapid", "Ra"),
+                                   (4, "Classical", "Cl"), (5, "Correspondence", "Co"), (7, "Chess 960", "C9"),
+                                   (6, "Crazyhouse", "Zh"), (8, "King Of The Hill", "KH"), (9, "Three Check", "3+"),
+                                   (10, "Antichess", "AC"), (11, "Atomic", "At"), (12, "Horde", "Ho"), (13, "Racing Kings", "RK")] %}
+          <button id="perf_type_{{i}}" class="btn btn-success py-1 px-1" type="button" onclick="perf_types({{i}});"><abbr title="{{name}}" class="abbr-plain">{{abbr}}</abbr></button>
+          {% endfor %}
         </div>
-        <button class="btn text-secondary py-1 px-1" type="button" onclick="set_perf_types(0);"><i class="fas fa-times"></i></button>
+        <button class="btn text-secondary py-1 px-1" type="button" title="Deselect all" onclick="set_perf_types(0);"><i class="fas fa-times"></i></button>
       </div>
       <table class="w-100 mt-2"><tbody>
         <tr class="align-items-baseline">
           <td><label for="userlink" class="text-nowrap m-0 mr-1">User / #games:</label></td>
           <td class="px-1">
             <div class="d-flex">
-              <input id="userlink" class="w-100 mr-1" type="text" placeholder="">
+              <input id="userlink" class="w-100 mr-1" type="text">
               <select id="num-games" class="flex-shrink-1">
                 <option value="100">100</option>
                 <option value="200">200</option>
@@ -41,39 +30,23 @@
               </select>
             </div>
           </td>
-          <td rowspan="2"><button class="btn btn-primary" style="min-height:100%;" onclick="go_username()">Go</button></td>
+          <td rowspan="2"><button class="btn btn-primary" type="button" style="min-height:100%;" onclick="go_username()">Go</button></td>
         </tr>
         <tr id="row-datetime" class="d-none">
           <td><label for="datetime-before" class="text-nowrap m-0">Before, UTC:</label></td>
-          <td class="w-100 px-1"><input id="datetime-before" class="w-100" type="datetime-local" value=""></td>
+          <td class="w-100 px-1"><input id="datetime-before" class="w-100" type="datetime-local"></td>
         </tr>
       </tbody></table>
-      <div id="user_downloading" class="d-none justify-content-center align-items-center my-3">
-        <div class="spinner-border spinner-blue-only text-secondary text-truncate" role="status"></div>
-        <span id="downloading_text" class="ml-3 text-secondary">Downloading user data&hellip;</span>
-      </div>
-      <div id="part-1">
-      </div>
-      <div id="performance">
-      </div>
-      <div class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2">
-        <p class="pr-2 m-0">Mode</p>
-        <div class="btn-group btn-group-toggle">
-          <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
-          <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
-          <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
-        </div>
-      </div>
+      {{ spinner("user_downloading", "Downloading user data&hellip;", text_id="downloading_text") }}
+      <div id="boost_error" class="text-danger my-2"></div>
+      <div id="part-1"></div>
+      <div id="performance"></div>
+      {{ mode_setting() }}
     </div>
     <div class="col mt-3" style="min-width:370px;max-width:500px;">
-      <div id="tournaments_downloading" class="row d-none justify-content-center align-items-center my-3">
-        <div class="spinner-border spinner-blue-only text-secondary text-truncate" role="status"></div>
-        <span class="ml-3 text-secondary">Downloading tournaments&hellip;</span>
-      </div>
-      <div id="tournaments" class="my-3" style="display:none;">
-      </div>
-      <div id="part-2">
-      </div>
+      {{ spinner("tournaments_downloading", "Downloading tournaments&hellip;", cls="row d-none justify-content-center align-items-center my-3") }}
+      <div id="tournaments" class="my-3 d-none"></div>
+      <div id="part-2"></div>
     </div>
     <div class="col mt-3" style="min-width:370px;max-width:800px;">
       <div id="notes-section" class="d-none mt-3">
@@ -81,91 +54,68 @@
           <span id="label_add_notes" class="d-none text-info align-self-center mr-2">Add note + </span>
           <span>Warn:</span>
           <div class="btn-group">
-            <button id="warn_sandbag" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="mod_action('warn_sandbagging')">
-              <abbr title="Warning: Sandbagging" style="text-decoration:none;cursor:inherit;">Sandbag</abbr>
+            <button id="warn_sandbag" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" type="button" onclick="mod_action('warn_sandbagging')">
+              <abbr title="Warning: Sandbagging" class="abbr-plain">Sandbag</abbr>
             </button>
-            <button id="warn_fail_to_start" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="mod_action('warn_failure_to_start')">
-              <abbr title="Warning: Failure to start tournament games" style="text-decoration:none;cursor:inherit;">FailToStart</abbr>
+            <button id="warn_fail_to_start" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" type="button" onclick="mod_action('warn_failure_to_start')">
+              <abbr title="Warning: Failure to start tournament games" class="abbr-plain">FailToStart</abbr>
             </button>
-            <button id="warn_boost" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="mod_action('warn_boosting')">
-              <abbr title="Warning: Boosting" style="text-decoration:none;cursor:inherit;">Boost</abbr>
+            <button id="warn_boost" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" type="button" onclick="mod_action('warn_boosting')">
+              <abbr title="Warning: Boosting" class="abbr-plain">Boost</abbr>
             </button>
           </div>
-          <button id="mark_booster" class="btn btn-secondary align-baseline flex-grow-1 p-0" onclick="mod_action('mark_booster')">
-            <abbr title="Mark as booster" style="text-decoration:none;cursor:inherit;">
-              <i class="fas fa-hammer"></i> Mark
-            </abbr>
+          <button id="mark_booster" class="btn btn-secondary align-baseline flex-grow-1 p-0" type="button" onclick="mod_action('mark_booster')">
+            <abbr title="Mark as booster" class="abbr-plain"><i class="fas fa-hammer"></i> Mark</abbr>
           </button>
         </div>
-        <textarea id="notes" class="form-control" rows="5" oninput='update_notes()'></textarea>
+        <textarea id="notes" class="form-control" rows="5" oninput="update_notes()"></textarea>
         <div id="btn_actions" class="d-none user-select-none justify-content-between px-1 py-1">
-          <span id="notes_username" class="align-self-center mr-2"></span>
-          <button class="btn btn-warning align-baseline flex-grow-1 p-0 mr-1" onclick="send_note()">Add note</button>
-          <button class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" onclick="copyTextToClipboard($('#notes').val())">Copy</button>
-          <button class="btn btn-secondary align-baseline flex-grow-1 p-0" onclick="clear_notes()">Clear</button>
+          <button class="btn btn-warning align-baseline flex-grow-1 p-0 mr-1" type="button" onclick="send_note()">Add note</button>
+          <button class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" type="button" onclick="copyTextToClipboard($('#notes').val())">Copy</button>
+          <button class="btn btn-secondary align-baseline flex-grow-1 p-0" type="button" onclick="clear_notes()">Clear</button>
         </div>
-        <div id="notes-header" class="d-none mt-3">
-        </div>
-        <div id="mod-notes" class="d-none mt-1">
-        </div>
-        <div id="mod-log" class="mt-3">
-        </div>
+        <div id="notes-header" class="d-none mt-3"></div>
+        <div id="mod-notes" class="d-none mt-1"></div>
+        <div id="mod-log" class="mt-3"></div>
       </div>
     </div>
   </div>
-</div> {% if embed_lichess %}
+</div>
+{% if embed_lichess %}
 <div class="container-fluid px-0">
-  <iframe id="embed_frame" class="container-fluid px-0" style="min-width:60vw; min-height:96vh;" src="https://lichess.org/report/list/boost" allowtransparency="true" frameborder="0"></iframe>
-</div> {% endif %}
+  <iframe id="embed_frame" class="container-fluid px-0 border-0" style="min-width:60vw; min-height:96vh;" src="https://lichess.org/report/list/boost"></iframe>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
-  <script>
-  $(document).ready(function() {
-    update_mode({{view.mode|safe}}, false);
-    if (window.matchMedia)
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
-        if ($('#mode_0').is('.active'))
-          update_mode(event.matches ? -1 : -2);
-      });
-    $("#loadOverlay").css("display","none");
-    $("#mainOverlay").css("display","block");
-    $("#userlink").on('change input', username_changed);
-    $("#userlink").on('keypress', username_entered);
-    $('#datetime-before').val("");
-    set_perf_types();
-    {% if boost_user %}
-    set_user('{{boost_user}}');
-    {% else %}
-    clear_data();
-    {% endif %}
-  });
-  function username_changed(e) {
-    $('#datetime-before').val("");
-    check_username(e.target.value);
-  }
-  function username_entered(e) {
-    if (!e) e = window.event;
-    var keyCode = e.code || e.key;
-    if (keyCode == 'Enter') {
-      go_username();
-    }
-  }
-  function check_username(data) {
-    if (data.startsWith("https://lichess.org/@/")) {
-      var i2 = data.indexOf('?');
-      var username = (i2 < 0) ? data : data.substr(0, i2);
-      var i1 = username.lastIndexOf('/');
-      username = username.substr(i1 + 1).trim();
+<script>
+  const NUM_PERF_TYPES = 14;
+  let current_user = "";
+  let job = null;  // the running poll, cancelled when another user is requested
+
+  $(function() {
+    $("#userlink").on('change input', e => {
+      $('#datetime-before').val("");
+      const username = lichessIdFromUrl(e.target.value);
       if (username)
         set_user(username);
-    }
-  }
+    });
+    onEnter("#userlink", go_username);
+    $('#datetime-before').val("");
+    set_perf_types();
+    const boost_user = {{ boost_user|tojson }};
+    if (boost_user)
+      set_user(boost_user);
+    else
+      clear_data();
+  });
+
   function go_username() {
-    set_user($("#userlink")[0].value.trim());
-    $("#userlink")[0].value = "";
+    set_user($("#userlink").val().trim());
+    $("#userlink").val("");
   }
-  var current_user = "";
+
   function set_user(username) {
     if (username)
       current_user = username;
@@ -174,223 +124,156 @@
     if (!username)
       return;
     clear_data();
-    $('#userlink').attr("placeholder", username).val("").focus().blur();
-    $('#user_downloading').removeClass("d-none").addClass("d-flex");
-    $('#downloading_text').html(`Downloading ${username}&hellip;`);
-    var timer1 = 0;
-    timer1 = setInterval(function() {
-      $.ajax({
-        url: `/boost/${username}/`,
-        type: "post",
-        data: {before: $('#datetime-before').val(), num_games: $('#num-games').val(), perf_type: get_flags()}})
-        .done(function(data, textStatus, jqXHR) {
-          if ("not ready" in data)
-            return;
-          clearInterval(timer1);
-          $('#user_downloading').removeClass("d-flex").addClass("d-none");
-          $('#downloading_text').html("Downloading user data&hellip;");
-          $('#row-datetime').removeClass("d-none");
-          $('#datetime-before').val(data["datetime-before"]);
-          $('#num-games').val(data["num-games"])
-          $('#part-1').html(data["part-1"]);
-          $('#part-2').html(data["part-2"]);
-          $('#mod-log').html(data["mod-log"]);
-          update_mod_notes(data);
-          $('#notes-section').removeClass("d-none").addClass("d-block");
-          $('#tournaments_downloading').removeClass("d-none").addClass("d-flex");
-          //$('#embed_frame')[0].src = `https://lichess.org/@/${username}?mod`;
+    $('#userlink').attr("placeholder", username).val("").trigger('blur');
+    setVisible('#user_downloading', true, "d-flex");
+    $('#downloading_text').html(`Downloading ${escapeHtml(username)}&hellip;`);
+    const user_url = `/boost/${encodeURIComponent(username)}`;
+    job = pollUntilReady(
+      () => ({url: `${user_url}/`, type: "post", data: {before: $('#datetime-before').val(), num_games: $('#num-games').val(), perf_type: get_flags()}}),
+      data => {
+        setVisible('#user_downloading', false, "d-flex");
+        $('#downloading_text').html("Downloading user data&hellip;");
+        $('#row-datetime').removeClass("d-none");
+        $('#datetime-before').val(data["datetime-before"]);
+        $('#num-games').val(data["num-games"]);
+        $('#part-1').html(data["part-1"]);
+        $('#part-2').html(data["part-2"]);
+        $('#mod-log').html(data["mod-log"]);
+        update_mod_notes(data);
+        setVisible('#notes-section', true);
+        setVisible('#tournaments_downloading', true, "d-flex");
+        enable_buttons(data);
+        job = pollUntilReady(() => ({url: `${user_url}/tournaments/`}), data => {
+          setVisible('#tournaments_downloading', false, "d-flex");
+          $('#tournaments').html(data["tournaments"]).removeClass("d-none");
+          $('#performance').html(data["performance"]);
           enable_buttons(data);
-          var timer2 = 0;
-          timer2 = setInterval(function() {
-            $.ajax({url: `/boost/${username}/tournaments/`})
-              .done(function(data, textStatus, jqXHR) {
-                if ("not ready" in data)
-                  return;
-                clearInterval(timer2);
-                $('#tournaments_downloading').removeClass("d-flex").addClass("d-none");
-                $('#tournaments').css("display","block");
-                $('#tournaments').html(data["tournaments"]);
-                $('#performance').html(data["performance"]);
-                enable_buttons(data);
-              });
-          }, 1000)
-        });
-    }, 1000)
+        }, {on_error: on_poll_error});
+      }, {on_error: on_poll_error});
   }
+
+  function on_poll_error(xhr) {
+    setVisible('#user_downloading', false, "d-flex");
+    setVisible('#tournaments_downloading', false, "d-flex");
+    $('#boost_error').text(`Request failed (status ${xhr.status}). Please try again.`);
+  }
+
   function clear_data() {
+    if (job)
+      job.cancel();
     clear_notes();
-    $('#notes-section').removeClass("d-block").addClass("d-none");
-    //$('#row-datetime').addClass("d-none");
-    $('#part-1').html("");
-    $('#part-2').html("");
-    $('#mod-log').html("");
-    $('#user_downloading').removeClass("d-flex").addClass("d-none");
+    setVisible('#notes-section', false);
+    $('#part-1, #part-2, #mod-log, #performance, #notes-header, #mod-notes').html("");
+    $('#boost_error').text("");
+    setVisible('#user_downloading', false, "d-flex");
     $('#downloading_text').html("Downloading user data&hellip;");
-    $('#tournaments_downloading').removeClass("d-flex").addClass("d-none");
-    $('#tournaments').css("display","none");
-    $('#tournaments').html("");
-    $('#performance').html("");
-    $('#notes-header').html("");
-    $('#notes-header').removeClass("d-flex").addClass("d-none");
-    $('#mod-notes').html("");
-    $('#mod-notes').removeClass("d-flex").addClass("d-none");
+    setVisible('#tournaments_downloading', false, "d-flex");
+    $('#tournaments').html("").addClass("d-none");
+    setVisible('#notes-header', false, "d-flex");
+    setVisible('#mod-notes', false, "d-flex");
   }
+
+  // state: 1 = recommended (highlighted), 0 = available, -1 = disabled
+  function set_action_button(selector, state, highlight_class) {
+    $(selector).toggleClass(highlight_class, state == 1).toggleClass("btn-secondary", state != 1).prop("disabled", state == -1);
+  }
+
   function enable_buttons(data) {
-    if (data["enable-sandbagging"] == 1) {
-      $('#warn_sandbag').removeClass("btn-secondary").addClass("btn-warning");
-      $('#warn_fail_to_start').removeClass("btn-secondary").addClass("btn-warning");
-    }
-    else {
-      $('#warn_sandbag').removeClass("btn-warning").addClass("btn-secondary");
-      $('#warn_fail_to_start').removeClass("btn-warning").addClass("btn-secondary");
-    }
-    if (data["enable-sandbagging"] == -1) {
-      $('#warn_sandbag').attr("disabled", "");
-      $('#warn_fail_to_start').attr("disabled", "");
-    }
-    else {
-      $('#warn_sandbag').removeAttr("disabled");
-      $('#warn_fail_to_start').removeAttr("disabled");
-    }
-    if (data["enable-boosting"] == 1)
-      $('#warn_boost').removeClass("btn-secondary").addClass("btn-warning");
-    else
-      $('#warn_boost').removeClass("btn-warning").addClass("btn-secondary");
-    if (data["enable-boosting"] == -1)
-      $('#warn_boost').attr("disabled", "");
-    else
-      $('#warn_boost').removeAttr("disabled");
-    if (data["enable-marking"] == 1)
-      $('#mark_booster').removeClass("btn-secondary").addClass("btn-danger");
-    else
-      $('#mark_booster').removeClass("btn-danger").addClass("btn-secondary");
-    if (data["enable-marking"] == -1)
-      $('#mark_booster').attr("disabled", "");
-    else
-      $('#mark_booster').removeAttr("disabled");
+    set_action_button('#warn_sandbag, #warn_fail_to_start', data["enable-sandbagging"], "btn-warning");
+    set_action_button('#warn_boost', data["enable-boosting"], "btn-warning");
+    set_action_button('#mark_booster', data["enable-marking"], "btn-danger");
   }
-  function update_mode(val, to_request=true) {
-    if (val == 0)
-      val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
-    for (var i = 0; i < 3; i++) {
-      if (val == i || (val < 0 && i == 0))
-        $(`#mode_${i}`).addClass("active");
-      else
-        $(`#mode_${i}`).removeClass("active");
-    }
-    if (to_request && val != "{{view.mode}}") {
-      setCookie('theme_mode', val);
-      $.ajax({url: `/set_mode/${val}`, type: "post"});
-      if (current_user) {
-        var form = $(`<form action="/boost" method="post"><input type="hidden" name="user" value="${current_user}" /></form>`);
-        $('body').append(form);
-        form.submit();
-      } else {
-        location.reload();
-      }
-    }
+
+  function reload_page() {
+    if (!current_user)
+      return location.reload();
+    postAndReload("/boost", {user: current_user});
   }
+
   function update_mod_notes(data) {
     $('#notes-header').html(data['notes-header']);
-    $('#notes-header').removeClass("d-none").addClass("d-flex");
+    setVisible('#notes-header', true, "d-flex");
     $('#mod-notes').html(data['mod-notes']);
-    if (data['mod-notes'])
-      $('#mod-notes').removeClass("d-none").addClass("d-flex");
-    else
-      $('#mod-notes').removeClass("d-flex").addClass("d-none");
+    setVisible('#mod-notes', !!data['mod-notes'], "d-flex");
   }
-  function update_username() {
-    $('#notes_username').html(current_user ? `<a class="text-success" href="https://lichess.org/@/${current_user.toLowerCase()}?notes" target="_blank">${current_user}</a>:` : "");
-  }
+
   function update_notes() {
-    $("#notes")[0].style.height = "50px";
-    $("#notes")[0].style.height = (Math.max(100, $("#notes")[0].scrollHeight + 5)) + "px";
-    if ($('#notes').val()) {
-      $('#btn_actions').removeClass("d-none").addClass("d-flex");
-      $('#label_add_notes').removeClass("d-none").addClass("d-flex");
-    }
-    else {
-      $("#btn_actions").removeClass("d-flex").addClass("d-none");
-      $('#label_add_notes').removeClass("d-flex").addClass("d-none");
-    }
-    $('[data-selection]').each(function(i, el){
-      if ($('#notes').val().includes(el.getAttribute("data-selection")))
-        $(el).attr("disabled", "");
-      else
-        $(el).removeAttr("disabled");
+    const notes = $("#notes");
+    const text = notes.val();
+    notes[0].style.height = "50px";
+    notes[0].style.height = Math.max(100, notes[0].scrollHeight + 5) + "px";
+    setVisible('#btn_actions', !!text, "d-flex");
+    setVisible('#label_add_notes', !!text, "d-flex");
+    $('[data-selection]').each((i, el) => {
+      el.disabled = text.includes(el.getAttribute("data-selection"));
     });
   }
+
   function clear_notes() {
     $('#notes').val('');
     update_notes();
   }
+
   function add_to_notes(button) {
-    if (!button)
-      return;
-    var text = button.getAttribute("data-selection");
+    const text = button && button.getAttribute("data-selection");
     if (!text)
       return;
-    var note = $('#notes').val();
-    if (note && note.includes(text))
+    const note = $('#notes').val();
+    if (note.includes(text))
       return;
     $('#notes').val(note ? `${note}\n${text}` : text);
     update_notes();
   }
+
   function send_note() {
-    text = $('#notes').val();
+    const text = $('#notes').val();
     if (!text)
       return;
-    $.ajax({
-      url: `/boost/send_note`,
-      type: "post",
-      data: {note: text, user: current_user}})
-        .done(function(data, textStatus, jqXHR) {
-          if (data['mod-notes']) {
-            if (current_user && data['user'] == current_user)
-              update_mod_notes(data);
-            clear_notes();
-          }
-        });
+    $.post('/boost/send_note', {note: text, user: current_user})
+      .done(data => {
+        if (data['mod-notes']) {
+          if (current_user && data['user'] == current_user)
+            update_mod_notes(data);
+          clear_notes();
+        }
+      });
   }
+
   function mod_action(action) {
     send_note();
-    $.ajax({
-      url: `/boost/mod_action`,
-      type: "post",
-      data: {action: action, user: current_user}})
-        .done(function(data, textStatus, jqXHR) {
-          if (current_user && data['user'] == current_user && data['mod-log']) {
-            $('#mod-log').html(data['mod-log']);
-            enable_buttons(data);
-          }
-        });
+    $.post('/boost/mod_action', {action: action, user: current_user})
+      .done(data => {
+        if (current_user && data['user'] == current_user && data['mod-log']) {
+          $('#mod-log').html(data['mod-log']);
+          enable_buttons(data);
+        }
+      });
   }
+
   function get_flags() {
-    var flags = 0;
-    for (var i = 0; i < 14; i++)
-      if ($(`#perf_type_${i}`).is('.btn-success'))
-        flags |= 2 ** i;
+    let flags = 0;
+    for (let i = 0; i < NUM_PERF_TYPES; i++)
+      if ($(`#perf_type_${i}`).hasClass('btn-success'))
+        flags |= 1 << i;
     return flags;
   }
-  function perf_types(val) {
-    if ($(`#perf_type_${val}`).is('.btn-success'))
-      $(`#perf_type_${val}`).removeClass("btn-success").addClass("btn-secondary");
-    else
-      $(`#perf_type_${val}`).removeClass("btn-secondary").addClass("btn-success");
+
+  function perf_types(i) {
+    $(`#perf_type_${i}`).toggleClass("btn-success btn-secondary");
     setCookie('perf_types', get_flags());
   }
-  function set_perf_types(flags=-1) {
+
+  function set_perf_types(flags = -1) {
     if (flags >= 0)
       setCookie('perf_types', flags);
     else
       flags = getCookie("perf_types");
-    if (flags == null)
+    if (flags === null)
       return;
-    for (var i = 0; i < 14; i++)
-      if (flags & (2 ** i))
-        $(`#perf_type_${i}`).removeClass("btn-secondary").addClass("btn-success");
-      else
-        $(`#perf_type_${i}`).removeClass("btn-success").addClass("btn-secondary");
+    for (let i = 0; i < NUM_PERF_TYPES; i++) {
+      const selected = (flags & (1 << i)) != 0;
+      $(`#perf_type_${i}`).toggleClass("btn-success", selected).toggleClass("btn-secondary", !selected);
+    }
   }
-  </script>
+</script>
 {% endblock %}
