@@ -239,7 +239,16 @@
       });
   }
 
+  const MOD_ACTION_QUESTIONS = {
+    warn_sandbagging: user => `Send a sandbagging warning to ${user}?`,
+    warn_failure_to_start: user => `Send a failure-to-start warning to ${user}?`,
+    warn_boosting: user => `Send a boosting warning to ${user}?`,
+    mark_booster: user => `Mark ${user} as booster?`,
+  };
+
   function mod_action(action) {
+    if (!current_user || !confirm(MOD_ACTION_QUESTIONS[action](current_user)))
+      return;
     send_note();
     $.post('/boost/mod_action', {action: action, user: current_user})
       .done(data => {
