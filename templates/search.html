@@ -1,16 +1,13 @@
 {% extends 'layout.html' %}
+{% from 'macros.html' import mode_buttons, datatables %}
 
 {% block main %}
 <div class="container mt-2">
     <div class="justify-content-around">
         <div class="position-relative mt-5 mb-2">
-            <div class="position-absolute top-0 start-0 row align-items-baseline">
+            <div class="position-absolute row align-items-baseline">
                 <p class="pr-2 m-0">Mode</p>
-                <div class="btn-group btn-group-toggle">
-                    <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
-                    <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
-                    <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
-                </div>
+                {{ mode_buttons() }}
             </div>
             <h4 class="text-center text-primary my-2">User Search</h4>
         </div>
@@ -83,16 +80,16 @@
                         class="table table-sm table-striped table-hover text-center text-nowrap mb-5">
                         <thead>
                             <tr>
-                                <th style="cursor:default;">Actions</th>
-                                <th class="d-none d-lg-table-cell" style="cursor:default;">Flair <i
+                                <th>Actions</th>
+                                <th class="d-none d-lg-table-cell">Flair <i
                                         class="fas fa-sort text-muted"></i></th>
-                                <th class="d-none d-lg-table-cell" style="cursor:default;">Flag <i class="fas fa-sort text-muted"></i></th>
-                                <th style="cursor:default;">Player <i class="fas fa-sort text-muted"></i></th>
-                                <th style="cursor:default;"># Games <i class="fas fa-sort text-muted"></i></th>
-                                <th style="cursor:default;">Online <i class="fas fa-sort text-muted"></i></th>
-                                <th class="text-left" style="cursor:default;">Created <i
+                                <th class="d-none d-lg-table-cell">Flag <i class="fas fa-sort text-muted"></i></th>
+                                <th>Player <i class="fas fa-sort text-muted"></i></th>
+                                <th># Games <i class="fas fa-sort text-muted"></i></th>
+                                <th>Online <i class="fas fa-sort text-muted"></i></th>
+                                <th class="text-left">Created <i
                                         class="fas fa-sort text-muted"></i></th>
-                                <th style="cursor:default;">Status <i class="fas fa-sort text-muted"></i></th>
+                                <th>Status <i class="fas fa-sort text-muted"></i></th>
                             </tr>
                         </thead>
                     </table>
@@ -104,26 +101,109 @@
 </div>
 {% endblock %}
 
+{% block libs %}{{ datatables() }}{% endblock %}
+
 {% block scripts %}
 <script>
-    var flags = {};
-    var searchTable = null;
+    const flags = {};  // username -> 'obvious' | 'borderline'
+    let searchTable = null;
 
-    $(document).ready(function () {
-        update_mode({{ view.mode | safe }}, false);
-        if (window.matchMedia)
-            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
-                if ($('#mode_0').is('.active'))
-                    update_mode(event.matches ? -1 : -2);
-            });
+    $(function () {
         $("body").tooltip({ selector: '[data-toggle=tooltip]' });
-        $("#loadOverlay").css("display", "none");
-        $("#mainOverlay").css("display", "block");
     });
 
+    function flagButtons(username) {
+        const flag = flags[username];
+        const u = escapeHtml(username);
+        const class_obv = (flag === 'obvious') ? "btn-danger" : "btn-outline-danger";
+        const class_bord = (flag === 'borderline') ? "btn-warning" : "btn-outline-warning";
+        return `<button id="btn_obvious_${u}" onclick="setFlag('${u}', 'obvious')" class="btn btn-sm ${class_obv} mr-1 px-2 py-0">Obv</button>
+                <button id="btn_borderline_${u}" onclick="setFlag('${u}', 'borderline')" class="btn btn-sm ${class_bord} mr-1 px-2 py-0">Bord</button>
+                <button id="btn_null_${u}" onclick="setFlag('${u}', null)" class="btn btn-sm btn-outline-secondary px-2 py-0">Clear</button>`;
+    }
+
+    function image(url, title) {
+        return `<abbr class="pr-2 abbr-plain" title="${escapeHtml(title)}"><img src="${url}" style="max-width:30px;"></abbr>`;
+    }
+
+    // Columns of a result row:
+    // 0 username, 1 country, 2 flair, 3 flair name, 4 #games, 5 seen-at, 6 seen-ago, 7 created-at, 8 created-ago,
+    // 9 TOS violation, 10 closed, 11 patron, 12 verified
+    const COLUMNS = [{
+        targets: [0],
+        className: "align-middle",
+        data: null,
+        orderable: false,
+        render: data => flagButtons(data[0])
+    }, {
+        targets: [1],
+        className: "d-none d-lg-table-cell align-middle py-0",
+        data: null,
+        render: (data, type) => {
+            if (type != 'display') return data[2];
+            return data[2] ? image(`https://lichess1.org/assets/______0/flair/img/${escapeHtml(data[2])}.webp`, data[3]) : "";
+        }
+    }, {
+        targets: [2],
+        className: "d-none d-lg-table-cell align-middle py-0",
+        data: null,
+        render: (data, type) => {
+            const country = data[1];
+            if (type != 'display')
+                return !country.length ? 'zz' : country.startsWith('_') ? 'zy' + country.substring(1) : country;
+            return country ? image(`https://lichess1.org/assets/______0/flags/${escapeHtml(country)}.webp`, country) : '';
+        }
+    }, {
+        targets: [3],
+        className: "text-left align-middle",
+        data: null,
+        render: (data, type) => {
+            const username = data[0];
+            if (type != 'display') return username;
+            let badges = '';
+            if (data[9]) badges += ' <span class="badge badge-danger" title="TOS Violation">TOS</span>';
+            if (data[10]) badges += ' <span class="badge badge-secondary" title="Disabled">Closed</span>';
+            if (data[11]) badges += ' <span class="badge badge-success" title="Patron">Patron</span>';
+            if (data[12]) badges += ' <span class="badge badge-info" title="Verified">Verified</span>';
+            const flag = flags[username];
+            const c = (flag === 'obvious') ? "text-danger" : (flag === 'borderline') ? "text-warning" : "";
+            const u = escapeHtml(username);
+            return `<a id="userlink_${u}" class="${c}" href="https://lichess.org/@/${u.toLowerCase()}" target="_blank">${u}</a>` + badges;
+        }
+    }, {
+        targets: [4],
+        className: "text-right align-middle pr-3",
+        data: null,
+        render: (data, type) => {
+            if (type != 'display') return -data[4];
+            return '<span class="text-muted">' + data[4].toLocaleString('en-US').replace(/,/g, '&nbsp;') + '</span>';
+        }
+    }, {
+        targets: [5],
+        className: "text-left align-middle py-0",
+        data: null,
+        render: (data, type) => type != 'display' ? data[5] : `<abbr class="pr-2 abbr-plain" title="${escapeHtml(data[5])}">${escapeHtml(data[6])}</abbr>`
+    }, {
+        targets: [6],
+        className: "text-left align-middle pr-3",
+        data: null,
+        render: (data, type) => type != 'display' ? data[7] : `<abbr class="pr-2 abbr-plain" title="${escapeHtml(data[7])}">${escapeHtml(data[8])}</abbr>`
+    }, {
+        targets: [7],
+        className: "align-middle",
+        data: null,
+        render: (data, type) => {
+            const status = [];
+            if (data[9]) status.push('TOS');
+            if (data[10]) status.push('Closed');
+            if (type != 'display') return status.join(',') || 'ok';
+            return status.length ? '<span class="text-danger">' + status.join(', ') + '</span>' : '<span class="text-success">OK</span>';
+        }
+    }];
+
     function doSearch() {
-        var query = $('#search_query').val().trim();
-        var match_type = $('#match_type').val();
+        let query = $('#search_query').val().trim();
+        let match_type = $('#match_type').val();
         if (match_type == "fast-regex") {
             if (!query.startsWith('^'))
                 query = '^' + query;
@@ -141,117 +221,20 @@
             searchTable = null;
         }
 
-        $.ajax({
-            url: '/search',
-            type: 'POST',
-            data: { query: query, match_type: match_type },
-            success: function (result) {
-                $('#search_spinner').hide();
-                $('#search_btn').prop('disabled', false);
+        $.post('/search', { query: query, match_type: match_type })
+            .done(result => {
                 if (result.error) {
                     $('#search_error').text(result.error).show();
                     return;
                 }
-                var data = result.data || [];
+                const data = result.data || [];
                 $('#search_count').text(data.length + ' user' + (data.length !== 1 ? 's' : '') + ' found');
                 $('#search_results').show();
                 searchTable = $('#search_table').DataTable({
-                    "searching": true, "paging": false, "pageLength": 100, "info": false,
-                    "data": data,
-                    "order": [[4, "desc"], [5, "asc"]],
-                    columnDefs: [
-                        {
-                            "targets": [0],
-                            "className": "align-middle",
-                            "data": null,
-                            "orderable": false,
-                            "render": function (data, type, row, meta) {
-                                var username = data[0];
-                                let flag = flags[username];
-                                let class_obv = (flag === 'obvious') ? "btn-danger" : "btn-outline-danger";
-                                let class_bord = (flag === 'borderline') ? "btn-warning" : "btn-outline-warning";
-                                return `<button id="btn_obvious_${username}" onclick="setFlag('${username}', 'obvious')" class="btn btn-sm ${class_obv} mr-1 px-2 py-0">Obv</button>
-                                        <button id="btn_borderline_${username}" onclick="setFlag('${username}', 'borderline')" class="btn btn-sm ${class_bord} mr-1 px-2 py-0">Bord</button>
-                                        <button id="btn_null_${username}" onclick="setFlag('${username}', null)" class="btn btn-sm btn-outline-secondary px-2 py-0">Clear</button>`;
-                            }
-                        },
-                        {
-                            "targets": [1],
-                            "className": "d-none d-lg-table-cell align-middle py-0",
-                            "data": null,
-                            "render": function (data, type, row, meta) {
-                                if (type != 'display') return data[2];
-                                return data[2] ? '<abbr class="pr-2" title="' + data[3] + '" style="text-decoration:none;"><img src="https://lichess1.org/assets/______0/flair/img/' + data[2] + '.webp" style="max-width:30px;"></abbr>' : "";
-                            }
-                        },
-                        {
-                            "targets": [2],
-                            "className": "d-none d-lg-table-cell align-middle py-0",
-                            "data": null,
-                            "render": function (data, type, row, meta) {
-                                var country = data[1];
-                                if (type != 'display')
-                                    return !country.length ? 'zz' : (country.charAt(0) == '_') ? 'zy' + country.substr(1) : country;
-                                if (!country.length) return '';
-                                return '<abbr class="pr-2" title="' + country + '" style="text-decoration:none;"><img src="https://lichess1.org/assets/______0/flags/' + country + '.webp" style="max-width:30px;"></abbr>';
-                            }
-                        },
-                        {
-                            "targets": [3],
-                            "className": "text-left align-middle",
-                            "data": null,
-                            "render": function (data, type, row, meta) {
-                                var username = data[0];
-                                var badges = '';
-                                if (data[9]) badges += ' <span class="badge badge-danger" title="TOS Violation">TOS</span>';
-                                if (data[10]) badges += ' <span class="badge badge-secondary" title="Disabled">Closed</span>';
-                                if (data[11]) badges += ' <span class="badge badge-success" title="Patron">Patron</span>';
-                                if (data[12]) badges += ' <span class="badge badge-info" title="Verified">Verified</span>';
-                                if (type != 'display') return username;
-                                var flag = flags[username];
-                                var c = (flag === 'obvious') ? "text-danger" : (flag === 'borderline') ? "text-warning" : "";
-                                return `<a id="userlink_${username}" class="${c}" href="https://lichess.org/@/${username.toLowerCase()}" target="_blank">${username}</a>` + badges;
-                            }
-                        },
-                        {
-                            "targets": [4],
-                            "className": "text-right align-middle pr-3",
-                            "data": null,
-                            "render": function (data, type, row, meta) {
-                                if (type != 'display') return -data[4];
-                                return '<span class="text-muted">' + data[4].toLocaleString('en-US').replace(/,/g, '&nbsp;') + '</span>';
-                            }
-                        },
-                        {
-                            "targets": [5],
-                            "className": "text-left align-middle py-0",
-                            "data": null,
-                            "render": function (data, type, row, meta) {
-                                if (type != 'display') return data[5];
-                                return '<abbr class="pr-2" title="' + data[5] + '" style="text-decoration:none;">' + data[6] + '</abbr>';
-                            }
-                        },
-                        {
-                            "targets": [6],
-                            "className": "text-left align-middle pr-3",
-                            "data": null,
-                            "render": function (data, type, row, meta) {
-                                if (type != 'display') return data[7];
-                                return '<abbr class="pr-2" title="' + data[7] + '" style="text-decoration:none;">' + data[8] + '</abbr>';
-                            }
-                        },
-                        {
-                            "targets": [7],
-                            "className": "align-middle",
-                            "data": null,
-                            "render": function (data, type, row, meta) {
-                                var status = [];
-                                if (data[9]) status.push('TOS');
-                                if (data[10]) status.push('Closed');
-                                if (type != 'display') return status.join(',') || 'ok';
-                                return status.length ? '<span class="text-danger">' + status.join(', ') + '</span>' : '<span class="text-success">OK</span>';
-                            }
-                        }],
+                    searching: true, paging: false, info: false,
+                    data: data,
+                    order: [[4, "desc"], [5, "asc"]],
+                    columnDefs: COLUMNS,
                 });
                 $('#search_table_wrapper .col-sm-12.col-md-6:empty').hide();
                 $('#search_table_wrapper .col-sm-12.col-md-6').removeClass('col-md-6').addClass('col-md-4');
@@ -259,30 +242,30 @@
                 $('#search_table_filter label input').addClass("ml-2");
                 if ($('#review_panel').is(":visible"))
                     toggleReview();
-            },
-            error: function (xhr) {
-                $('#search_spinner').hide();
-                $('#search_btn').prop('disabled', false);
+            })
+            .fail(xhr => {
                 if (xhr.status === 400)
                     $('#search_error').text('Authentication required. Please log in again.').show();
                 else
                     $('#search_error').text('Search failed. Status: ' + xhr.status).show();
-            }
-        });
+            })
+            .always(() => {
+                $('#search_spinner').hide();
+                $('#search_btn').prop('disabled', false);
+            });
     }
 
     function setFlag(username, type) {
-        let btn = $(`#btn_${type}_${username}`);
-        let c = (type === 'obvious') ? "danger" : "warning";
-        let is_set = btn.is(`.btn-${c}`);
+        const btn = $(`#btn_${type}_${username}`);
+        const c = (type === 'obvious') ? "danger" : "warning";
+        const is_set = btn.hasClass(`btn-${c}`);
         $(`#btn_obvious_${username}`).removeClass('btn-danger').addClass('btn-outline-danger');
         $(`#btn_borderline_${username}`).removeClass('btn-warning').addClass('btn-outline-warning');
-        $(`#userlink_${username}`).removeClass('text-danger').removeClass('text-warning');
+        $(`#userlink_${username}`).removeClass('text-danger text-warning');
         if (!is_set && ['obvious', 'borderline'].includes(type)) {
             flags[username] = type;
             btn.removeClass(`btn-outline-${c}`).addClass(`btn-${c}`);
-            let link_class = (type === 'obvious') ? "text-danger" : (type === 'borderline') ? "text-warning" : "";
-            $(`#userlink_${username}`).addClass(`${link_class}`);
+            $(`#userlink_${username}`).addClass(`text-${c}`);
         } else {
             delete flags[username];
         }
@@ -290,30 +273,25 @@
     }
 
     function updateReviewUI() {
-        var count = Object.keys(flags).length;
-        $('#flag_count').text(count);
-        var tbody = $('#review_table tbody').empty();
-        for (var username in flags) {
-            var type = flags[username];
-            var badge = type === 'obvious' ? '<span class="badge badge-danger">Obvious</span>' : '<span class="badge badge-warning text-dark">Borderline</span>';
-            var tr = $('<tr>').append(
-                $('<td>').html('<a class="text-info" href="https://lichess.org/@/' + username.toLowerCase() + '" target="_blank">' + username + '</a>'),
+        $('#flag_count').text(Object.keys(flags).length);
+        const tbody = $('#review_table tbody').empty();
+        for (const [username, type] of Object.entries(flags)) {
+            const u = escapeHtml(username);
+            const badge = type === 'obvious' ? '<span class="badge badge-danger">Obvious</span>' : '<span class="badge badge-warning text-dark">Borderline</span>';
+            $('<tr>').append(
+                $('<td>').html(userlink(username, {cls: "text-info"})),
                 $('<td>').html(badge),
                 $('<td>').html(
-                    `<button id="btn_close_${username}" class="btn btn-sm btn-danger mr-1 px-2 py-0" onclick="closeAccount('${username}')">Close</button>
-                     <button class="btn btn-sm btn-secondary px-2 py-0" onclick="setFlag('${username}', null)">Unflag</button>`
+                    `<button id="btn_close_${u}" class="btn btn-sm btn-danger mr-1 px-2 py-0" onclick="closeAccount('${u}')">Close</button>
+                     <button class="btn btn-sm btn-secondary px-2 py-0" onclick="setFlag('${u}', null)">Unflag</button>`
                 )
-            );
-            tbody.append(tr);
+            ).appendTo(tbody);
         }
     }
 
     function toggleReview() {
         $('#review_panel').toggle();
-        if ($('#review_btn').is('.btn-info'))
-            $('#review_btn').removeClass('btn-info').addClass('btn-outline-info');
-        else
-            $('#review_btn').removeClass('btn-outline-info').addClass('btn-info');
+        $('#review_btn').toggleClass('btn-info btn-outline-info');
     }
 
     function closeAccount(username) {
@@ -321,63 +299,43 @@
         performClose([username]);
     }
 
+    // Closes the accounts one after another; stops at the first failure.
     function performClose(usernames) {
         if (!usernames.length)
             return;
-        let username = usernames.shift();
-        $(`#btn_close_${username}`).prop('disabled', true).text('Closing...');
-        $(`#btn_close_${username}`).closest('tr').addClass("table-primary");
-        $.post('/mod/close_account', { user: username }, function (data) {
-            if (data && data.error) {
-                alert('Failed to close ' + username + ': ' + data.error);
-                $(`#btn_close_${username}`).prop('disabled', false).text('Close');
-            } else {
-                $(`#btn_close_${username}`).removeClass('btn-danger').addClass('btn-success').text('Closed');
+        const username = usernames.shift();
+        const button = () => $(`#btn_close_${username}`);
+        button().prop('disabled', true).text('Closing...').closest('tr').addClass("table-primary");
+        $.post('/mod/close_account', { user: username })
+            .done(data => {
+                if (data && data.error) {
+                    alert('Failed to close ' + username + ': ' + data.error);
+                    button().prop('disabled', false).text('Close');
+                    return;
+                }
+                button().removeClass('btn-danger').addClass('btn-success').text('Closed');
                 setFlag(username, null);
-                $('#search_table').DataTable().rows(function(idx, data, node) {
-                    return data[0] === username;
-                }).remove().draw();
+                $('#search_table').DataTable().rows((idx, data) => data[0] === username).remove().draw();
                 performClose(usernames);
-            }
-        }).fail(function (err) {
-            alert('Request failed for ' + username);
-            $(`#btn_close_${username}`).prop('disabled', false).text('Close');
-        });
+            })
+            .fail(() => {
+                alert('Request failed for ' + username);
+                button().prop('disabled', false).text('Close');
+            });
     }
 
     function closeBatchObvious() {
-        var targets = Object.keys(flags).filter(key => flags[key] === "obvious");
-        var names = targets.slice(0, 20).join(", ");
+        const targets = Object.keys(flags).filter(key => flags[key] === "obvious");
         if (targets.length == 0)
             return;
-        if (targets.length == 1) {
-             closeAccount(targets[0]);
-             return;
-        }
+        if (targets.length == 1)
+            return closeAccount(targets[0]);
+        let names = targets.slice(0, 20).join(", ");
         if (targets.length > 20)
             names += ", etc.";
         if (!confirm('Are you sure you want to CLOSE ALL ' + targets.length + ' obvious accounts?\n\n' + names))
             return;
-
         performClose(targets);
     }
-
-    function update_mode(val, to_request = true) {
-        if (val == 0)
-            val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
-        for (var i = 0; i < 3; i++) {
-            if (val == i || (val < 0 && i == 0))
-                $(`#mode_${i}`).addClass("active");
-            else
-                $(`#mode_${i}`).removeClass("active");
-        }
-        if (to_request && val != "{{view.mode}}") {
-            setCookie('theme_mode', val);
-            $.ajax({ url: `/set_mode/${val}`, type: "post" });
-            window.location.reload();
-        }
-    }
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.20/js/jquery.dataTables.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.20/js/dataTables.bootstrap4.min.js"></script>
 {% endblock %}
