@@ -5,3 +5,7 @@ _install_/
 build/
 dist/
 venv/
+.venv/
+data/
+---/
+*_local.py

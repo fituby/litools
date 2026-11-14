@@ -1254,3 +1254,13 @@ Lang.Spam: [
 }
 
 re_spaces = re.compile(r'\s{2,}', re.IGNORECASE)
+
+try:
+    import chat_re_local
+    for lang, res in chat_re_local.res_first.items():
+        list_res[lang][:0] = res
+    for lang, res in chat_re_local.res_last.items():
+        list_res[lang].extend(res)
+except ModuleNotFoundError as e:
+    if e.name != "chat_re_local":
+        raise

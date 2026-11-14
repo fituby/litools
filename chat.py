@@ -30,10 +30,7 @@ tournament_teams = [
     "lichess-king-of-the-hill",
     "lichess-racing-kings",
     "lichess-three-check",
-    "dark-horse",
-    "sc-turm-illingen",
-    "chessscoutinfo-team"
-]
+] + CHAT_EXTRA_TEAMS
 
 arena_tournament_page = "https://lichess.org/tournament/"
 swiss_tournament_page = "https://lichess.org/swiss/"

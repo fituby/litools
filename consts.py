@@ -1,6 +1,9 @@
+import os
+
 LITOOLS_VERSION = "v1.9.1"
 
 # Chat
+CHAT_EXTRA_TEAMS = [t.strip() for t in os.getenv("CHAT_EXTRA_TEAMS", "").split(",") if t.strip()]
 CHAT_TOURNAMENT_FINISHED_AGO = 24 * 60  # [min]
 CHAT_TOURNAMENT_STARTS_IN = 6 * 60  # [min]
 CHAT_SWISS_STARTED_AGO = 6 * 60  # [min]
@@ -101,3 +104,9 @@ CONFIG_FILE = "config.yml"
 NOT_READY = {'not ready': True}
 REFRESH_OPENINGS_PERIOD = 24 * 60 * 60  # seconds
 VERBOSE = 1
+
+try:
+    from consts_local import *
+except ModuleNotFoundError as e:
+    if e.name != "consts_local":
+        raise
