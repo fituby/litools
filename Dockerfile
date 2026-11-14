@@ -1,4 +1,4 @@
-FROM python:3.13.2-alpine3.21
+FROM python:3.14.10-alpine3.24
 
 RUN python -m ensurepip --upgrade && \
     pip install setuptools --upgrade
