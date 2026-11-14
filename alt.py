@@ -340,10 +340,12 @@ class Alts:
         except:
             step = 0
         if step >= 1:
-            if step == 1 and (force_refresh_openings or not alts.is_step1):
-                if (alts.is_step1 is None) or (force_refresh_openings and alts.is_step1 is not False):
-                    if alts.is_step1 is not True:
-                        alts.is_step1 = False
+            if step == 1 and (force_refresh_openings or not alts.is_step1 or alts.is_refreshing_openings):
+                if alts.is_step1 is None:
+                    alts.is_step1 = False
+                    Thread(name="alts_process", target=alts.process, args=(step, force_refresh_openings, mod)).start()
+                elif force_refresh_openings and alts.is_step1 and not alts.is_refreshing_openings:
+                    alts.is_refreshing_openings = True
                     Thread(name="alts_process", target=alts.process, args=(step, force_refresh_openings, mod)).start()
                 return NOT_READY
             if step == 2 and not alts.is_step2:
@@ -363,6 +365,7 @@ class Alts:
         self.is_step0 = None
         self.is_step1 = None
         self.is_step2 = None
+        self.is_refreshing_openings = False
         self.is_mod_log = True
         self.errors = []
         self.wait_insights_refresh_s = 0
@@ -394,6 +397,7 @@ class Alts:
             alt.download_openings(force_refresh_openings, mod)
         self.wait_insights_refresh_s = mod.api.get_waiting_time(ApiType.InsightsRefresh)
         self.is_step1 = True
+        self.is_refreshing_openings = False
 
     def process_step2(self, mod):
         self.hist_switch_intervals = [0.0] * len(ALT_SWITCH_INTERVAL_NAMES)

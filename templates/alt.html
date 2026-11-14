@@ -1,174 +1,148 @@
 {% extends 'layout.html' %}
+{% from 'macros.html' import mode_setting, spinner %}
 
 {% block main %}
-{% if embed_lichess %}
-<div class="container-fluid m-0 px-2 pb-5" style="max-width:100vw;min-height:60vh;">
-{% else %}
-<div class="container-fluid m-0 px-2 pb-3" style="max-width:100vw;min-height:97vh;">
-{% endif %}
+<div class="container-fluid m-0 px-2 {{'pb-5' if embed_lichess else 'pb-3'}}" style="max-width:100vw;min-height:{{'60vh' if embed_lichess else '97vh'}};">
   <div class="d-flex flex-row flex-wrap justify-content-around align-items-baseline w-100 mt-2 ml-1" style="padding-right: 150px;">
     <select id="num-games" class="flex-shrink-1 mr-2">
       <option value="100" title="analyze max 100 games per player">100 games</option>
       <option value="200" title="analyze max 200 games per player">200 games</option>
-      <option value="500" selected="selected" title="analyze max 500 games per player">500 games</option>
+      <option value="500" selected title="analyze max 500 games per player">500 games</option>
       <option value="1000" title="analyze max 1000 games per player">1,000 games</option>
       <option value="5000" title="analyze max 5000 games per player">5,000 games</option>
       <option value="10000" title="analyze max 10000 games per player">10,000 games</option>
     </select>
-    <button class="btn btn-primary mr-2" style="min-height:100%;" onclick="go_alts()">Go</button>
+    <button class="btn btn-primary mr-2" type="button" style="min-height:100%;" onclick="go_alts()">Go</button>
     <label for="alt-names" class="text-nowrap m-0 mr-1">Players:</label>
-    <input id="alt-names" class="flex-grow-1 mr-1" type="text" maxlength="150" placeholder="">
+    <input id="alt-names" class="flex-grow-1 mr-1" type="text" maxlength="150">
   </div>
   <div class="d-flex flex-row flex-wrap justify-content-around mt-1 mb-2">
     <div class="flex-column ml-1 mr-2" style="width:420px;min-width:370px;max-width:500px;">
       <table><tbody>
         <tr>
           <td><label for="date-begin" class="text-nowrap m-0">Games from:</label></td>
-          <td class="w-100 px-1"><input id="date-begin" class="w-100" type="date" value=""></td>
+          <td class="w-100 px-1"><input id="date-begin" class="w-100" type="date"></td>
           <td class="pr-1">optional</td>
         </tr>
         <tr>
           <td><label for="date-end" class="text-nowrap m-0">Games to:</label></td>
-          <td class="w-100 px-1"><input id="date-end" class="w-100" type="date" value=""></td>
+          <td class="w-100 px-1"><input id="date-end" class="w-100" type="date"></td>
           <td class="pr-1">optional</td>
         </tr>
       </tbody></table>
-      <div id="alts_downloading" class="d-none justify-content-center align-items-center my-3">
-        <div class="spinner-border text-secondary text-truncate" role="status"></div>
-        <span id="downloading_text" class="ml-3 text-secondary text-truncate">Downloading user data&hellip;</span>
-      </div>
-      <div id="part-1">
-      </div>
-      <div class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2">
-        <p class="pr-2 m-0">Mode</p>
-        <div class="btn-group btn-group-toggle">
-          <button id="mode_0" class="btn btn-secondary" onclick="update_mode(0);">Auto</button>
-          <button id="mode_1" class="btn btn-secondary" onclick="update_mode(1);">Dark</button>
-          <button id="mode_2" class="btn btn-secondary" onclick="update_mode(2);">Light</button>
-        </div>
-      </div>
+      {{ spinner("alts_downloading", "Downloading user data&hellip;", text_id="downloading_text") }}
+      <div id="alts_error" class="text-danger my-2"></div>
+      <div id="part-1"></div>
+      {{ mode_setting() }}
     </div>
     <div class="flex-column flex-grow-1 mx-2" style="min-width:420px;max-width:1000px;">
-      <div id="openings_downloading" class="row d-none justify-content-center align-items-center my-3">
-        <div class="spinner-border text-secondary text-truncate" role="status"></div>
-        <span class="ml-3 text-secondary">Downloading openings&hellip;</span>
-      </div>
-      <div id="games_downloading" class="row d-none justify-content-center align-items-center my-3">
-        <div class="spinner-border text-secondary text-truncate" role="status"></div>
-        <span class="ml-3 text-secondary">Downloading games&hellip;</span>
-      </div>
-      <div id="part-2">
-      </div>
+      {{ spinner("openings_downloading", "Downloading openings&hellip;", cls="row d-none justify-content-center align-items-center my-3") }}
+      {{ spinner("games_downloading", "Downloading games&hellip;", cls="row d-none justify-content-center align-items-center my-3") }}
+      <div id="part-2"></div>
     </div>
     <div class="flex-column flex-grow-1 ml-2 mr-1" style="min-width:420px;max-width:700px;">
-      <div id="part-3">
-      </div>
+      <div id="part-3"></div>
     </div>
   </div>
-</div> {% if embed_lichess %}
+</div>
+{% if embed_lichess %}
 <div class="container-fluid px-0">
-  <iframe id="embed_frame" class="container-fluid px-0" style="min-width:60vw; min-height:96vh;" src="https://lichess.org/report/list/print" allowtransparency="true" frameborder="0"></iframe>
-</div> {% endif %}
+  <iframe id="embed_frame" class="container-fluid px-0 border-0" style="min-width:60vw; min-height:96vh;" src="https://lichess.org/report/list/print"></iframe>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block scripts %}
-  <script>
-  $(document).ready(function() {
-    update_mode({{view.mode|safe}}, false);
-    if (window.matchMedia)
-      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
-        if ($('#mode_0').is('.active'))
-          update_mode(event.matches ? -1 : -2);
-      });
-    $("#loadOverlay").css("display","none");
-    $("#mainOverlay").css("display","block");
-    $("#alt-names").on('keypress', username_entered);
-    jQuery(function($){
-      $('#alt-names').bind('paste', function(event){
-        event.preventDefault();
-        var clipboardData = event.originalEvent.clipboardData.getData('text/plain');
-        alts_pasted(clipboardData);
-      });
+<script>
+  const TITLES = ["GM", "WGM", "IM", "WIM", "FM", "WFM", "NM", "CM", "WCM", "LM", "BOT"];
+  let current_alts = "";
+  let job = null;  // the running poll, cancelled when a new search starts
+
+  $(function() {
+    onEnter("#alt-names", go_alts);
+    $('#alt-names').on('paste', function(event) {
+      event.preventDefault();
+      alts_pasted(event.originalEvent.clipboardData.getData('text/plain'));
     });
-    {% if alts %}
-    $("#alt-names")[0].value = "{{alts}}";
-    {% if num_games %}
-    $("#num-games").val("{{num_games}}");
-    {% endif %}
-    {% if date_begin %}
-    $("#date-begin").val("{{date_begin}}");
-    {% endif %}
-    {% if date_end %}
-    $("#date-end").val("{{date_end}}");
-    {% endif %}
-    set_alts('{{alts}}');
-    {% else %}
-    clear_data();
-    {% endif %}
+    const initial = {{ {'alts': alts, 'num_games': num_games, 'date_begin': date_begin, 'date_end': date_end}|tojson }};
+    if (initial.alts) {
+      $("#alt-names").val(initial.alts);
+      if (initial.num_games) $("#num-games").val(initial.num_games);
+      if (initial.date_begin) $("#date-begin").val(initial.date_begin);
+      if (initial.date_end) $("#date-end").val(initial.date_end);
+      set_alts(initial.alts);
+    }
+    else
+      clear_data();
   });
-  function username_entered(e) {
-    if (!e) e = window.event;
-    var keyCode = e.code || e.key;
-    if (keyCode == 'Enter') {
-      go_alts();
-    }
-  }
-  (function ($, undefined) {
-    $.fn.getCursorPosition = function() {
-        var el = $(this).get(0);
-        var pos = 0;
-        if('selectionStart' in el) {
-            pos = el.selectionStart;
-        } else if('selection' in document) {
-            el.focus();
-            var Sel = document.selection.createRange();
-            var SelLength = document.selection.createRange().text.length;
-            Sel.moveStart('character', -el.value.length);
-            pos = Sel.text.length - SelLength;
-        }
-        return pos;
-    }
-  })(jQuery);
-  (function ($, undefined) {
-    $.fn.getSelectionEnd = function() {
-        var el = $(this).get(0);
-        var pos = 0;
-        if('selectionEnd' in el)
-            return el.selectionEnd;
-        return null;
-    }
-  })(jQuery);
+
+  // Rows copied from the user table contain titles, ratings etc.; keep only the usernames.
   function alts_pasted(text) {
-    var names = [];
+    const names = [];
     if (text.includes("\t")) {
-      var lines = text.replace(/\t /g, "\n").split("\n");
-      for (var i = 0; i < lines.length; i++) {
-        var line = lines[i].trim();
-        if (line.length > 2) {
-          var words = line.split(/\s+/);
-          if (["GM", "WGM", "IM", "WIM", "FM", "WFM", "NM", "CM", "WCM", "LM", "BOT"].includes(words[0]))
-            words.shift();
-          if (words.length) {
-            names.push(words[0]);
-            if (words.length == 1)
-              i++;
-          }
+      const lines = text.replace(/\t /g, "\n").split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.length <= 2)
+          continue;
+        const words = line.split(/\s+/);
+        if (TITLES.includes(words[0]))
+          words.shift();
+        if (words.length) {
+          names.push(words[0]);
+          if (words.length == 1)
+            i++;
         }
       }
     }
     else
       names.push(text);
-    var pos = $("#alt-names").getCursorPosition();
-    var end = $("#alt-names").getSelectionEnd();
-    if (end === null)
-      end = pos;
-    var val = $("#alt-names").val();
-    $("#alt-names").val(val.substring(0, pos) + names.join(" ") + val.substring(end, val.length));
+    insertAtCursor($("#alt-names")[0], names.join(" "));
   }
+
   function go_alts() {
-    set_alts($("#alt-names")[0].value.trim());
+    set_alts($("#alt-names").val().trim());
   }
-  var current_alts = "";
+
+  function show_parts(data) {
+    $('#part-1').html(data["part-1"]);
+    $('#part-2').html(data["part-2"]);
+    $('#part-3').html(data["part-3"]);
+  }
+
+  // `first_request_extra` is sent with the first request only (e.g. a forced refresh must not restart on every poll).
+  function request_step(step, alts, first_request_extra = {}) {
+    const form = {alts: alts, num_games: $('#num-games').val(), date_begin: $('#date-begin').val(), date_end: $('#date-end').val()};
+    let extra = first_request_extra;
+    return () => {
+      const data = {...form, ...extra};
+      extra = {};
+      return {url: `/alts/${step}/`, type: "post", data: data};
+    };
+  }
+
+  function on_poll_error(xhr) {
+    clear_spinners();
+    $('#alts_error').text(`Request failed (status ${xhr.status}). Please try again.`);
+  }
+
+  // Step 0: user data, step 1: openings, step 2: games. Each step starts when the previous one is ready.
+  function run_steps(alts, first_step, last_step, first_request_extra = {}) {
+    if (job)
+      job.cancel();
+    const spinners = ["#alts_downloading", "#openings_downloading", "#games_downloading"];
+    const run = step => {
+      setVisible(spinners[step], true, "d-flex");
+      job = pollUntilReady(request_step(step, alts, step == first_step ? first_request_extra : {}), data => {
+        setVisible(spinners[step], false, "d-flex");
+        show_parts(data);
+        if (step < last_step)
+          run(step + 1);
+      }, {on_error: on_poll_error});
+    };
+    run(first_step);
+  }
+
   function set_alts(alts) {
     if (alts)
       current_alts = alts;
@@ -177,116 +151,33 @@
     if (!alts)
       return;
     clear_data();
-    //$('#alt-names').attr("placeholder", alts).val("").focus().blur();
-    $('#alts_downloading').removeClass("d-none").addClass("d-flex");
-    $('#downloading_text').html(`Downloading ${alts.substring(0, 30)}&hellip;`);
-    var num_games_val = $('#num-games').val();
-    var date_begin_val = $('#date-begin').val();
-    var date_end_val = $('#date-end').val();
-    var timer0 = 0;
-    timer0 = setInterval(function() {
-      $.ajax({
-        url: `/alts/0/`,
-        type: "post",
-        data: {alts: alts, num_games: num_games_val, date_begin: date_begin_val, date_end: date_end_val}})
-        .done(function(data, textStatus, jqXHR) {
-          if ("not ready" in data)
-            return;
-          clearInterval(timer0);
-          $('#alts_downloading').removeClass("d-flex").addClass("d-none");
-          $('#downloading_text').html("Downloading user data&hellip;");
-          $('#part-1').html(data["part-1"]);
-          $('#part-2').html(data["part-2"]);
-          $('#part-3').html(data["part-3"]);
-          $('#openings_downloading').removeClass("d-none").addClass("d-flex");
-          var timer1 = 0;
-          timer1 = setInterval(function() {
-            $.ajax({
-              url: `/alts/1/`,
-              type: "post",
-              data: {alts: alts, num_games: num_games_val, date_begin: date_begin_val, date_end: date_end_val}})
-              .done(function(data, textStatus, jqXHR) {
-                if ("not ready" in data)
-                  return;
-                clearInterval(timer1);
-                $('#openings_downloading').removeClass("d-flex").addClass("d-none");
-                $('#part-1').html(data["part-1"]);
-                $('#part-2').html(data["part-2"]);
-                $('#part-3').html(data["part-3"]);
-                $('#games_downloading').removeClass("d-none").addClass("d-flex");
-                var timer2 = 0;
-                timer2 = setInterval(function() {
-                  $.ajax({
-                    url: `/alts/2/`,
-                    type: "post",
-                    data: {alts: alts, num_games: num_games_val, date_begin: date_begin_val, date_end: date_end_val}})
-                    .done(function(data, textStatus, jqXHR) {
-                      if ("not ready" in data)
-                        return;
-                      clearInterval(timer2);
-                      $('#games_downloading').removeClass("d-flex").addClass("d-none");
-                      $('#part-1').html(data["part-1"]);
-                      $('#part-2').html(data["part-2"]);
-                      $('#part-3').html(data["part-3"]);
-                    });
-                }, 1000);
-              });
-          }, 1000);
-        });
-    }, 1000);
+    $('#downloading_text').html(`Downloading ${escapeHtml(alts.substring(0, 30))}&hellip;`);
+    run_steps(alts, 0, 2);
   }
-  function clear_data() {
-    $('#notes-section').removeClass("d-block").addClass("d-none");
-    $('#part-1').html("");
-    $('#part-2').html("");
-    $('#part-3').html("");
-    $('#user_downloading').removeClass("d-flex").addClass("d-none");
-    $('#downloading_text').html("Downloading user data&hellip;");
-    $('#games_downloading').removeClass("d-flex").addClass("d-none");
-  }
+
   function refresh_openings() {
-    $('#refresh-openings').removeClass("d-flex").addClass("d-none");
-    $('#openings_downloading').removeClass("d-none").addClass("d-flex");
-    var num_games_val = $('#num-games').val();
-    var date_begin_val = $('#date-begin').val();
-    var date_end_val = $('#date-end').val();
-    var timer2 = 0;
-    timer2 = setInterval(function() {
-      $.ajax({
-        url: `/alts/1/`,
-        type: "post",
-        data: {alts: current_alts, num_games: num_games_val, date_begin: date_begin_val, date_end: date_end_val, force_refresh_openings: true}})
-        .done(function(data, textStatus, jqXHR) {
-          if ("not ready" in data)
-            return;
-          clearInterval(timer2);
-          $('#openings_downloading').removeClass("d-flex").addClass("d-none");
-          $('#part-1').html(data["part-1"]);
-          $('#part-2').html(data["part-2"]);
-          $('#part-3').html(data["part-3"]);
-        });
-    }, 1000);
+    setVisible('#refresh-openings', false, "d-flex");
+    run_steps(current_alts, 1, 1, {force_refresh_openings: true});
   }
-  function update_mode(val, to_request=true) {
-    if (val == 0)
-      val = (!window.matchMedia || window.matchMedia('(prefers-color-scheme: dark)').matches) ? -1 : -2;
-    for (var i = 0; i < 3; i++) {
-      if (val == i || (val < 0 && i == 0))
-        $(`#mode_${i}`).addClass("active");
-      else
-        $(`#mode_${i}`).removeClass("active");
-    }
-    if (to_request && val != "{{view.mode}}") {
-      setCookie('theme_mode', val);
-      $.ajax({url: `/set_mode/${val}`, type: "post"});
-      if (current_alts) {
-        var form = $(`<form action="/alt" method="post"><input type="hidden" name="alts" value="${current_alts}" /><input type="hidden" name="num_games" value="${$('#num-games').val()}" /><input type="hidden" name="date_begin" value="${$('#date-begin').val()}" /><input type="hidden" name="date_end" value="${$('#date-end').val()}" /></form>`);
-        $('body').append(form);
-        form.submit();
-      } else {
-        location.reload();
-      }
-    }
+
+  function clear_spinners() {
+    for (const id of ["#alts_downloading", "#openings_downloading", "#games_downloading"])
+      setVisible(id, false, "d-flex");
   }
-  </script>
+
+  function clear_data() {
+    if (job)
+      job.cancel();
+    show_parts({});
+    clear_spinners();
+    $('#alts_error').text("");
+    $('#downloading_text').html("Downloading user data&hellip;");
+  }
+
+  function reload_page() {
+    if (!current_alts)
+      return location.reload();
+    postAndReload("/alt", {alts: current_alts, num_games: $('#num-games').val(), date_begin: $('#date-begin').val(), date_end: $('#date-end').val()});
+  }
+</script>
 {% endblock %}
