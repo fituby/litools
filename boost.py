@@ -602,7 +602,8 @@ class Boost:
                 url_refresh = f'https://lichess.org/insights/refresh/{self.user.id}'
                 r = mod.api.post(ApiType.InsightsRefresh, url_refresh, token=mod.token)
                 if r.status_code != 200:
-                    raise Exception("Performance error: Failed to refresh insights")
+                    body = ' '.join(r.text[:300].split())
+                    raise Exception(f"Performance error: Failed to refresh insights: Status {r.status_code}: {body}")
                 set_insights_refreshed(self.user.id, now)
             url = f'https://lichess.org/insights/data/{self.user.id}'
             headers = {'Content-Type': "application/json"}

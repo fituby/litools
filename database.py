@@ -2,7 +2,7 @@ from peewee import *
 from elements import get_db
 
 
-db = SqliteDatabase(get_db(), pragmas={'timeout': 20})
+db = SqliteDatabase(get_db(), timeout=20, pragmas={'journal_mode': 'wal', 'synchronous': 'normal'})
 
 
 class Mods(Model):
@@ -29,18 +29,20 @@ class Authentication(Model):
 
 class Messages(Model):
     id = AutoField()
-    time = DateTimeField()
+    time = DateTimeField(index=True)
     delay = IntegerField(null=True)
     username = CharField(max_length=20+4)
     text = CharField()
     removed = BooleanField(default=False)
     disabled = BooleanField(default=False)
     timeout = BooleanField(default=False)
-    tournament = CharField()
+    tournament = CharField(index=True)
 
     class Meta:
         database = db
 
+
+Messages.add_index(SQL('CREATE INDEX IF NOT EXISTS "messages_username_nocase" ON "messages" ("username" COLLATE NOCASE)'))
 
 db.connect()
 db.create_tables([Mods, Authentication, Messages], safe=True)

@@ -31,7 +31,8 @@ def download_openings(user_id, color, opening_stage, mod, to_refresh=False):
             url_refresh = f'https://lichess.org/insights/refresh/{user_id}'
             r = mod.api.post(ApiType.InsightsRefresh, url_refresh, token=mod.token)
             if r.status_code != 200:
-                log(f"Failed to refresh insights for @{user_id}: Status {r.status_code}", to_print=True, to_save=True)
+                body = ' '.join(r.text[:300].split())
+                log(f"Failed to refresh insights for @{user_id}: Status {r.status_code}: {body}", to_print=True, to_save=True)
         url = f'https://lichess.org/insights/data/{user_id}'
         headers = {'Content-Type': "application/json"}
         data = {"metric": "opponentRating", "dimension": opening_stage.name, "filters": {"color": [color.name]}}
