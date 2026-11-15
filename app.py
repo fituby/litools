@@ -8,7 +8,7 @@ import threading
 import base64
 from secrets import token_bytes
 import hashlib
-from urllib.parse import urlencode, quote_plus
+from urllib.parse import urlencode, quote_plus, urlsplit
 import requests
 from datetime import datetime, timedelta
 from dateutil import tz
@@ -41,8 +41,36 @@ logger.setLevel(logging.ERROR)
 app = Flask(__name__, template_folder="templates", static_folder="static", static_url_path="/")
 app.secret_key = token_bytes(32)
 app.config['SESSION_TYPE'] = 'memcached'
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = get_uri().startswith("https://")
 Compress(app)  # must be registered before minify: after_request hooks run in reverse order
 minify(app=app, html=True, js=True, cssless=True)
+
+
+def url_origin(url):
+    parts = urlsplit(url)
+    return f"{parts.scheme}://{parts.netloc}".lower()
+
+
+@app.before_request
+def check_origin():
+    """Rejects state-changing requests sent from other websites (CSRF)."""
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
+        return None
+    origin = request.headers.get('Origin')
+    if origin and origin.lower() not in (url_origin(get_uri()), url_origin(request.host_url)):
+        log_bad_request(f"cross-site {request.method} {request.path} from {origin}")
+        return Response(status=403)
+    return None
+
+
+@app.after_request
+def add_security_headers(resp):
+    resp.headers.setdefault('X-Frame-Options', "DENY")
+    resp.headers.setdefault('Content-Security-Policy', "frame-ancestors 'none'")
+    resp.headers.setdefault('X-Content-Type-Options', "nosniff")
+    resp.headers.setdefault('Referrer-Policy', "strict-origin-when-cross-origin")
+    return resp
 chat = ChatAnalysis()
 auto_mod_token = get_token()
 auto_mod = Mod(auto_mod_token) if auto_mod_token else None
@@ -53,9 +81,10 @@ mod_cache = {}
 re_state = re.compile(r'[\w-]')
 
 
-def with_mod(page=False, mod_only=False, update_theme=False, update_seenAt=False):
+def with_mod(page=False, allow=None, update_theme=False, update_seenAt=False):
     """Passes the logged-in moderator to the view as its first argument.
-    Without a valid login, pages redirect to /login and API requests get 401."""
+    Without a valid login, pages redirect to /login and API requests get 401.
+    allow: permission check of the tool (e.g. Mod.is_boost); moderators without it get 403."""
     def decorator(view):
         @wraps(view)
         def wrapper(*args, **kwargs):
@@ -63,8 +92,8 @@ def with_mod(page=False, mod_only=False, update_theme=False, update_seenAt=False
                 mod = get_mod(request.cookies, update_theme=update_theme, update_seenAt=update_seenAt)
             except Exception:
                 return redirect('/login') if page else Response(status=401)
-            if mod_only and not mod.is_mod():
-                return Response(status=401)
+            if allow and not allow(mod):
+                return Response("You don't have access to this tool.", status=403)
             return view(mod, *args, **kwargs)
         return wrapper
     return decorator
@@ -88,7 +117,7 @@ def make_leaderboard(mod, variant):
 
 @app.route('/boost/', methods=['GET', 'POST'])
 @app.route('/boost', methods=['GET', 'POST'])
-@with_mod(page=True, update_theme=True, update_seenAt=True)
+@with_mod(page=True, update_theme=True, update_seenAt=True, allow=Mod.is_boost)
 def create_boost(mod):
     boost_user = request.form.get("user", None) if request.method == 'POST' else None
     if not is_username(boost_user):
@@ -98,7 +127,7 @@ def create_boost(mod):
 
 
 @app.route('/boost/<user>/', methods=['POST'])
-@with_mod(update_seenAt=True)
+@with_mod(update_seenAt=True, allow=Mod.is_boost)
 def get_boost_user(mod, user):
     if not is_username(user):
         return Response("Invalid username", status=400)
@@ -110,7 +139,7 @@ def get_boost_user(mod, user):
 
 
 @app.route('/boost/<user>/tournaments/', methods=['GET'])
-@with_mod()
+@with_mod(allow=Mod.is_boost)
 def create_tournaments(mod, user):
     if not is_username(user):
         return Response("Invalid username", status=400)
@@ -119,7 +148,7 @@ def create_tournaments(mod, user):
 
 
 @app.route('/boost/send_note', methods=['POST'])
-@with_mod()
+@with_mod(allow=Mod.is_boost)
 def boost_send_note(mod):
     user = request.form.get("user", None)
     if not is_username(user):
@@ -129,7 +158,7 @@ def boost_send_note(mod):
 
 
 @app.route('/boost/mod_action', methods=['POST'])
-@with_mod()
+@with_mod(allow=Mod.is_boost)
 def boost_mod_action(mod):
     user = request.form.get("user", None)
     if not is_username(user):
@@ -140,7 +169,7 @@ def boost_mod_action(mod):
 
 @app.route('/alt/', methods=['GET', 'POST'])
 @app.route('/alt', methods=['GET', 'POST'])
-@with_mod(page=True, update_theme=True, update_seenAt=True)
+@with_mod(page=True, update_theme=True, update_seenAt=True, allow=Mod.is_alt)
 def create_alt(mod):
     form = request.form if request.method == 'POST' else {}
     return render_template('/alt.html', embed_lichess=get_embed_lichess(), mod=mod, view=mod.view, icon="A/",
@@ -149,7 +178,7 @@ def create_alt(mod):
 
 
 @app.route('/alts/<step>/', methods=['POST'])
-@with_mod(update_theme=True)
+@with_mod(update_theme=True, allow=Mod.is_alt)
 def get_alts(mod, step):
     alt_names = request.form.get("alts", None)
     num_games = request.form.get("num_games", None)
@@ -320,13 +349,13 @@ def custom_timeout(mod):
 
 @app.route('/comms/', methods=['GET'])
 @app.route('/comms', methods=['GET'])
-@with_mod(page=True, update_theme=True, update_seenAt=True)
+@with_mod(page=True, update_theme=True, update_seenAt=True, allow=Mod.is_mod)
 def create_comms(mod):
     return render_template('/comms.html', mod=mod, view=mod.view, icon="C/")
 
 
 @app.route('/comms', methods=['POST'])
-@with_mod(update_seenAt=True)
+@with_mod(update_seenAt=True, allow=Mod.is_mod)
 def query_comms(mod):
     data = request.form
     username = data.get("username", "").strip()
@@ -343,13 +372,13 @@ def query_comms(mod):
 
 @app.route('/fp/', methods=['GET'])
 @app.route('/fp', methods=['GET'])
-@with_mod(page=True, mod_only=True, update_theme=True, update_seenAt=True)
+@with_mod(page=True, update_theme=True, update_seenAt=True, allow=Mod.is_alt)
 def create_fp(mod):
     return render_template('/fp.html', mod=mod, variants1=variants1, variants2=variants2, view=mod.view, icon="F/")
 
 
 @app.route('/fp/analyze', methods=['POST'])
-@with_mod(mod_only=True, update_theme=True, update_seenAt=True)
+@with_mod(update_theme=True, update_seenAt=True, allow=Mod.is_alt)
 def analyze_fp(mod):
     try:
         data = request.form
@@ -364,27 +393,27 @@ def analyze_fp(mod):
 
 
 @app.route('/fp/cancel', methods=['POST'])
-@with_mod(mod_only=True, update_seenAt=True)
+@with_mod(update_seenAt=True, allow=Mod.is_alt)
 def cancel_fp(mod):
     cancel_footprints(mod)
     return Response(status=204)
 
 
 @app.route('/fp/data', methods=['POST'])
-@with_mod(mod_only=True, update_seenAt=True)
+@with_mod(update_seenAt=True, allow=Mod.is_alt)
 def get_fp_data(mod):
     return get_footprints(mod)
 
 
 @app.route('/search/', methods=['GET'])
 @app.route('/search', methods=['GET'])
-@with_mod(page=True, update_theme=True, update_seenAt=True)
+@with_mod(page=True, update_theme=True, update_seenAt=True, allow=Mod.is_mod)
 def create_search(mod):
     return render_template('/search.html', mod=mod, view=mod.view, icon="")
 
 
 @app.route('/search', methods=['POST'])
-@with_mod(update_seenAt=True)
+@with_mod(update_seenAt=True, allow=Mod.is_mod)
 def query_search(mod):
     query = request.form.get("query", None)
     if not query:
@@ -394,7 +423,7 @@ def query_search(mod):
 
 
 @app.route('/mod/close_account', methods=['POST'])
-@with_mod()
+@with_mod(allow=Mod.is_mod)
 def close_account_route(mod):
     user = request.form.get("user", None)
     if not is_username(user):
@@ -440,6 +469,8 @@ def get_mod_token(token1, print_exception=False):
             mod_db = Mods.get(tokenHash=token_hash)
         except DoesNotExist:
             raise Exception("An unknown token is saved in your browser. <br>Outdated?")
+        if not mod_db.enabled or mod_db.expiresAt < datetime.now(tz=tz.tzutc()).replace(tzinfo=None):
+            raise Exception("The token saved in your browser has expired.")
         key = mod_db.tokenKey
         b_token2 = key * int(math.ceil(len(b_token1) / 24))
         b_token2 = b_token2[:len(b_token1)]
@@ -466,7 +497,7 @@ def save_token(access_token, expires_in):
     resp = make_response(redirect('/'))
     now_utc = datetime.now(tz=tz.tzutc())
     expires_date = now_utc + timedelta(seconds=expires_in)
-    resp.set_cookie('token', token1, max_age=timedelta(seconds=expires_in), secure=True, httponly=True)
+    resp.set_cookie('token', token1, max_age=timedelta(seconds=expires_in), secure=True, httponly=True, samesite='Lax')
     # Save token in the DB
     m = Mod(access_token, check_perms=False, get_public_data=True)
     token_hash = base64.b64encode(hash1, altchars=b'-_').decode("ascii")
@@ -661,10 +692,12 @@ def oauth2_callback():
 @app.route('/revoke_token/<token_hash>', methods=['DELETE'])
 @with_mod()
 def revoke_token(mod, token_hash):
-    is_deleted = Mod.revoke_token(token_hash)
-    if is_deleted:
-        return Response(status=204)
-    return Response(status=400)
+    if not mod.id or not Mod.revoke_token(token_hash, mod.id):
+        return Response(status=400)
+    for token1, mod_info in list(mod_cache.items()):  # the revoked session must stop working right away
+        if mod_info.mod.current_session == token_hash:
+            mod_cache.pop(token1, None)
+    return Response(status=204)
 
 
 if __name__ == "__main__":

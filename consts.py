@@ -98,7 +98,7 @@ ALT_MAX_PERIOD_FOR_GAMES = 2*365  # days
 # Authentication
 AUTH_ENDPOINT = "/oauth2"
 UPDATE_INTERVAL_MODS_SEEN_AT = 1 * 60  # [s]
-UPDATE_INTERVAL_MOD_PERMS = 24 * 60 * 60  # [s]
+UPDATE_INTERVAL_MOD_PERMS = 60 * 60  # [s]
 
 CONFIG_FILE = "config.yml"
 NOT_READY = {'not ready': True}

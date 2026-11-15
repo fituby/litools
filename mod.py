@@ -13,12 +13,13 @@ class Mod:
     auth_lock = Lock()
 
     @staticmethod
-    def revoke_token(token_hash):
+    def revoke_token(token_hash, mod_id):
+        """Deletes a session (token) of the moderator `mod_id`; sessions of other moderators are not touched."""
         try:
-            mod_db = Mods.get(tokenHash=token_hash)
+            mod_db = Mods.get((Mods.tokenHash == token_hash) & (Mods.modId == mod_id))
             mod_db.delete_instance()
             return True
-        except:
+        except Exception:
             return False
 
     def __init__(self, token, current_session="", mod_db=None, check_perms=True, get_public_data=True):

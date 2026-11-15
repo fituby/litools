@@ -9,8 +9,12 @@
   <link rel="apple-touch-icon-precomposed" href="{{url_for('static', filename=icon+'apple-touch-icon-precomposed.png')}}" />
   <meta name="theme-color" content="{{view.theme_color|safe}}" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no" />
-  <link rel="stylesheet" href="https://bootswatch.com/4/{{view.theme|safe}}/bootstrap.min.css" crossorigin="anonymous" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+  {% set bootswatch_sri = {"darkly": "sha384-AlZcjtenZsVAy5f0aLRFbRpPzwz9Lu3yKC+H0P3B6eHnp0FgEAHgPMal9E7I3O1U",
+                           "flatly": "sha384-YVAqsn9zrIMjKmYdRYojxLhIq3G2hInoDKjRpva2+OLSLQLyejdI59SK98PS4f83"} %}
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@4.6.2/dist/{{view.theme}}/bootstrap.min.css"
+        integrity="{{bootswatch_sri[view.theme]}}" crossorigin="anonymous" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+        integrity="sha384-DyZ88mC6Up2uqS4h/KRgHuoeGwBcD4Ng9SiP4dIRy0EXTlnuz47vAwmeGwVChigm" crossorigin="anonymous" />
   <style>
     .selectee:hover {background-color: rgba(128,128,128,0.25);}
     .selected-msgA {border-width: 3px !important;}
@@ -19,8 +23,10 @@
     #loadOverlay {background-color: {{view.theme_color|safe}}; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000;}
     #mainOverlay {display: none;}
   </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"
+          integrity="sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.1/umd/popper.min.js"
+          integrity="sha384-9/reFTGAW83EW2RDu2S0VKaIzap3H66lZH81PoYlFhbGU+6BZp6G7niu735Sk7lN" crossorigin="anonymous"></script>
   <script src="{{url_for('static', filename='bootstrap.min.js')}}"></script>
   <script src="{{url_for('static', filename='common.js')}}"></script>
   {% block libs %}{% endblock %}
