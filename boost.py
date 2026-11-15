@@ -503,6 +503,7 @@ class Boost:
         self.info_games_played = ""
         self.is_ready = False
         self.output: dict = None
+        self.output_theme = None
         self.output_tournaments: dict = None
 
     def get_errors(self):
@@ -864,11 +865,14 @@ class Boost:
     def get_output(self, mod):
         if not self.is_ready:
             return NOT_READY
+        if self.output and self.output_theme != mod.view.theme_color:
+            self.output = None  # the chart is drawn in the dark/light mode the output was created with
         if self.output:
             return self.output
         if self.output is not None:
             return NOT_READY
         self.output = {}
+        self.output_theme = mod.view.theme_color
         Thread(name="set_output", target=self.set_output, args=(mod,)).start()
         return NOT_READY
 

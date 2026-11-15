@@ -353,13 +353,13 @@ class Alts:
                     alts.is_step2 = False
                     Thread(name="alts_process", target=alts.process, args=(step, force_refresh_openings, mod)).start()
                 return NOT_READY
+        alts.set_theme(mod.view.theme_color)
         return alts.get_output()
 
     def __init__(self, theme_color):
         self.players = []
         self.alt_names = {}
-        self.theme_color = theme_color
-        self.is_dark_mode = not theme_color.upper().startswith("#FFF")
+        self.set_theme(theme_color)
         self.hist_switch_intervals = [0.0] * len(ALT_SWITCH_INTERVAL_NAMES)
         self.overlapping_games = {}
         self.is_step0 = None
@@ -717,6 +717,11 @@ class Alts:
                 openings_ij = self.get_hist_openings(color, opening_stage)
                 openings.append(f'<div class="mt-3">{openings_ij}</div>' if openings_ij else "")
         return f'{overlapping_games}{header}{self.get_mutual_games()}{mutual_teams}{"".join(openings)}'
+
+    def set_theme(self, theme_color):
+        """Charts are drawn on every request, so a cached result follows the current dark/light mode."""
+        self.theme_color = theme_color
+        self.is_dark_mode = not theme_color.upper().startswith("#FFF")
 
     def get_output(self):
         if not self.is_step0:

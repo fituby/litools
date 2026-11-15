@@ -25,6 +25,7 @@
     a:hover {text-decoration: underline;}
     .card {--bs-card-spacer-y: 1.25rem; --bs-card-spacer-x: 1.25rem;}
     {% if view.theme == "darkly" %}.table {--bs-table-striped-bg: #303030;}{% endif %}
+    .table > :not(caption) > * > * {border-color: var(--bs-table-border-color);}
     .card-deck {display: flex; flex-flow: row wrap;}
     .card-deck > .card {flex: 1 0 0%;}
     #loadOverlay {background-color: {{view.theme_color|safe}}; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2000;}
