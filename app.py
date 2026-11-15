@@ -25,7 +25,7 @@ from mod import Mod, ModInfo, View
 from api import get_user_agent
 from elements import get_client_id, get_host, get_port, get_num_threads, get_embed_lichess
 from elements import get_token, get_room_token, get_uri, delta_s, close_account
-from elements import log, log_exception, log_read
+from elements import log, log_exception, log_read, is_username
 from database import Mods, Authentication
 from consts import *
 
@@ -91,6 +91,8 @@ def make_leaderboard(mod, variant):
 @with_mod(page=True, update_theme=True, update_seenAt=True)
 def create_boost(mod):
     boost_user = request.form.get("user", None) if request.method == 'POST' else None
+    if not is_username(boost_user):
+        boost_user = None
     return render_template('/boost.html', boost_user=boost_user, embed_lichess=get_embed_lichess(),
                            mod=mod, view=mod.view, icon="B/")
 
@@ -98,6 +100,8 @@ def create_boost(mod):
 @app.route('/boost/<user>/', methods=['POST'])
 @with_mod(update_seenAt=True)
 def get_boost_user(mod, user):
+    if not is_username(user):
+        return Response("Invalid username", status=400)
     before = request.form.get("before", None)
     num_games = request.form.get("num_games", None)
     perf_type = request.form.get("perf_type", None)
@@ -108,6 +112,8 @@ def get_boost_user(mod, user):
 @app.route('/boost/<user>/tournaments/', methods=['GET'])
 @with_mod()
 def create_tournaments(mod, user):
+    if not is_username(user):
+        return Response("Invalid username", status=400)
     boost = get_boost_data(user.lower(), mod)
     return boost.get_tournaments(mod)
 
@@ -116,6 +122,8 @@ def create_tournaments(mod, user):
 @with_mod()
 def boost_send_note(mod):
     user = request.form.get("user", None)
+    if not is_username(user):
+        return Response("Invalid username", status=400)
     note = request.form.get("note", None)
     return send_boost_note(note, user, mod)
 
@@ -124,6 +132,8 @@ def boost_send_note(mod):
 @with_mod()
 def boost_mod_action(mod):
     user = request.form.get("user", None)
+    if not is_username(user):
+        return Response("Invalid username", status=400)
     action = request.form.get("action", None)
     return send_mod_action(action, user, mod)
 
@@ -205,6 +215,8 @@ def chat_set_multi_msg_ok(mod, msg_id):
 @app.route('/chat/warn/<username>/<subject>', methods=['POST'])
 @with_mod(update_seenAt=True)
 def chat_warn(mod, username, subject):
+    if not is_username(username):
+        return Response("Invalid username", status=400)
     chat.warn(username, subject, mod)
     return chat_changes(mod)
 
@@ -289,6 +301,8 @@ def chat_load_more(mod, tourn_id):
 @app.route('/chat/send_note', methods=['POST'])
 @with_mod()
 def chat_send_note(mod):
+    if not is_username(request.form.get("user")):
+        return Response("Invalid username", status=400)
     is_ok = chat.send_note(request.form.get("note"), request.form.get("user"), mod)
     data = chat_changes(mod)
     data['ok'] = is_ok
@@ -383,8 +397,8 @@ def query_search(mod):
 @with_mod()
 def close_account_route(mod):
     user = request.form.get("user", None)
-    if not user:
-        return {'error': 'No user provided'}
+    if not is_username(user):
+        return {'error': 'No valid user provided'}
     if close_account(user, mod):
         return {'status': 'success'}
     return {'error': 'Failed to close account'}

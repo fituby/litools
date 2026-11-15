@@ -1,4 +1,5 @@
 import statistics
+import html
 from datetime import datetime, timedelta
 from dateutil import tz
 import time
@@ -336,7 +337,7 @@ class UserTournament:
         return performance
 
     def get_name_link(self):
-        name = shorten(self.name, MAX_LEN_TOURNEY_NAME)
+        name = html.escape(shorten(self.name, MAX_LEN_TOURNEY_NAME))
         tourney_type = "tournament" if self.is_arena else "swiss"
         class_name = ""
         if self.is_official and self.name.startswith('≤') and self.place:
@@ -509,7 +510,7 @@ class Boost:
     def get_errors(self):
         if not self.errors:
             return ""
-        return f'<div class="text-warning"><div>{"</div><div>".join(self.errors)}</div></div>'
+        return f'<div class="text-warning"><div>{"</div><div>".join(html.escape(e) for e in self.errors)}</div></div>'
 
     def get_info_1(self, mod):
         main = self.user.get_user_info(BOOST_CREATED_DAYS_AGO, BOOST_NUM_PLAYED_GAMES)
@@ -517,14 +518,15 @@ class Boost:
         analysis = self.get_analysis()
         if analysis:
             analysis = f'<div class="my-3">{analysis}</div>'
-        best_tournaments = f'<a href="https://lichess.org/@/{self.user.name}/tournaments/best" target="_blank" ' \
+        user_name = html.escape(self.user.name)
+        best_tournaments = f'<a href="https://lichess.org/@/{user_name}/tournaments/best" target="_blank" ' \
                            f'class="btn btn-secondary flex-grow-1 py-0 mr-1" role="button">Best tournaments&hellip;</a>'
-        games = f'<a href="https://lichess.org/mod/{self.user.name}/games" target="_blank" ' \
+        games = f'<a href="https://lichess.org/mod/{user_name}/games" target="_blank" ' \
                 f'class="btn btn-secondary flex-grow-1 py-0" role="button">Games&hellip;</a>'
         if mod.boost_ring_tool:
             class_boost_ring = "btn-warning" if self.enable_sandbagging and self.enable_boosting else "btn-secondary"
             additional_tools = f'<div class="d-flex justify-content-between mb-2 px-1">' \
-                               f'<a href="https://{mod.boost_ring_tool}/?user={self.user.name}" target="_blank" ' \
+                               f'<a href="https://{mod.boost_ring_tool}/?user={user_name}" target="_blank" ' \
                                f'class="btn {class_boost_ring} flex-grow-1 py-0 mr-1" ' \
                                f'role="button">Boost ring tool&hellip;</a>{best_tournaments}{games}</div>'
         else:

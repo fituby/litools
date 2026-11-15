@@ -253,7 +253,7 @@ class Alt:
     def get_errors(self):
         if not self.user.errors:
             return ""
-        return f'<div class="text-warning"><div>{"</div><div>".join(self.user.errors)}</div></div>'
+        return f'<div class="text-warning"><div>{"</div><div>".join(html.escape(e) for e in self.user.errors)}</div></div>'
 
     def get_user_info(self):
         main = self.user.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES)
@@ -726,5 +726,5 @@ class Alts:
     def get_errors(self):
         if not self.errors:
             return ""
-        errors = '</p><p>'.join(self.errors)
+        errors = '</p><p>'.join(html.escape(e) for e in self.errors)
         return f'<h4 class="text-danger">Error{"" if len(self.errors) == 1 else "s"}:</h4><p>{errors}</p>'

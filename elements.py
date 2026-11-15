@@ -21,6 +21,12 @@ refresh_insights_times = {}
 STYLE_WORD_BREAK = "word-break:break-word;"  # "word-break:break-all;"
 re_link = re.compile(r'\bhttps?:\/\/(?:www\.)?[-_a-zA-Z0-9]*\.?lichess\.(?:ovh|org)\/[-a-zA-Z0-9@:%&\?\$\.,_\+~#=\/]+\b', re.IGNORECASE)
 url_symbols = "abcdefghijklmnopqrstuvwxyz1234567890/?@&=$-_.+!,()'*{}^~[]#%<>; "
+re_username = re.compile(r'^[A-Za-z0-9_-]{2,30}$')
+
+
+def is_username(name):
+    """Lichess usernames: 2-30 letters, digits, '_' or '-'. Anything else must not reach API URLs or HTML."""
+    return bool(name) and bool(re_username.match(name))
 
 country_names = {'GB-WLS': 'Wales󠁧󠁢󠁷󠁬󠁳󠁿', 'GB-SCT': 'Scotland󠁢󠁳󠁣󠁴󠁿󠁧󠁢󠁷󠁬󠁳󠁿',
          'GB-ENG': 'England󠁢󠁥󠁮󠁧󠁿', 'GB-NIR': 'Northern Ireland󠁢󠁥󠁮󠁧󠁿',
@@ -96,8 +102,8 @@ def flair_to_text(flair):
 def get_flair_element(flair, size=30):
     if not flair:
         return ""
-    return f'<abbr class="user-flair text-info pr-1" title="{flair_to_text(flair)}" style="text-decoration:none;">' \
-           f'<img src="https://lichess1.org/assets/______0/flair/img/{flair}.webp" ' \
+    return f'<abbr class="user-flair text-info pr-1" title="{html.escape(flair_to_text(flair))}" style="text-decoration:none;">' \
+           f'<img src="https://lichess1.org/assets/______0/flair/img/{html.escape(flair)}.webp" ' \
            f'style="max-width:{size}px;"></abbr>'
 
 
@@ -222,9 +228,9 @@ class Profile:
         info = []
         name = f"{self.firstName} {self.lastName}".strip()
         if name:
-            info.append(f'<div><span class="text-muted">Name:</span> {name}</div>')
+            info.append(f'<div><span class="text-muted">Name:</span> {html.escape(name)}</div>')
         if self.location:
-            info.append(f'<div><span class="text-muted">Location:</span> {self.location}</div>')
+            info.append(f'<div><span class="text-muted">Location:</span> {html.escape(self.location)}</div>')
         if self.bio:
             info.append(f'<div class="text-break"><span class="text-muted">Bio:</span> {self.bio}</div>')
         ratings = []
@@ -269,13 +275,15 @@ class User:
                 title = f'<span class="text-warning">{self.title}</span> '
         else:
             title = ""
-        return f'{title}<a href="https://lichess.org/@/{self.id}{postfix}" class="pr-1" target="_blank">{self.name}</a>'
+        return f'{title}<a href="https://lichess.org/@/{html.escape(self.id)}{postfix}" class="pr-1" target="_blank">' \
+               f'{html.escape(self.name)}</a>'
 
     def get_short_name(self, max_len=10):
         if len(self.name) > max_len:
             title_name = f'{self.title} {self.name}'.strip()
-            return f'<abbr title="{title_name}" style="text-decoration:none;">{shorten(self.name, max_len)}</abbr>'
-        return self.name
+            return f'<abbr title="{html.escape(title_name)}" style="text-decoration:none;">' \
+                   f'{html.escape(shorten(self.name, max_len))}</abbr>'
+        return html.escape(self.name)
 
     def get_disabled(self):
         if not self.disabled:
@@ -308,14 +316,14 @@ class User:
         country = self.profile.country
         if not country:
             return ""
-        country_img = f'<img src="https://lichess1.org/assets/______0/flags/{country}.webp" style="max-width:30px;">'
+        country_img = f'<img src="https://lichess1.org/assets/______0/flags/{html.escape(country)}.webp" style="max-width:30px;">'
         country_name = country_names.get(country, None)
         if country_name is None:
             country_name = country.upper()
             if country_name[0] == '_':
                 country_name = country_name[1:]
         if country_name:
-            return f'<abbr class="px-1" title="{country_name}" style="text-decoration:none;">{country_img}</abbr>'
+            return f'<abbr class="px-1" title="{html.escape(country_name)}" style="text-decoration:none;">{country_img}</abbr>'
         return f'<span class="px-1">{country_img}</span>'
 
     def get_name_info(self, limits_created_days_ago):
@@ -1009,10 +1017,11 @@ def get_user_link(username, no_name="Unknown User", class_a="text-info", max_len
     if username:
         if len(username) > max_len:
             user_url = username
-            username = f'{username[:max_len - 1]}&hellip;'
+            username = f'{username[:max_len - 1]}…'
         else:
             user_url = username.lower()
-        return f'<a class="{class_a}" href="https://lichess.org/@/{user_url}" target="_blank">{username}</a>'
+        return f'<a class="{class_a}" href="https://lichess.org/@/{html.escape(user_url)}" target="_blank">' \
+               f'{html.escape(username)}</a>'
     return f'<i>{no_name}</i>'
 
 

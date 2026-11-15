@@ -42,6 +42,7 @@ class ChatAnalysis:
     re_kid_years = re.compile(r"(?:\b|\D)({})(?:\b|\D)".format("|".join(
         [f"{y}\\s*(?:г|л|y|j)|{datetime.now().year - y}" for y in range(6, 12)])), re.IGNORECASE)
     re_tourn_id = re.compile(r"^\w{8}$")
+    re_chat_id = re.compile(r"^[\w-]{1,64}$")  # ids of studies/broadcasts taken from pasted links
 
     def __init__(self):
         self.tournaments = {}
@@ -848,7 +849,7 @@ class ChatAnalysis:
             page = f'{arena_tournament_page}{page}'
         if page and page.startswith(str_lichess):
             i = page.rfind('/')
-            if 0 < i < len(page):
+            if 0 < i < len(page) and ChatAnalysis.re_chat_id.match(page[i + 1:]):
                 tourn_id = page[i + 1:]
                 if tourn_id in self.tournaments:
                     self.tournaments[tourn_id].is_monitored = True
