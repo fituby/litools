@@ -193,6 +193,7 @@
   let is_reviewed = false;
   let update_frequency_val = {{ update_frequency|tojson }};
   let next_report_id_to_select = 0;
+  let last_multiline_reports = [];
 
   $(function() {
     onEnter("#tournament_link", add_tournament);
@@ -258,6 +259,7 @@
     else if (is_reviewed)
       setVisible("#clean_messages", true, "d-flex");
     msg_users.clear();
+    last_multiline_reports = multiline_reports;
     $('#chat_reports').html(renderGlobalErrors(errors) + reports.map(renderReport).join(""));
     $('#multiline_chat_reports').html(multiline_reports.map(renderMultiReport).join(""));
     $('#update_time').text(data_chats["time"]);
@@ -337,8 +339,22 @@
   function timeout_multi(msg_id, reason = 0) {
     if (reason == 0 && !is_clickable())
       return;
+    const excluded = $(`#mmsg${msg_id} [id^=msgB]`).map((i, el) => Number(el.id.substring(4))).get()
+      .filter(id => excluded_msgs.has(id));
     $(`#mmsg${msg_id}`).hide();
-    post_and_update(`/chat/timeout_multi/${msg_id}/${reason}`);
+    post_and_update(`/chat/timeout_multi/${msg_id}/${reason}`, {excluded: excluded});
+  }
+
+  // Excludes a multi-line message from the block's timeout, in this browser only (nothing is sent until the timeout).
+  function toggle_excluded(msg_id) {
+    const id = Number(msg_id.substring(1));
+    if (!excluded_msgs.delete(id))
+      excluded_msgs.add(id);
+    const block = $(`#msg${msg_id}`).closest('[id^=mmsgB]')[0];
+    const report = last_multiline_reports.find(r => `mmsgB${r.id}` == block?.id);
+    if (report)
+      $(block).replaceWith(renderMultiReport(report));
+    filter_out();
   }
 
   function set_multi_ok(msg_id) {

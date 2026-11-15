@@ -12,6 +12,8 @@ const HR_DOTTED = '<hr class="my-0" style="border-top:dotted 2px;"/>';
 
 // Usernames of rendered messages by message id (without the section letter).
 const msg_users = new Map();
+// Ids of multi-line messages excluded by the moderator. Kept only in the browser and sent with a multi-line timeout.
+const excluded_msgs = new Set();
 
 function safeUrl(url) {
   return /^https?:\/\//i.test(url || "") ? url : "#";
@@ -105,8 +107,10 @@ function banButtons(m, id, {add_reason = null, fn = "timeout", idle_class = "btn
   return html;
 }
 
-function messageText(m) {
+function messageText(m, excluded = false) {
   const f = m.f || 0;
+  if (excluded)
+    return `<span class="text-muted" style="${WORD_BREAK}"><s>${renderSegments(m.t)}</s></span>`;
   const text = renderSegments(m.t);
   const cls = (f & (MsgFlag.Deleted | MsgFlag.Reset | MsgFlag.Disabled | MsgFlag.TimedOut | MsgFlag.Official)) ? "text-muted"
     : (f & MsgFlag.Removed) ? "text-secondary" : "";
@@ -122,7 +126,8 @@ function messageText(m) {
 // Options:
 //   tag: section letter of the element id; base: time of the selected message (shows relative times, hides buttons);
 //   show_hidden: also show processed/zero-score messages; buttons: BTN_BAN | BTN_DISMISS;
-//   dismiss_name: label of the dismiss button; add_user: show the username; mscore: add score/language data for filters;
+//   dismiss_name: label of the dismiss button; exclusion: the dismiss button toggles the client-side exclusion instead;
+//   add_user: show the username; mscore: add score/language data for filters;
 //   add_reason: reason to suggest if none was detected; highlight: true or the username to highlight; diff: highlight colour;
 //   selected: not clickable; centered: the selected message; selection: text for the notes.
 function renderMessage(m, o) {
@@ -133,7 +138,7 @@ function renderMessage(m, o) {
   let buttons = 0;
   if (!(f & (MsgFlag.Official | MsgFlag.Disabled | MsgFlag.Removed | MsgFlag.TimedOut))) {
     buttons = o.buttons ?? (has_base ? 0 : BTN_BAN | BTN_DISMISS);
-    if ((!score && !o.dismiss_name) || (f & MsgFlag.Reset))
+    if ((!score && !o.dismiss_name && !o.exclusion) || (f & MsgFlag.Reset))
       buttons &= ~BTN_DISMISS;
   }
   const is_hidden = f & (MsgFlag.Removed | MsgFlag.Disabled | MsgFlag.Reset | MsgFlag.TimedOut | MsgFlag.Official);
@@ -146,11 +151,14 @@ function renderMessage(m, o) {
   const username = (o.highlight === true || o.highlight === m.u) ? `<b><u>${name}</u></b>` : name;
   const user = (o.add_user ?? true)
     ? `<a class="text-info user-select-none" href="${commUrl(m.u)}" target="_blank" onclick="prevent_click(event)">${username}</a>` : "";
+  const excluded = o.exclusion && excluded_msgs.has(Number(m.id));
+  const dismiss_name = o.exclusion ? (excluded ? "Include" : "Exclude") : (o.dismiss_name || "Dismiss");
+  const dismiss_fn = o.exclusion ? "toggle_excluded" : "set_ok";
   const dismiss = (buttons & BTN_DISMISS)
-    ? `<button class="btn ${o.dismiss_name ? "btn-secondary" : "btn-primary"} text-nowrap align-baseline flex-grow-0 py-0 px-1 ml-1" ` +
-      `onclick="set_ok('${id}');">${o.dismiss_name || "Dismiss"}</button> ` : "";
+    ? `<button class="btn ${o.dismiss_name || o.exclusion ? "btn-secondary" : "btn-primary"} text-nowrap align-baseline flex-grow-0 py-0 px-1 ml-1" ` +
+      `onclick="${dismiss_fn}('${id}');">${dismiss_name}</button> ` : "";
   const ban = (buttons & BTN_BAN) ? banButtons(m, id, {add_reason: o.add_reason ?? null}) : "";
-  const text = messageText(m);
+  const text = messageText(m, excluded);
   let attrs = o.mscore ? ` data-mscore="${score}" data-langs="${m.l || 0}"` : "";
   if (o.selection)
     attrs += ` data-selection="${escapeHtml(`${m.u}: "${segmentsText(m.t)}"`)}"`;
@@ -219,7 +227,7 @@ function renderMultiReport(r) {
                  `<div class="d-flex justify-content-between mb-1"><span>${ban}${user}</span>` +
                  `<span class="align-items-baseline ml-1"><span${score_cls}>${score}</span> ${dismiss}</span></div></div>`;
   const msgs = r.msgs.map(x => x === null ? HR_DOTTED : renderMessage(x, {tag: 'B', show_hidden: true, add_user: false,
-                                                                         dismiss_name: "Exclude", add_reason: REASON_SPAM})).join("");
+                                                                         exclusion: true, add_reason: REASON_SPAM})).join("");
   return `<div id="mmsg${id}" data-mscore="${Number(r.score)}" class="col rounded m-1 px-0 pb-1" style="${PANEL_BG}min-width:350px;">${header}${msgs}</div>`;
 }
 

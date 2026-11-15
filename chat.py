@@ -386,7 +386,7 @@ class ChatAnalysis:
             self.add_error(f"ERROR at{datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: timeout: {exception}", False)
             self.state_reports += 1
 
-    def timeout_multi(self, mmsg_id, reason, mod):
+    def timeout_multi(self, mmsg_id, reason, mod, excluded_ids=()):
         try:
             with self.msg_lock:
                 msg_id = int(mmsg_id[1:])
@@ -395,7 +395,10 @@ class ChatAnalysis:
                     reason = int(reason)
                     if reason == 0:
                         reason = Reason.Spam #msgs[0].best_reason()
-                    combined_text = f'[multiline] {" | ".join([m.text for m in msgs if not m.is_reset])}'
+                    texts = [m.text for m in msgs if not m.is_reset and m.id not in excluded_ids]
+                    if not texts:
+                        return
+                    combined_text = f'[multiline] {" | ".join(texts)}'
                     combined_msg = Message({'u': msgs[0].username, 't': combined_text}, msgs[0].tournament, msgs[0].time)
                     combined_msg.evaluate(self.tournaments[self.tournament_messages[msg_id]].re_usernames)
                     self.api_timeout(combined_msg, reason, True, mod)

@@ -185,7 +185,8 @@ def chat_timeout(mod, msg_id, reason):
 @app.route('/chat/timeout_multi/<msg_id>/<reason>', methods=['POST'])
 @with_mod(update_seenAt=True)
 def chat_timeout_multi(mod, msg_id, reason):
-    chat.timeout_multi(msg_id, reason, mod)
+    excluded = {int(i) for i in request.form.getlist("excluded[]") if i.isdigit()}
+    chat.timeout_multi(msg_id, reason, mod, excluded)
     return chat.get_all(mod)
 
 
