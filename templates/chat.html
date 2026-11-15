@@ -6,7 +6,7 @@
   <div class="row justify-content-center my-2">
     <div class="col" style="width:420px;min-height:97vh;">
       <div class="d-flex flex-row justify-content-between align-items-baseline mb-1" style="max-width:500px;">
-        <button class="btn p-0 mb-1 collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_settings" aria-expanded="false" aria-controls="collapse_settings" onclick="show_settings($(this).is('.collapsed'));">
+        <button class="btn p-0 mb-1 collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_settings" aria-expanded="false" aria-controls="collapse_settings">
           <i class="fas fa-cog text-secondary" style="font-size:23px"></i>
         </button>
         <div id="hide_flairs" class="form-check form-switch d-none">
@@ -63,10 +63,10 @@
           <div class="d-flex flex-row justify-content-between align-items-baseline p-0" id="set_tournaments" style="box-shadow: none;">
             <p class="pe-2 m-0">Chats</p>
             <div class="btn-group" role="group">
-              <button id="tab_tournaments" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_tournaments" aria-expanded="false" aria-controls="collapse_tournaments" onclick="check_collapse('tournaments');">Monitored</button>
-              <button id="tab_started" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_started" aria-expanded="false" aria-controls="collapse_started" onclick="check_collapse('started');">Ongoing</button>
-              <button id="tab_created" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_created" aria-expanded="false" aria-controls="collapse_created" onclick="check_collapse('created');">Created</button>
-              <button id="tab_finished" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_finished" aria-expanded="false" aria-controls="collapse_finished" onclick="check_collapse('finished');">Finished</button>
+              <button id="tab_tournaments" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_tournaments" aria-expanded="false" aria-controls="collapse_tournaments">Monitored</button>
+              <button id="tab_started" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_started" aria-expanded="false" aria-controls="collapse_started">Ongoing</button>
+              <button id="tab_created" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_created" aria-expanded="false" aria-controls="collapse_created">Created</button>
+              <button id="tab_finished" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_finished" aria-expanded="false" aria-controls="collapse_finished">Finished</button>
             </div>
           </div>
           <div style="max-height:50vh;overflow-y:auto;">
@@ -207,6 +207,10 @@
     $("#switchHideFlairs").prop('checked', !is_flairs());
     $("#tournament_settings, #dubious_messages, #multiline_messages").hide();
     clear_notes();
+    $("#collapse_settings").on("show.bs.collapse", () => show_settings(true)).on("hide.bs.collapse", () => show_settings(false));
+    for (const tab of TOURNAMENT_TABS)
+      $(`#collapse_${tab}`).on("show.bs.collapse", () => $(`#tab_${tab}`).addClass("active"))
+                           .on("hide.bs.collapse", () => $(`#tab_${tab}`).removeClass("active"));
     refresh_loop();
   });
 
@@ -640,10 +644,6 @@
       .always(() => $('#btn_refresh_selected').removeClass("btn-outline-info").addClass("btn-outline-secondary"));
   }
 
-  function check_collapse(val) {
-    for (const tab of TOURNAMENT_TABS)
-      $(`#tab_${tab}`).toggleClass("active", tab == val && !$(`#collapse_${val}`).hasClass("show"));
-  }
 
   function set_tournament(tourn_id) {
     const checked = $(`#t_${tourn_id}`).is(':checked') ? 1 : 0;
