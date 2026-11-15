@@ -9,7 +9,7 @@ from typing import DefaultDict, Dict
 import html
 from api import ApiType
 from elements import Reason, TournType, delta_s, log, log_exception, get_notes, add_note
-from elements import load_mod_log, load_timeout_log, get_mod_log, get_highlight_style, add_timeout_msg
+from elements import load_mod_log, load_timeout_log, get_mod_log, add_timeout_msg
 from elements import ModActionType, ModAction, UserData
 from chat_message import Message
 from chat_tournament import Tournament
@@ -356,9 +356,9 @@ class ChatAnalysis:
                 self.recommended_timeouts.pop(msg.id, None)
             else:
                 status_info = "invalid token?" if r.status_code == 200 else f"status: {r.status_code}"
-                self.add_error(f"ERROR: Timeout ({status_info}):<br>{timeout_tag}{reason_tag.upper()} "
-                               f"<u>Score</u>: {msg.score} <u>User</u>: {msg.username} "
-                               f"<u>RoomId</u>: {msg.tournament.id} <u>Channel</u>: {chan} <u>Text</u>: {text}", False, 2)
+                self.add_error(f"ERROR: Timeout ({status_info}):\n{timeout_tag}{reason_tag.upper()} "
+                               f"Score: {msg.score} User: {msg.username} "
+                               f"RoomId: {msg.tournament.id} Channel: {chan} Text: {text}", False, 2)
         else:
             if msg.id not in self.recommended_timeouts:
                 now = datetime.now()
@@ -410,7 +410,7 @@ class ChatAnalysis:
 
     def api_warn(self, username, subject, mod, check_updates=True):
         if subject not in ModAction.warnings.values():
-            self.add_error(f"ERROR: Warn: @{username}: <u>Subject</u>: {subject}", False)
+            self.add_error(f"ERROR: Warn: @{username}: Subject: {subject}", False)
             self.state_reports += 1
             return
         if check_updates and not self.is_user_up_to_date(username, mod):
@@ -421,7 +421,7 @@ class ChatAnalysis:
             log(f"WARNING @{username}: {subject}", True, True, 2)
             self.update_selected_user(mod)
         else:
-            self.add_error(f"ERROR: Warn (status: {r.status_code}):<br>@{username}: <u>Subject</u>: {subject}", False)
+            self.add_error(f"ERROR: Warn (status: {r.status_code}):\n@{username}: Subject: {subject}", False)
         self.state_reports += 1
 
     def api_kidMode(self, username, mod, to_update):
@@ -436,7 +436,7 @@ class ChatAnalysis:
                 self.state_reports += 1
             return True
         else:
-            self.add_error(f"ERROR: action (status: {r.status_code}):<br>@{username}: kidMode", False)
+            self.add_error(f"ERROR: action (status: {r.status_code}):\n@{username}: kidMode", False)
             self.state_reports += 1
         return False
 
@@ -449,7 +449,7 @@ class ChatAnalysis:
             log(f"SB @{username}", True, True, 2)
             self.update_selected_user(mod)
         else:
-            self.add_error(f"ERROR: SB (status: {r.status_code}):<br>@{username}", False)
+            self.add_error(f"ERROR: SB (status: {r.status_code}):\n@{username}", False)
         self.state_reports += 1
 
     def warn(self, username, subject_tag, mod):
@@ -604,17 +604,17 @@ class ChatAnalysis:
         return self.get_all(mod)
 
     def select_message(self, msg_id, mod, update_selected_user=True):
-        def create_info(info):
+        def create_info(error=None):
             state_all = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
-            return {'selected-messages': info, 'filtered-messages': info, 'selected-tournament': "", 'selected-user': "",
-                    'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': "", 'selected-tournament-update': "",
-                    'state_reports': state_all}
+            selected = {'error': error} if error else None
+            return {'selected': selected, 'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "",
+                    'user-profile': "", 'state_reports': state_all}
 
         try:
             self.state_selected_msg[mod.id] += 1
             if msg_id == "--":
                 self.selected_msg_id[mod.id] = 0
-                return create_info("")
+                return create_info()
             self.selected_msg_id[mod.id] = int(msg_id[1:])
             if update_selected_user:
                 self.update_selected_user(mod)
@@ -622,10 +622,7 @@ class ChatAnalysis:
         except Exception as exception:
             self.selected_msg_id[mod.id] = 0
             log_exception(exception)
-            return create_info(f'<p class="text-danger">Error: {exception}</p>')
-        except:
-            self.selected_msg_id[mod.id] = 0
-            return create_info(f'<p class="text-danger">Error: get_messages_near()</p>')
+            return create_info(f"Error: {exception}")
 
     def get_messages_nearby(self, msg_id, mod):
         def get_warn_btn(subject_tag, btn_title, is_highlighted, user_name, is_disabled=False, txt_class=""):
@@ -743,10 +740,8 @@ class ChatAnalysis:
                                f'<span>{add_info}</span><span>{button_warn}</span></div>'
             return add_info
 
-        def create_output(info, tournament, user_data, update_time, filtered_info=None, user_msgs=None):
-            str_update = f'{update_time:%H:%M:%S} UTC' if update_time else ""
-            data = {'selected-messages': info, 'filtered-messages': filtered_info or info,
-                    'selected-tournament': tournament, 'selected-tournament-update': str_update}
+        def create_output(selected, user_data=None, user_msgs=None):
+            data = {'selected': selected}
             if user_data:
                 user_info = user_data.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES)
                 add_info = add_comm_info(user_data, user_msgs)
@@ -760,77 +755,36 @@ class ChatAnalysis:
             self.cache_selected_data[mod.id] = data
             return data
 
-        def make_selected(msg_selected, to_highlight=False):
-            style = f"{get_highlight_style(0.3, True)}border-width:3px !important;" if to_highlight \
-                else get_highlight_style(0.3)
-            return f'<div class="border border-success rounded" style="{style}">{msg_selected}</div>'
-
-        def load_more_btn(tournament_id, index):
-            return f'<div class="d-flex"><button id="btn-load-more-{index}" class="btn btn-success flex-grow-1 py-0 px-1" ' \
-                   f'onclick="load_more(\'{tourn_id}\');"><i class="fas fa-long-arrow-alt-up"></i>' \
-                   f'<span class="mx-2">Load more</span><i class="fas fa-long-arrow-alt-up"></i></button></div>' \
-                   if self.tournaments[tournament_id].is_more() else ""
-
-        tournament_name = ""
-        tournament_update = ""
+        selected = None
         try:
             tourn_id = self.tournament_messages.get(msg_id)
-            if tourn_id in self.tournaments:
-                tournament_name = self.tournaments[tourn_id].get_link(short=False)
-                tournament_update = self.tournaments[tourn_id].last_update
+            tournament = self.tournaments.get(tourn_id)
+            if tournament:
+                selected = {'tourn': tournament.get_header(short=False),
+                            'update': f'{tournament.last_update:%H:%M:%S} UTC' if tournament.last_update else ""}
             if not msg_id:
-                return create_output("", tournament_name, None, tournament_update)
+                return create_output(selected)
             with self.msg_lock:
-                i: int = None
-                if tourn_id in self.tournaments:
-                    for j, msg in enumerate(self.tournaments[tourn_id].messages):
-                        if msg.id == msg_id:
-                            i = j
-                            break
-                if i is None:
-                    return create_output(f'<p class="text-warning">Warning: Message has been removed</p>',
-                                         tournament_name, None, tournament_update)
-                i_start = 0
-                i_end = len(self.tournaments[tourn_id].messages)
-                msg_i = self.tournaments[tourn_id].messages[i]
+                messages = tournament.messages if tournament else []
+                msg_i = next((msg for msg in messages if msg.id == msg_id), None)
+                if msg_i is None:
+                    selected = selected or {}
+                    selected['warning'] = "Warning: Message has been removed"
+                    return create_output(selected)
                 username = msg_i.username
                 u = self.users[mod.id].get(username)
                 if not u or not u.is_up_to_date():
                     self.update_selected_user(mod)
                 user = self.users[mod.id].get(username)
-                is_diff = any([a.is_perms() for a in user.actions])
-                msg = make_selected(msg_i.get_info('C', show_hidden=True, highlight_user=True,
-                                                   is_diff_highlight=is_diff, is_selected=True, is_centered=True),
-                                    is_diff)
-                msg_f = make_selected(msg_i.get_info('F', show_hidden=True, highlight_user=True, add_selection=True,
-                                                     is_diff_highlight=is_diff, is_selected=False, is_centered=True),
-                                      is_diff)
-                # msg_f is not selected to allow copying to the notes.
-                # However, this prevents text from being selected with the mouse
-                msgs_before = [self.tournaments[tourn_id].messages[j].get_info('C', base_time=msg_i.time,
-                               highlight_user=msg_i.username, is_diff_highlight=is_diff) for j in range(i_start, i)]
-                msgs_after = [self.tournaments[tourn_id].messages[j].get_info('C', base_time=msg_i.time,
-                              highlight_user=msg_i.username, is_diff_highlight=is_diff) for j in range(i + 1, i_end)]
-                msgs_user = [(msg_f if msg_user.id == msg_id else msg_user.get_info('F', base_time=msg_i.time,
-                                highlight_user=msg_i.username, is_diff_highlight=is_diff, add_selection=True))
-                             for msg_user in self.tournaments[tourn_id].messages if msg_user.username == msg_i.username]
-                user_msgs = [(msg_i if msg_user.id == msg_id else msg_user)
-                             for msg_user in self.tournaments[tourn_id].messages if msg_user.username == msg_i.username]
-                list_start = '<hr class="text-primary my-1" style="border:1px solid;">' \
-                    if i_start == 0 and not self.tournaments[tourn_id].is_more() else ""
-                list_end = '<hr class="text-primary mt-1 mb-0" style="border:1px solid;">'\
-                           if i_end == len(self.tournaments[tourn_id].messages) else ""
-            info_selected = f'{load_more_btn(tourn_id, 1)}{list_start}{"".join(msgs_before)} {msg} {"".join(msgs_after)}' \
-                            f'{list_end}'
-            info_filtered = f'{load_more_btn(tourn_id, 2)}{"".join(msgs_user)}'
-            return create_output(info_selected, tournament_name, user, tournament_update,
-                                 filtered_info=info_filtered, user_msgs=user_msgs)
+                selected.update({'id': msg_id, 'diff': any([a.is_perms() for a in user.actions]),
+                                 'more': tournament.is_more(), 'msgs': [msg.to_data() for msg in messages]})
+                user_msgs = [msg for msg in messages if msg.username == username]
+            return create_output(selected, user, user_msgs)
         except Exception as exception:
             log_exception(exception)
-            return create_output(f'<p class="text-danger">Error: {exception}</p>', tournament_name, None, tournament_update)
-        except:
-            return create_output(f'<p class="text-danger">Error: get_messages_near()</p>', tournament_name, None,
-                                 tournament_update)
+            selected = selected or {}
+            selected['error'] = f"Error: {exception}"
+            return create_output(selected)
 
     def update_selected_data(self, mod):
         state_all = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
@@ -1027,24 +981,15 @@ class ChatAnalysis:
                 # Main content
                 now_utc = datetime.now(tz=tz.tzutc())
                 active_tournaments = self.get_score_sorted_tournaments(now_utc)
-                info = "".join([tourn.reports for tourn in active_tournaments])
-                output = []
+                reports = [tourn.reports for tourn in active_tournaments if tourn.reports]
+                multiline_reports = []
                 for tourn in active_tournaments:
                     if tourn.multiline_reports:
-                        output.extend(tourn.multiline_reports)
-                output.sort(key=lambda t: t[0], reverse=True)
-                info_frequent = "".join([info for score, info in output])
-                all_errors = self.errors.copy()
-                all_errors.extend(self.warnings)
-                if all_errors:
-                    btn_clear = f'<div><button class="btn btn-info align-baseline flex-grow-1 py-0 px-1" ' \
-                                f'onclick="clear_errors(\'global\');">Clear errors</button></div>'
-                    info = f'<div class="text-warning text-break">{"<b>Errors</b>: " if len(all_errors) > 1 else ""}' \
-                           f'<div>{"</div><div>".join(all_errors)}</div>{btn_clear}' \
-                           f'<div class="text-danger">ABORTED</div></div>{info}'
-                str_time = f"{now_utc:%H:%M} UTC"
-                self.cache_reports = {'reports': info, 'multiline-reports': info_frequent,
-                                      'time': str_time, 'state_reports': self.state_reports}
+                        multiline_reports.extend(tourn.multiline_reports)
+                multiline_reports.sort(key=lambda t: t[0], reverse=True)
+                self.cache_reports = {'reports': reports, 'multiline-reports': [info for score, info in multiline_reports],
+                                      'errors': self.errors + self.warnings, 'time': f"{now_utc:%H:%M} UTC",
+                                      'state_reports': self.state_reports}
 
     def get_tournaments_data(self, state):
         try:

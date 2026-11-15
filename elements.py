@@ -898,9 +898,9 @@ def shorten(original_name, max_len):
             i = max(name[:-1].rfind(' '), name[:-1].rfind('-'), name[:-1].rfind(','), name[:-1].rfind('.'),
                     name[:-1].rfind('!'), name[:-1].rfind('?'))  # TODO: regex
             if i >= 0.7 * max_len:
-                name = f"{name[:i]}&hellip;"
+                name = f"{name[:i]}…"
             else:
-                name = f"{name[:-1]}&hellip;"
+                name = f"{name[:-1]}…"
         else:
             name = original_name
     else:

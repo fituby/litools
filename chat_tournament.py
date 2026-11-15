@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 from dateutil import tz
 import json
-from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, get_client_id, shorten, add_timeout_msg, get_user_comm_href
+import html
+from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, get_client_id, shorten, add_timeout_msg
 from elements import log, log_exception, Error500
 from chat_re import ReUser, Lang
 from chat_message import Message
@@ -183,7 +184,7 @@ class Tournament:
                     if self.last_error_404 is None:
                         self.last_error_404 = now_utc
                     return new_messages, deleted_messages
-                raise Exception(f"Failed to download {url}<br>Status Code {r.status_code}")
+                raise Exception(f"Failed to download {url}\nStatus Code {r.status_code}")
             self.last_error_404 = None
             if self.errors_500 and self.errors_500[-1].is_ongoing():
                 self.errors_500[-1].complete(now_utc)
@@ -388,43 +389,45 @@ class Tournament:
                 return True
         return False
 
-    def get_link(self, short=True):
-        name = shorten(self.name, MAX_LEN_TOURNEY_NAME_SHORT if short else MAX_LEN_TOURNEY_NAME_LONG)
+    def get_url(self):
         link = self.link if self.link else f'https://lichess.org/{self.get_endpoint()}/{self.id}'
         if link and self.t_type == TournType.Study:
             link = f"{link}#players"
-        tournament = f'<a href="{link}" target="_blank">{name}</a>'
-        return tournament
+        return link
+
+    def get_name(self, short=True):
+        return shorten(self.name, MAX_LEN_TOURNEY_NAME_SHORT if short else MAX_LEN_TOURNEY_NAME_LONG)
+
+    def get_link(self, short=True):
+        return f'<a href="{html.escape(self.get_url())}" target="_blank">{html.escape(self.get_name(short))}</a>'
 
     def get_status(self, now_utc):
         if now_utc < self.startsAt:
-            return f'<abbr title="Starts in {deltaperiod(self.startsAt, now_utc)}" class="text-info">Created</abbr>'
+            return {'text': "Created", 'c': "text-info", 'i': f"Starts in {deltaperiod(self.startsAt, now_utc)}"}
         if self.t_type == TournType.Arena and now_utc < self.finishesAt:
-            return f'<abbr title="Finishes in {deltaperiod(self.finishesAt, now_utc)}" class="text-success">Started</abbr>'
+            return {'text': "Started", 'c': "text-success", 'i': f"Finishes in {deltaperiod(self.finishesAt, now_utc)}"}
         if self.t_type != TournType.Arena and not self.finishesAt:
-            return f'<abbr title="Started {deltaperiod(now_utc, self.startsAt)} ago" class="text-success">Started</abbr>'
+            return {'text': "Started", 'c': "text-success", 'i': f"Started {deltaperiod(now_utc, self.startsAt)} ago"}
         if self.t_type == TournType.Arena:
-            return f'<abbr title="Finished {deltaperiod(now_utc, self.finishesAt)} ago" class="text-muted">Finished</abbr>'
-        return f'<abbr title="Started {deltaperiod(now_utc, self.startsAt)} ago" class="text-muted">Finished</abbr>'
+            return {'text': "Finished", 'c': "text-muted", 'i': f"Finished {deltaperiod(now_utc, self.finishesAt)} ago"}
+        return {'text': "Finished", 'c': "text-muted", 'i': f"Started {deltaperiod(now_utc, self.startsAt)} ago"}
+
+    def get_header(self, now_utc=None, short=True):
+        header = {'id': self.id, 'url': self.get_url(), 'name': self.get_name(short)}
+        if now_utc:
+            header['status'] = self.get_status(now_utc)
+        return header
 
     def get_info(self, now_utc):
-        msgs = [msg.get_info('A', add_mscore=True) for msg in self.messages if msg.score and not msg.is_hidden()]
+        msgs = [msg.to_data() for msg in self.messages if msg.score and not msg.is_hidden()]
         if not msgs and not self.errors and not self.errors_500:
-            return ""
+            return None
         errors = self.errors.copy()
         errors.extend([str(err) for err in self.errors_500])
         if self.last_error_404 and (msgs or errors):
             errors.append(f"Tournament removed at {self.last_error_404:%Y-%m-%d %H:%M} UTC"
                           f" (Failed to download: Status Code 404).")
-        header = f'<div class="d-flex user-select-none justify-content-between px-1 mb-1" ' \
-                 f'style="background-color:rgba(128,128,128,0.2);">' \
-                 f'{self.get_link(short=False)}{self.get_status(now_utc)}</div>'
-        btn_clear = f'<div><button class="btn btn-info text-nowrap align-baseline flex-grow-1 py-0 px-1" ' \
-                    f'onclick="clear_errors(\'{self.id}\');">Clear errors</button></div>' if errors else ""
-        errors = f'<div class="d-flex text-warning justify-content-between px-1"><div>{"<br>".join(errors)}</div>' \
-                 f'{btn_clear}</div>' if errors else ""
-        return f'<div class="col rounded m-1 px-0" style="background-color:rgba(128,128,128,0.2);min-width:350px">' \
-               f'{header}{errors}{"".join(msgs)}</div>'
+        return {'tourn': self.get_header(now_utc, short=False), 'errors': errors, 'msgs': msgs}
 
     def clear_errors(self):
         self.errors.clear()
@@ -528,51 +531,18 @@ class Tournament:
                     return
             # Add scores
             best_reason = best_ban_reason if best_ban_reason != Reason.No else combined_msg.best_score_reason()
-            final_score = f'<abbr title="{num_msgs} messages in a row or in a short period of time">{score_int}</abbr>'
+            # score_parts: [score for the number of messages (None if hidden), extra score for the combined text]
+            score_parts = [{'v': score_int, 'i': f"{num_msgs} messages in a row or in a short period of time"}]
             if combined_msg.score > max_score:
-                prev = final_score if score_int > 0 else ""
-                if best_reason != Reason.No:
-                    final_score = f'{prev}+<abbr title="{Reason.to_text(best_reason)}">{combined_msg.score}</abbr>'
-                else:
-                    final_score = f'{prev}+{combined_msg.score}'
+                if score_int <= 0:
+                    score_parts[0] = None
+                score_parts.append({'v': combined_msg.score,
+                                    'i': Reason.to_text(best_reason) if best_reason != Reason.No else ""})
                 score_int += combined_msg.score
             if score_int < CHAT_FREQUENT_MSGS_MIN_SCORE[0] or (score_int < CHAT_FREQUENT_MSGS_MIN_SCORE[1] and num_msgs < 5):
                 return
-            tag = 'B'
-            score_theme = ' class="text-danger"' if score_int > 50 else ' class="text-warning"' if score_int > 10 else ""
-            score = f'<span{score_theme}>{final_score}</span>'
-            user = f'<a class="text-info" href="{get_user_comm_href(user_name)}" target="_blank">{user_name}</a>'
-            button_dismiss = f'<button class="btn btn-primary align-baseline flex-grow-0 px-1 py-0" ' \
-                             f'onclick="set_multi_ok(\'{tag}{msgs_id}\')">Dismiss</button>'
-            if best_reason == Reason.No:
-                best_reason = int(Reason.Spam)
-            r = Reason.to_Tag(best_reason)
-            class_ban = "btn-warning" if combined_msg.score >= 50 else "btn-success"
-            button_ban = f'<button class="btn {class_ban} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" ' \
-                         f'data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">' \
-                         f'Ban</button><span class="dropdown-menu" style="">' \
-                         f'<button class="dropdown-item btn-primary" onclick="timeout_multi(\'{tag}{msgs_id}\', 1);">' \
-                         f'{combined_msg.format_reason(Reason.Shaming, "Public Shaming", Reason.Spam, best_reason)}</button>' \
-                         f'<button class="dropdown-item btn-primary" onclick="timeout_multi(\'{tag}{msgs_id}\', 2);">' \
-                         f'{combined_msg.format_reason(Reason.Offensive, "Offensive Language", Reason.Spam, best_reason)}</button>' \
-                         f'<button class="dropdown-item btn-primary" onclick="timeout_multi(\'{tag}{msgs_id}\', 3);">' \
-                         f'{combined_msg.format_reason(Reason.Spam, "Spamming", Reason.Spam, best_reason)}</button>' \
-                         f'<button class="dropdown-item btn-primary" onclick="timeout_multi(\'{tag}{msgs_id}\', 4);">' \
-                         f'{combined_msg.format_reason(Reason.Other, "Inappropriate Behaviour", Reason.Spam, best_reason)}</button>' \
-                         f'</span>'
-            if best_ban_reason != Reason.No or combined_msg.score >= 50:
-                button_ban = f'<button class="btn btn-danger align-baseline flex-grow-0 py-0 px-1" ' \
-                             f'onclick="timeout_multi(\'{tag}{msgs_id}\', {int(best_reason)});">{r}</button>{button_ban}'
-            header_1 = f'<div class="d-flex justify-content-between">{self.get_link()}' \
-                       f'<span class="ml-1">{self.get_status(now_utc)}</span></div>'
-            header_2 = f'<div class="d-flex justify-content-between mb-1"><span>{button_ban}{user}</span>' \
-                       f'<span class="align-items-baseline ml-1">{score} {button_dismiss}</span></div>'
-            header = f'<div class="user-select-none px-1" style="background-color:rgba(128,128,128,0.2);">' \
-                     f'{header_1}{header_2}</div>'
-            msgs_info = [HR if m is None else m.get_info(tag, show_hidden=True, add_user=False, rename_dismiss="Exclude",
-                                                         add_reason=Reason.Spam) for m in msgs]
-            info = f'<div id="mmsg{tag}{msgs_id}" data-mscore={score_int} class="col rounded m-1 px-0 pb-1" ' \
-                   f'style="background-color:rgba(128,128,128,0.2);min-width:350px;">{header}{"".join(msgs_info)}</div>'
+            info = {'id': msgs_id, 'score': score_int, 'score_parts': score_parts, 'tourn': self.get_header(now_utc),
+                    'msg': combined_msg.to_data(), 'msgs': [None if m is None else m.to_data() for m in msgs]}
             output.append((score_int, info))
             multi_messages[msgs_id] = [m for m in real_msgs]
 

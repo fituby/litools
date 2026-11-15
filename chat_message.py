@@ -1,18 +1,18 @@
 import os
-import html
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 from enum import IntFlag
-from elements import STYLE_WORD_BREAK
 from chat_re import list_res, list_res_variety, re_spaces, Lang
 from database import Messages
-from elements import Reason, deltaseconds, get_user_comm_href, get_highlight_style, get_flair_element, log, log_exception
+from elements import Reason, log, log_exception
 
 
-class AddButtons(IntFlag):
-    No = 0
-    Ban = 1
-    Dismiss = 2
-    BanAndDismiss = 3
+class MsgFlag(IntFlag):
+    Removed = 1
+    Disabled = 2
+    Reset = 4
+    TimedOut = 8
+    Official = 16
+    Deleted = 32
 
 
 def load_res():
@@ -47,7 +47,7 @@ class Message:
         self.delay: int = delay
         self.username = data['u']
         self.text = data['t']
-        self.eval_text = ""
+        self.segments = []
         self.is_official = (self.username in ["lichess", "Lichess"])
         self.is_deleted = False  # was available before and now isn't on the page
         self.is_removed = data.get('r', False)  # SB'ed, was never visible
@@ -79,13 +79,6 @@ class Message:
             return reason
         return self.best_score_reason()
 
-    def format_reason(self, i_reason, text, add_reason, best_reason):
-        if self.scores[i_reason] == 0 and i_reason != add_reason:
-            return text
-        if i_reason == best_reason:
-            return f'<b class="text-warning">{text}</b>'
-        return f'<b>{text}</b>'
-
     def update(self, msg):
         if self.is_removed == msg.is_removed and self.is_disabled == msg.is_disabled:
             return
@@ -114,7 +107,7 @@ class Message:
         return f"[{self.username}]: {self.text}"
 
     def dont_evaluate(self):
-        self.eval_text = html.escape(self.text)
+        self.segments = [self.text]
         self.score = 0
 
     def evaluate(self, re_usernames):
@@ -135,19 +128,15 @@ class Message:
             result = result_all if ban_points_all > ban_points_variety else result_variety \
                 if ban_points_all < ban_points_variety or result_all.total_score() < result_variety.total_score() \
                 else result_all
-            self.eval_text = result.element
+            self.segments = result.element
             self.scores = result.scores
             self.score = result.total_score()
             self.reasons = result.ban_points
             self.languages = result.languages
-            if self.score >= 50:
-                self.eval_text.replace('<span class="text-warning"', '<span class="text-danger"')
-                if self.score > 60:
-                    self.eval_text.replace('<span class="text-warning"', '<span class="text-danger bg-warning"')
         except Exception as exception:
             log(f"ERROR when processing: {self}", to_print=True, to_save=True)
             log_exception(exception)
-            self.eval_text = html.escape(self.text)
+            self.segments = [self.text]
             self.score = 0
 
     def is_hidden(self):
@@ -159,102 +148,34 @@ class Message:
             return True
         return self.best_score_reason() != Reason.No and self.score and self.score >= 50
 
-    def get_info(self, tag, show_hidden=None, add_buttons=None, base_time=None, rename_dismiss=None, add_user=True,
-                 add_mscore=False, add_reason=None, highlight_user=None, is_diff_highlight=False,
-                 is_selected=False, is_centered=False, add_selection=False):
-        if show_hidden is None:
-            show_hidden = (base_time is not None)
-        if self.is_official or self.is_disabled or self.is_removed or self.is_timed_out:
-            add_buttons = AddButtons.No
-        else:
-            if add_buttons is None:
-                add_buttons = AddButtons.BanAndDismiss if base_time is None else AddButtons.No
-            if (self.score == 0 and not rename_dismiss) or self.is_reset:
-                add_buttons &= ~AddButtons.Dismiss
-        if not show_hidden and (self.is_hidden() or not self.score):
-            return ""
-        if base_time is None:
-            str_time = ""
-        else:
-            ds = deltaseconds(self.time, base_time)
-            dt = f"{abs(ds)}s" if abs(ds) < 60 \
-                else f"{abs(ds) // 60}m{abs(ds) % 60:02d}s" if abs(ds) < 300 \
-                else f"{int(round(abs(ds) / 60))}m"
-            str_time = f"&minus;{dt} " if ds < 0 else f'+{dt} ' if ds > 0 else "== "
-            time_tz = self.time.replace(tzinfo=None)
-            time_interval = f"{time_tz:%H:%M:%S} or before" if self.delay is None \
-                else f"{time_tz - timedelta(seconds=self.delay):%H:%M:%S}…{time_tz:%H:%M:%S}"
-            str_time = f'<abbr title="{time_interval}" class="user-select-none" ' \
-                       f'style="text-decoration:none;">{str_time}</abbr>'
-            flair = self.tournament.user_flairs.get(self.username, "")
-            if flair:
-                str_time = f'{str_time}{get_flair_element(flair, 17)}'
-        score_theme = "" if self.score is None else ' text-danger' if self.score > 50 \
-            else ' text-warning' if self.score > 10 else ""
-        score = f'<span class="user-select-none{score_theme}">{self.score}</span>' if self.score and self.score > 0 else ""
-        username = f"<b><u>{self.username}</u></b>" if highlight_user is True or highlight_user == self.username \
-            else self.username
-        user = f'<a class="text-info user-select-none" href="{get_user_comm_href(self.username)}"' \
-               f' target="_blank" onclick="prevent_click(event)">{username}</a>' if add_user else ""
-        highlight_style = "" if not highlight_user or highlight_user != self.username \
-            else get_highlight_style(0.2, is_diff_highlight)
-        name_dismiss = rename_dismiss if rename_dismiss else "Dismiss"
-        class_dismiss = "btn-secondary" if rename_dismiss else "btn-primary"
-        button_dismiss = f'<button class="btn {class_dismiss} text-nowrap align-baseline flex-grow-0 py-0 px-1 ml-1" ' \
-                         f'onclick="set_ok(\'{tag}{self.id}\');">{name_dismiss}</button> ' \
-                         if add_buttons & AddButtons.Dismiss else ""
+    def to_data(self):
+        """Message data for the chat page, which renders it (see chat.html)."""
+        data = {'id': self.id, 'u': self.username, 't': self.segments}
+        if self.score:
+            data['s'] = self.score
+        flags = sum(flag for flag, is_set in [(MsgFlag.Removed, self.is_removed), (MsgFlag.Disabled, self.is_disabled),
+                                              (MsgFlag.Reset, self.is_reset), (MsgFlag.TimedOut, self.is_timed_out),
+                                              (MsgFlag.Official, self.is_official), (MsgFlag.Deleted, self.is_deleted)]
+                    if is_set)
+        if flags:
+            data['f'] = flags
+        if self.languages:
+            data['l'] = int(self.languages)
         best_ban_reason = self.best_ban_reason()
-        best_reason = best_ban_reason if best_ban_reason != Reason.No else self.best_score_reason()
-        if best_reason == Reason.No and add_reason is not None:
-            best_reason = int(add_reason)
-        class_ban = "btn-warning" if self.score and self.score >= 50 else "btn-secondary"
-        button_ban = f'<button class="btn {class_ban} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" ' \
-                     f'data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">' \
-                     f'Ban</button><span class="dropdown-menu" style="">' \
-                     f'<button class="dropdown-item btn-primary" onclick="timeout(\'{tag}{self.id}\', 1);">' \
-                        f'{self.format_reason(Reason.Shaming, "Public Shaming", add_reason, best_reason)}</button>' \
-                     f'<button class="dropdown-item btn-primary" onclick="timeout(\'{tag}{self.id}\', 2);">' \
-                        f'{self.format_reason(Reason.Offensive, "Offensive Language", add_reason, best_reason)}</button>' \
-                     f'<button class="dropdown-item btn-primary" onclick="timeout(\'{tag}{self.id}\', 3);">' \
-                        f'{self.format_reason(Reason.Spam, "Spamming", add_reason, best_reason)}</button>' \
-                     f'<button class="dropdown-item btn-primary" onclick="timeout(\'{tag}{self.id}\', 4);">' \
-                        f'{self.format_reason(Reason.Other, "Inappropriate Behaviour", add_reason, best_reason)}</button>' \
-                     f'</span>' if add_buttons & AddButtons.Ban else ""
-        if add_buttons & AddButtons.Ban:
-            if best_ban_reason != Reason.No or (best_reason != Reason.No and self.score and self.score >= 50):
-                button_ban = f'<button class="btn btn-danger align-baseline flex-grow-0 py-0 px-1" ' \
-                             f'onclick="timeout(\'{tag}{self.id}\');">{Reason.to_Tag(best_reason)}</button>{button_ban}'
-        class_name = "text-muted" if self.is_deleted or self.is_reset or self.is_disabled or self.is_timed_out \
-                     or self.is_official else "text-secondary" if self.is_removed else ""
-        text = f'<s style="text-decoration-style:double;">{self.eval_text}</s>' if self.is_removed \
-            else f'<s style="text-decoration-style:dotted;"><u style="text-decoration-style:wavy;">' \
-                 f'{self.eval_text}</u></s>' if self.is_timed_out \
-            else f'<s>{self.eval_text}</s>' if self.is_disabled \
-            else f'<small>{self.eval_text}</small>' if self.is_reset \
-            else f'<small><i>{self.eval_text}</i></small>' if self.is_official \
-            else self.eval_text if self.is_deleted \
-            else self.eval_text
-        text = f'<span class="{class_name}" style="{STYLE_WORD_BREAK}">{text}</span>'
-        mscore = f' data-mscore={self.score}' if add_mscore else ""
-        langs = f' data-langs={self.languages}' if add_mscore else ""
-        selection = html.escape(self.text).replace("'", "&apos;")
-        selection = f' data-selection=\'{self.username}: "{selection}"\'' if add_selection else ""
-        onclick = "" if is_selected else f' onclick="select_message(event,\'{tag}{self.id}\')"'
-        selectee_class = "selectee selectee-center" if is_centered else "selectee"
-        if add_buttons == AddButtons.No:
-            div = f'<div id="msg{tag}{self.id}"{mscore}{langs}{selection} ' \
-                  f'class="align-items-baseline {selectee_class} px-1" style="{STYLE_WORD_BREAK}"{onclick}>' \
-                  f'{str_time}{user} <b>{score}</b> {text}</div>'
-        elif add_buttons & AddButtons.Ban:
-            div = f'<div id="msg{tag}{self.id}"{mscore}{langs}{selection} ' \
-                  f'class="align-items-baseline {selectee_class} px-1" style="{STYLE_WORD_BREAK}"{onclick}>' \
-                  f'<div class="d-flex justify-content-between"><span>{button_ban}{str_time}{user} {text}</span> ' \
-                  f'<span class="text-nowrap"><b class="pl-2">{score}</b>{button_dismiss}</span></div></div>'
-        else:
-            div = f'<div id="msg{tag}{self.id}"{mscore}{langs}{selection} class="align-items-baseline {selectee_class} ' \
-                  f'px-1" {onclick}>' \
-                  f'<div class="d-flex justify-content-between">' \
-                  f'<span class="d-flex flex-row">{button_ban}{str_time}{user}</span>' \
-                  f'<span class="d-flex flex-row">{score}{button_dismiss}</span></div>' \
-                  f'<div class="align-items-baseline" style="{STYLE_WORD_BREAK}">{text}</div></div>'
-        return f'<div style="{highlight_style}">{div}</div>' if highlight_style else div
+        if best_ban_reason != Reason.No:
+            data['rb'] = best_ban_reason
+        best_score_reason = self.best_score_reason()
+        if best_score_reason != Reason.No:
+            data['rs'] = best_score_reason
+        reasons_mask = sum(1 << i for i in range(Reason.Size) if self.scores[i])
+        if reasons_mask:
+            data['rm'] = reasons_mask
+        if self.time is not None:
+            time_utc = self.time if self.time.tzinfo else self.time.replace(tzinfo=timezone.utc)
+            data['tm'] = int(round(time_utc.timestamp() * 1000))
+        if self.delay is not None:
+            data['d'] = self.delay
+        flair = self.tournament.user_flairs.get(self.username) if self.tournament else None
+        if flair:
+            data['fl'] = flair
+        return data

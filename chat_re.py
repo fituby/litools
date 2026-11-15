@@ -1,8 +1,6 @@
-import html
 import re
 from enum import IntFlag
-from elements import Reason, TournType, log_exception
-from elements import STYLE_WORD_BREAK
+from elements import Reason, TournType
 
 
 class Lang(IntFlag):
@@ -31,17 +29,27 @@ LANGUAGES = {
 }
 
 
+def join_segments(*parts):
+    """Concatenates lists of text segments, merging adjacent plain strings.
+    A segment is either plain text or a dict: {'t': text, 'c': css class, 'i': tooltip, 'h': link}."""
+    segments = []
+    for part in parts:
+        for segment in part:
+            if not segment:
+                continue
+            if isinstance(segment, str) and segments and isinstance(segments[-1], str):
+                segments[-1] += segment
+            else:
+                segments.append(segment)
+    return segments
+
+
 class EvalResult:
     def __init__(self, text):
         self.scores = [0] * Reason.Size
         self.ban_points = [0] * Reason.Size
         self.languages = Lang.No
-        try:
-            self.element = html.escape(text)
-        except Exception as exception:
-            print(f"ERROR when processing: {text}")
-            self.element = text
-            log_exception(exception)
+        self.element = [text] if text else []
 
     def __iadd__(self, o):
         for i in range(Reason.Size):
@@ -101,8 +109,7 @@ class TextVariety:
                 if self.info:
                     str_lang = f"{LANGUAGES[self.lang]}: " if self.lang != Lang.No else ""
                     info = f'{info}\n{str_lang}{self.info}'
-                result.element = f'<abbr class="{self.class_name}" title="{info}" style="{STYLE_WORD_BREAK}' \
-                                 f'text-decoration:none;">{html.escape(original_msg)}</abbr>'
+                result.element = [{'t': original_msg, 'c': self.class_name, 'i': info}]
                 if self.ban and self.reason != Reason.No:
                     result.ban_points[self.reason] = result.scores[self.reason] / self.ban
                 result.languages |= self.lang
@@ -169,12 +176,11 @@ class Re:
                 new_msgs[i] = result_i.element
                 result += result_i
             else:
-                new_msgs[i] = html.escape(new_msgs[i])
+                new_msgs[i] = [new_msgs[i]]
         if len(new_msgs) == 1:
             result.element = new_msgs[0]
             return result
         for i in range(len(elements)):
-            elements[i] = html.escape(elements[i])
             if self.reason == Reason.No:
                 info = ""
             else:
@@ -185,14 +191,11 @@ class Re:
                 info = f'{info}{str_sep}{str_lang}{self.info}'
                 elements[i] = self.format_element(elements[i], info)
         elements.append("")
-        result.element = "".join(f'{text}{element}' for text, element in zip(new_msgs, elements))
+        result.element = join_segments(*[[*text, element] for text, element in zip(new_msgs, elements)])
         return result
 
     def format_element(self, element, info):
-        if info:
-            return f'<abbr class="{self.class_name}" title="{info}" style="{STYLE_WORD_BREAK}text-decoration:none;">' \
-                   f'{element}</abbr>'
-        return f'<span class="{self.class_name}" style="{STYLE_WORD_BREAK}">{element}</span>'
+        return {'t': element, 'c': self.class_name, 'i': info}
 
 
 class ReLink(Re):
@@ -202,10 +205,7 @@ class ReLink(Re):
                          exclude_tournaments)
 
     def format_element(self, element, info):
-        if info:
-            return f'<abbr class="{self.class_name}" title="{info}" style="{STYLE_WORD_BREAK}text-decoration:none;">' \
-                   f'<a class="{self.class_name}" href="{element}" target="_blank">{element}</a></abbr>'
-        return f'<a class="{self.class_name}" href="{element}" target="_blank" style="{STYLE_WORD_BREAK}">{element}</a>'
+        return {'t': element, 'c': self.class_name, 'i': info, 'h': element}
 
 
 class ReUser(Re):
@@ -216,7 +216,7 @@ class ReUser(Re):
     def format_element(self, element, info):
         i = max(element[:-1].rfind('/'), element[:-1].rfind('@'))
         name = element[i + 1:] if i >= 0 else element
-        return f'<a class="{self.class_name}" href="https://lichess.org/@/{name.lower()}" target="_blank">{element}</a>'
+        return {'t': element, 'c': self.class_name, 'h': f"https://lichess.org/@/{name.lower()}"}
 
 
 list_res_variety = {

@@ -173,6 +173,8 @@
 </div>
 {% endblock %}
 
+{% block libs %}<script src="{{url_for('static', filename='chat_render.js')}}"></script>{% endblock %}
+
 {% block scripts %}
   <script>
   const UPDATE_PERIODS = [1, 5, 25, 60];  // seconds, indexed by update frequency (0 = "Never")
@@ -243,7 +245,10 @@
     if (data_chats['state_reports'] == state_reports)
       return false;
     state_reports = data_chats['state_reports'];
-    const has_reports = !!(data_chats["reports"] || data_chats["multiline-reports"]);
+    const reports = data_chats["reports"] || [];
+    const multiline_reports = data_chats["multiline-reports"] || [];
+    const errors = data_chats["errors"] || [];
+    const has_reports = reports.length > 0 || multiline_reports.length > 0 || errors.length > 0;
     $("#dubious_messages, #multiline_messages").toggle(has_reports);
     if (has_reports) {
       is_reviewed = true;
@@ -252,8 +257,9 @@
     }
     else if (is_reviewed)
       setVisible("#clean_messages", true, "d-flex");
-    $('#chat_reports').html(data_chats["reports"]);
-    $('#multiline_chat_reports').html(data_chats["multiline-reports"]);
+    msg_users.clear();
+    $('#chat_reports').html(renderGlobalErrors(errors) + reports.map(renderReport).join(""));
+    $('#multiline_chat_reports').html(multiline_reports.map(renderMultiReport).join(""));
     $('#update_time').text(data_chats["time"]);
     filter_out();
     set_selection(data_chats);
@@ -354,7 +360,7 @@
   }
 
   function clear_errors(tourn_id) {
-    post_and_update(`/chat/clear_errors/${tourn_id}`);
+    post_and_update(`/chat/clear_errors/${encodeURIComponent(tourn_id)}`);
   }
 
   function update_frequency(val) {
@@ -403,23 +409,23 @@
   }
 
   function set_selection(data_chats) {
-    $('#selected_messages').html(data_chats["selected-messages"]);
-    $('#filtered_messages').html(data_chats["filtered-messages"]);
-    $('#selected_tournament').html(data_chats["selected-tournament"]);
-    const updated_at = data_chats["selected-tournament-update"];
-    $('#selected_tournament_update').prop('title', updated_at ? `updated at ${updated_at}` : "reload");
+    const sel = data_chats["selected"];
+    const [chat_html, user_msgs_html] = renderSelection(sel);
+    $('#selected_messages').html(chat_html);
+    $('#filtered_messages').html(user_msgs_html);
+    $('#selected_tournament').html(sel?.tourn ? renderTournamentLink(sel.tourn) : "");
+    $('#selected_tournament_update').prop('title', sel?.update ? `updated at ${sel.update}` : "reload");
     const username = data_chats["selected-user"];
     update_user_button(username);
     $('#selected_user').html(username ? userlink(username, {cls: "text-success", suffix: "?mod"}) : "the user");
-    setVisible('#selection_header', !!data_chats["selected-tournament"], "d-flex");
+    setVisible('#selection_header', !!sel?.tourn, "d-flex");
     update_user_info(data_chats);
     update_mod_notes(data_chats);
     update_mod_log(data_chats);
-    const sel_id = $("#selected_messages .selectee-center").attr('id');
     const classes = "selected-msgA border border-success rounded";
     $("#chat_reports .selected-msgA").removeClass(classes);
-    if (sel_id && sel_id.length > 4)
-      $(`#msgA${sel_id.substring(4)}`).addClass(classes);
+    if (sel?.id)
+      $(`#msgA${Number(sel.id)}`).addClass(classes);
   }
 
   function set_section(selector, html, display_class) {
@@ -463,8 +469,7 @@
   }
 
   function msg_username(msg_id) {
-    const link = is_message_id(msg_id) ? $(`#msg${msg_id} a`)[0] : null;
-    return link ? link.text : "";
+    return is_message_id(msg_id) ? (msg_users.get(msg_id.substring(1)) ?? "") : "";
   }
 
   function select_msg(msg_id) {
@@ -502,9 +507,9 @@
 
   function add_users_all_messages() {
     $('#filtered_messages .selectee').each((i, el) => {
-      const link = $(el).find('a')[0];
-      if (el.id.startsWith('msgF') && link)
-        add_to_notes(link.text, el.id.substring(3));
+      const msg_id = el.id.substring(3);
+      if (el.id.startsWith('msgF'))
+        add_to_notes(msg_username(msg_id), msg_id);
     });
   }
 
