@@ -162,24 +162,29 @@ def get_chat_update(mod, state):
     return chat.get_tournaments_data(state)
 
 
-@app.route('/chat/process/<state>', methods=['POST'])
+def chat_changes(mod):
+    """The parts of the chat data that changed since the versions the page sent with its request."""
+    return chat.get_changes(mod, request.form.get("reports_state"), request.form.get("selected_version"))
+
+
+@app.route('/chat/process', methods=['POST'])
 @with_mod()
-def get_chat_process(mod, state):
-    return chat.get_all_data(mod, state)
+def get_chat_process(mod):
+    return chat_changes(mod)
 
 
 @app.route('/chat/set_msg_ok/<msg_id>', methods=['POST'])
 @with_mod(update_seenAt=True)
 def chat_set_msg_ok(mod, msg_id):
     chat.set_msg_ok(msg_id)
-    return chat.get_all(mod)
+    return chat_changes(mod)
 
 
 @app.route('/chat/timeout/<msg_id>/<reason>', methods=['POST'])
 @with_mod(update_seenAt=True)
 def chat_timeout(mod, msg_id, reason):
     chat.timeout(msg_id, reason, mod)
-    return chat.get_all(mod)
+    return chat_changes(mod)
 
 
 @app.route('/chat/timeout_multi/<msg_id>/<reason>', methods=['POST'])
@@ -187,7 +192,7 @@ def chat_timeout(mod, msg_id, reason):
 def chat_timeout_multi(mod, msg_id, reason):
     excluded = {int(i) for i in request.form.getlist("excluded[]") if i.isdigit()}
     chat.timeout_multi(msg_id, reason, mod, excluded)
-    return chat.get_all(mod)
+    return chat_changes(mod)
 
 
 @app.route('/chat/set_multi_msg_ok/<msg_id>', methods=['POST'])
@@ -201,7 +206,7 @@ def chat_set_multi_msg_ok(mod, msg_id):
 @with_mod(update_seenAt=True)
 def chat_warn(mod, username, subject):
     chat.warn(username, subject, mod)
-    return chat.get_all(mod)
+    return chat_changes(mod)
 
 
 @app.route('/chat/set_update/<update_frequency>', methods=['POST'])
@@ -214,20 +219,22 @@ def chat_set_update(mod, update_frequency):
 @app.route('/chat/select_message/<msg_id>', methods=['POST'])
 @with_mod(update_seenAt=True)
 def chat_select_message(mod, msg_id):
-    return chat.select_message(msg_id, mod)
+    chat.select_message(msg_id, mod)
+    return chat_changes(mod)
 
 
 @app.route('/chat/refresh_selected', methods=['POST'])
 @with_mod(update_seenAt=True)
 def chat_refresh_selected(mod):
-    return chat.refresh_selected(mod, room_mod, auto_mod)
+    chat.refresh_selected(mod, room_mod, auto_mod)
+    return chat_changes(mod)
 
 
 @app.route('/chat/clear_errors/<tourn_id>', methods=['POST'])
 @with_mod(update_seenAt=True)
 def chat_clear_errors(mod, tourn_id):
     chat.clear_errors(tourn_id)
-    return chat.get_all(mod)
+    return chat_changes(mod)
 
 
 @app.route('/chat/set_tournament/<tourn_id>/<checked>', methods=['POST'])
@@ -267,25 +274,25 @@ def chat_flip_tournament_group(mod, group):
 def chat_add_tournament(mod):
     page = request.form.get("page", "")
     data = chat.add_tournament(page, non_mod, room_mod)  # add `, auto_mod` to auto time out after adding a tournament
-    data.update(chat.get_all(mod))
+    data.update(chat_changes(mod))
     return data
 
 
 @app.route('/chat/load_more/<tourn_id>', methods=['POST'])
 @with_mod(update_seenAt=True)
 def chat_load_more(mod, tourn_id):
-    return chat.load_more(tourn_id, mod)
+    data = chat.load_more(tourn_id, mod)
+    data.update(chat_changes(mod))
+    return data
 
 
 @app.route('/chat/send_note', methods=['POST'])
 @with_mod()
 def chat_send_note(mod):
-    note = request.form.get("note", None)
-    user = request.form.get("user", None)
-    data = chat.send_note(note, user, mod)
-    all_data = chat.get_all(mod)  # the page also needs 'user-info', which send_note() doesn't return
-    all_data.update(data)
-    return all_data
+    is_ok = chat.send_note(request.form.get("note"), request.form.get("user"), mod)
+    data = chat_changes(mod)
+    data['ok'] = is_ok
+    return data
 
 
 @app.route('/chat/custom_timeout', methods=['POST'])
@@ -294,7 +301,7 @@ def custom_timeout(mod):
     msg_ids = request.form.getlist("ids[]") or None
     reason = request.form.get("reason", 0)
     chat.custom_timeout(msg_ids, reason, mod)
-    return chat.get_all(mod)
+    return chat_changes(mod)
 
 
 @app.route('/comms/', methods=['GET'])

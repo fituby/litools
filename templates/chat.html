@@ -187,6 +187,8 @@
   let notes_msgs = [];
   let state_tournaments = 0;
   let state_reports = 0;
+  let selected_version = "";
+  let selected_chat = null;
   const hidden_msgs = new Set();
   const deleted_mmsgs = {};  // multi-message id -> time it was dismissed
   let last_update = Date.now();
@@ -229,7 +231,7 @@
         if (data['state_tournaments'] != 0)
           $("#tournament_settings").show();
         update_tournament_list(data);
-        const data_chats = await $.post(`/chat/process/${state_reports}`);
+        const data_chats = await $.post('/chat/process', chat_versions());
         if (!is_paused() && update_data(data_chats)) {
           const now = Date.now();
           delay = UPDATE_PERIODS[update_frequency_val] * 1000 + last_update - now;
@@ -242,10 +244,41 @@
     }
   }
 
+  // Versions of the data shown; the server sends only the parts that have changed since.
+  function chat_versions() {
+    return {reports_state: state_reports, selected_version: selected_version};
+  }
+
+  // Applies the parts of the chat data in the response: the reports and/or the selected chat with the user info.
   function update_data(data_chats) {
-    if (data_chats['state_reports'] == state_reports)
+    let changed = false;
+    if ('state_reports' in data_chats && data_chats['state_reports'] != state_reports) {
+      state_reports = data_chats['state_reports'];
+      render_reports(data_chats);
+      changed = true;
+    }
+    if ('selected_version' in data_chats && data_chats['selected_version'] != selected_version) {
+      selected_version = data_chats['selected_version'];
+      set_selection(data_chats);
+      filter_messages();
+      changed = true;
+    }
+    if (!changed)
       return false;
-    state_reports = data_chats['state_reports'];
+    mark_selected_report();
+    update_flairs();
+    for (const msg_id of hidden_msgs)
+      $(`#msgA${msg_id}, #msgB${msg_id}`).hide();
+    const now = Date.now();
+    for (const msg_id in deleted_mmsgs) {
+      $(`#mmsg${msg_id}`).hide();
+      if (now >= deleted_mmsgs[msg_id] + 300000)
+        delete deleted_mmsgs[msg_id];
+    }
+    return true;
+  }
+
+  function render_reports(data_chats) {
     const reports = data_chats["reports"] || [];
     const multiline_reports = data_chats["multiline-reports"] || [];
     const errors = data_chats["errors"] || [];
@@ -259,23 +292,21 @@
     else if (is_reviewed)
       setVisible("#clean_messages", true, "d-flex");
     msg_users.clear();
+    for (const m of selected_chat?.msgs || [])
+      msg_users.set(String(m.id), m.u);
     last_multiline_reports = multiline_reports;
     $('#chat_reports').html(renderGlobalErrors(errors) + reports.map(renderReport).join(""));
     $('#multiline_chat_reports').html(multiline_reports.map(renderMultiReport).join(""));
     $('#update_time').text(data_chats["time"]);
     filter_out();
-    set_selection(data_chats);
-    filter_messages();
-    update_flairs();
-    for (const msg_id of hidden_msgs)
-      $(`#msgA${msg_id}, #msgB${msg_id}`).hide();
-    const now = Date.now();
-    for (const msg_id in deleted_mmsgs) {
-      $(`#mmsg${msg_id}`).hide();
-      if (now >= deleted_mmsgs[msg_id] + 300000)
-        delete deleted_mmsgs[msg_id];
-    }
-    return true;
+  }
+
+  // Outlines the report of the selected message.
+  function mark_selected_report() {
+    const classes = "selected-msgA border border-success rounded";
+    $("#chat_reports .selected-msgA").removeClass(classes);
+    if (selected_chat?.id)
+      $(`#msgA${Number(selected_chat.id)}`).addClass(classes);
   }
 
   function update_tournament_list(data) {
@@ -301,8 +332,9 @@
       hidden_msgs.delete(msg_id.substring(1));
   }
 
-  function post_and_update(url, data) {
-    return $.post(url, data).done(update_data);
+  // Posts an action; the response contains the parts of the chat data that changed.
+  function post_and_update(url, data = {}) {
+    return $.post(url, {...data, ...chat_versions()}).done(update_data);
   }
 
   function set_ok(msg_id) {
@@ -311,7 +343,7 @@
     if (!msg_id.startsWith('C') && !msg_id.startsWith('F'))
       $(`#msg${msg_id}`).hide();
     hide_msg(msg_id, true);
-    $.post(`/chat/set_msg_ok/${msg_id}`)
+    $.post(`/chat/set_msg_ok/${msg_id}`, chat_versions())
       .done(data_chats => {
         hide_msg(msg_id, false);
         update_data(data_chats);
@@ -329,7 +361,7 @@
       $(`#msgC${m_id} .btn, #msgF${m_id} .btn`).hide();
     }
     hide_msg(msg_id, true);
-    $.post(`/chat/timeout/${msg_id}/${reason}`)
+    $.post(`/chat/timeout/${msg_id}/${reason}`, chat_versions())
       .done(data_chats => {
         hide_msg(msg_id, false);
         update_data(data_chats);
@@ -426,6 +458,7 @@
 
   function set_selection(data_chats) {
     const sel = data_chats["selected"];
+    selected_chat = sel;
     const [chat_html, user_msgs_html] = renderSelection(sel);
     $('#selected_messages').html(chat_html);
     $('#filtered_messages').html(user_msgs_html);
@@ -438,10 +471,6 @@
     update_user_info(data_chats);
     update_mod_notes(data_chats);
     update_mod_log(data_chats);
-    const classes = "selected-msgA border border-success rounded";
-    $("#chat_reports .selected-msgA").removeClass(classes);
-    if (sel?.id)
-      $(`#msgA${Number(sel.id)}`).addClass(classes);
   }
 
   function set_section(selector, html, display_class) {
@@ -498,11 +527,9 @@
     }
     if (msg_id.startsWith('F'))
       add_to_notes(username, msg_id);
-    $.post(`/chat/select_message/${msg_id}`)
-      .done(data => {
-        set_selection(data);
+    post_and_update(`/chat/select_message/${msg_id}`)
+      .done(() => {
         filter_messages(!msg_id.startsWith('F'));
-        update_flairs();
         scrollToSelected('#selected_messages .selectee-center');
       });
   }
@@ -599,11 +626,8 @@
 
   function refresh_selected() {
     $('#btn_refresh_selected').removeClass("btn-outline-secondary").addClass("btn-outline-info");
-    $.post('/chat/refresh_selected')
-      .done(data => {
-        update_data(data);
-        scrollToSelected('#selected_messages .selectee-center');
-      })
+    post_and_update('/chat/refresh_selected')
+      .done(() => scrollToSelected('#selected_messages .selectee-center'))
       .always(() => $('#btn_refresh_selected').removeClass("btn-outline-info").addClass("btn-outline-secondary"));
   }
 
@@ -631,21 +655,15 @@
     const tournament_link = $("#tournament_link").val();
     $("#tournament_link").val("");
     $('#btn_add_tournament').removeClass("btn-primary").addClass("btn-info");
-    $.post("/chat/add_tournament", {page: tournament_link})
-      .done(data => {
-        update_tournament_list(data);
-        update_data(data);
-      })
+    post_and_update("/chat/add_tournament", {page: tournament_link})
+      .done(update_tournament_list)
       .always(() => $('#btn_add_tournament').removeClass("btn-info").addClass("btn-primary"));
   }
 
   function load_more(tourn_id) {
     $('#btn-load-more-1, #btn-load-more-2').prop("disabled", true);
-    $.post(`/chat/load_more/${tourn_id}`)
-      .done(data => {
-        update_tournament_list(data);
-        update_data(data);
-      });
+    post_and_update(`/chat/load_more/${encodeURIComponent(tourn_id)}`)
+      .done(update_tournament_list);
   }
 
   function update_notes() {
@@ -664,15 +682,10 @@
   }
 
   function send_note() {
-    $.post('/chat/send_note', {note: $('#notes').val(), user: notes_user})
+    post_and_update('/chat/send_note', {note: $('#notes').val(), user: notes_user})
       .done(data => {
-        if (data["mod-notes"]) {
-          if (notes_user && data["selected-user"] == notes_user) {
-            update_mod_notes(data);
-            update_user_info(data);
-          }
+        if (data["ok"])
           clear_notes();
-        }
       });
   }
 

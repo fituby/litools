@@ -7,6 +7,8 @@ import sys
 from collections import defaultdict
 from typing import DefaultDict, Dict
 import html
+import hashlib
+import json
 from api import ApiType
 from elements import Reason, TournType, delta_s, log, log_exception, get_notes, add_note
 from elements import load_mod_log, load_timeout_log, get_mod_log, add_timeout_msg
@@ -70,7 +72,7 @@ class ChatAnalysis:
         self.users: DefaultDict[str, Dict[UserData]] = defaultdict(dict)
         self.selected_msg_id: DefaultDict[str, int] = defaultdict(int)
         self.state_selected_msg: DefaultDict[str, int] = defaultdict(int)
-        self.cache_selected_data: DefaultDict[str, dict] = defaultdict(lambda: {'state_reports': 0})
+        self.cache_selected_data: DefaultDict[str, tuple] = defaultdict(lambda: (None, None))  # (state, data)
         self.selected_user_num_recent_timeouts: DefaultDict[str, int] = defaultdict(int)
         self.selected_user_num_recent_comm_warnings: DefaultDict[str, int] = defaultdict(int)
         self.selected_user_lock: DefaultDict[str, Lock] = defaultdict(Lock)  # = Lock()
@@ -603,29 +605,19 @@ class ChatAnalysis:
                 #self.get_tournaments()  # -- uncomment out to update #messages in the tounaments list
         # Uncomment out to update only the selected tournament:
         #msg_id = f"C{msg_id}" if self.selected_msg_id[mod.id] else "--"
-        #return self.select_message(msg_id, mod, update_selected_user=False)
-        return self.get_all(mod)
+        #self.select_message(msg_id, mod, update_selected_user=False)
 
     def select_message(self, msg_id, mod, update_selected_user=True):
-        def create_info(error=None):
-            state_all = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
-            selected = {'error': error} if error else None
-            return {'selected': selected, 'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "",
-                    'user-profile': "", 'state_reports': state_all}
-
+        self.state_selected_msg[mod.id] += 1
         try:
-            self.state_selected_msg[mod.id] += 1
-            if msg_id == "--":
-                self.selected_msg_id[mod.id] = 0
-                return create_info()
-            self.selected_msg_id[mod.id] = int(msg_id[1:])
-            if update_selected_user:
-                self.update_selected_user(mod)
-            return self.get_messages_nearby(self.selected_msg_id[mod.id], mod)
-        except Exception as exception:
+            self.selected_msg_id[mod.id] = 0 if msg_id == "--" else int(msg_id[1:])
+        except ValueError:
             self.selected_msg_id[mod.id] = 0
-            log_exception(exception)
-            return create_info(f"Error: {exception}")
+        if update_selected_user and self.selected_msg_id[mod.id]:
+            self.update_selected_user(mod)
+
+    def get_selected_state(self, mod):
+        return self.state_reports + self.state_users + self.state_selected_msg[mod.id]
 
     def get_messages_nearby(self, msg_id, mod):
         def get_warn_btn(subject_tag, btn_title, is_highlighted, user_name, is_disabled=False, txt_class=""):
@@ -743,6 +735,8 @@ class ChatAnalysis:
                                f'<span>{add_info}</span><span>{button_warn}</span></div>'
             return add_info
 
+        state = self.get_selected_state(mod)
+
         def create_output(selected, user_data=None, user_msgs=None):
             data = {'selected': selected}
             if user_data:
@@ -754,8 +748,10 @@ class ChatAnalysis:
                              'user-info': user_info, 'mod-notes': user_data.notes, 'mod-log': user_data.mod_log})
             else:
                 data.update({'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': ""})
-            data['state_reports'] = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
-            self.cache_selected_data[mod.id] = data
+            # Fingerprint of the content: the page gets the data again only when it has changed
+            content = json.dumps(data, sort_keys=True, default=str).encode()
+            data['selected_version'] = hashlib.sha1(content).hexdigest()[:16]
+            self.cache_selected_data[mod.id] = (state, data)
             return data
 
         selected = None
@@ -790,8 +786,7 @@ class ChatAnalysis:
             return create_output(selected)
 
     def update_selected_data(self, mod):
-        state_all = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
-        if state_all != self.cache_selected_data[mod.id]['state_reports']:
+        if self.get_selected_state(mod) != self.cache_selected_data[mod.id][0]:
             self.get_messages_nearby(self.selected_msg_id[mod.id], mod)
 
     def clear_errors(self, tourn_id):
@@ -921,9 +916,7 @@ class ChatAnalysis:
         else:
             self.add_error(f"WARNING: No tournament \"{tourn_id}\" to load more messages", False)
         self.state_reports += 1
-        data = self.get_tournaments()
-        data.update(self.get_all(mod))
-        return data
+        return self.get_tournaments()
 
     def get_score_sorted_tournaments(self, now_utc, active_only=True):
         active_tournaments = [tourn for tourn in self.tournaments.values() if not active_only or tourn.is_active(now_utc)]
@@ -935,24 +928,19 @@ class ChatAnalysis:
         active_tournaments.sort(key=lambda tourn: tourn.priority_time(now_utc), reverse=True)
         return active_tournaments
 
-    def get_all_data(self, mod, state):
-        if state is not None:
-            try:
-                state = int(state)
-            except:
-                state = -1
-            state_all = self.state_reports + self.state_users + self.state_selected_msg[mod.id]
-            if state == state_all:
-                return {'state_reports': state}
-        return self.get_all(mod)
-
-    def get_all(self, mod):
+    def get_changes(self, mod, reports_state=None, selected_version=None):
+        """Returns the parts of the chat data that differ from the versions the page already has:
+        the reports (versioned by 'state_reports') and the selected chat with the user info ('selected_version')."""
         self.prepare_reports()
         with self.reports_lock:
             self.update_selected_data(mod)
-            ret_data = self.cache_reports.copy()
-            ret_data.update(self.cache_selected_data[mod.id])
-            return ret_data
+            data = {}
+            if str(self.cache_reports['state_reports']) != str(reports_state):
+                data.update(self.cache_reports)
+            selected = self.cache_selected_data[mod.id][1]
+            if selected and selected['selected_version'] != selected_version:
+                data.update(selected)
+            return data
 
     def msgs_query(self, username, text, tournId, date_begin, date_end, num_msgs, mod):
         if not mod.is_mod():
@@ -1075,32 +1063,27 @@ class ChatAnalysis:
             for state, t in self.cache_tournaments.items():
                 self.cache_tournaments[state] = "".join(t)
             self.cache_tournaments['state_tournaments'] = self.state_tournaments + self.state_reports
-            return self.cache_tournaments
+            return self.cache_tournaments.copy()
 
     def send_note(self, note, username, mod):
+        """Adds a note to the user; returns True on success."""
         try:
             if not note or not username:
                 raise Exception(f"Wrong note: [{username}]: {note}")
-            if note and username:
-                is_ok = add_note(username, note, mod)
-                if is_ok:
-                    user = self.users[mod.id].get(username)
-                    if user and user.is_up_to_date():
-                        mod_notes = get_notes(username, mod)
-                        user.notes = mod_notes
-                        data = {'selected-user': username, 'mod-notes': mod_notes}
-                    else:
-                        self.update_selected_user(mod)
-                        data = {}
-                    self.state_users += 1
-                    add_data = self.get_messages_nearby(self.selected_msg_id[mod.id], mod)
-                    data.update(add_data)
-                    return data
+            if not add_note(username, note, mod):
+                return False
+            user = self.users[mod.id].get(username)
+            if user and user.is_up_to_date():
+                user.notes = get_notes(username, mod)
+            else:
+                self.update_selected_user(mod)
+            self.state_users += 1
+            return True
         except Exception as exception:
             log_exception(exception)
             self.add_error(f"ERROR at {datetime.now(tz=tz.tzutc()):%Y-%m-%d %H:%M} UTC: send_note: {exception}", False, 2)
             self.state_reports += 1
-        return {'selected-user': username, 'mod-notes': "", 'user-profile': "", 'user-info': ""}
+        return False
 
     def clear_messages_database(self):
         old_dt = datetime.now(tz=tz.tzutc()).replace(tzinfo=None) - timedelta(days=CHAT_MSGS_LIFETIME)
