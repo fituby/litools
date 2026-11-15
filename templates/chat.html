@@ -189,6 +189,7 @@
   let state_reports = 0;
   let selected_version = "";
   let selected_chat = null;
+  let selected_user_name = "";
   const hidden_msgs = new Set();
   const deleted_mmsgs = {};  // multi-message id -> time it was dismissed
   let last_update = Date.now();
@@ -310,11 +311,12 @@
   }
 
   function update_tournament_list(data) {
-    if (data['state_tournaments'] == state_tournaments)
+    if (data['state_tournaments'] == state_tournaments || !data['list'])
       return;
     state_tournaments = data['state_tournaments'];
+    const lists = renderTournamentLists(data);
     for (const tab of TOURNAMENT_TABS)
-      $(`#tournaments_${tab}`).html(data[tab]);
+      $(`#tournaments_${tab}`).html(lists[tab]);
   }
 
   // Message ids are prefixed with the section letter: A = reports, B = multi-line reports, C = selected chat,
@@ -407,6 +409,12 @@
     post_and_update(`/chat/warn/${encodeURIComponent(username)}/${encodeURIComponent(subject)}`);
   }
 
+  // Items of the "Action" menu act on the selected user.
+  function warn_selected_user(button, subject) {
+    if (selected_user_name)
+      warn(button, selected_user_name, subject);
+  }
+
   function clear_errors(tourn_id) {
     post_and_update(`/chat/clear_errors/${encodeURIComponent(tourn_id)}`);
   }
@@ -465,6 +473,7 @@
     $('#selected_tournament').html(sel?.tourn ? renderTournamentLink(sel.tourn) : "");
     $('#selected_tournament_update').prop('title', sel?.update ? `updated at ${sel.update}` : "reload");
     const username = data_chats["selected-user"];
+    selected_user_name = username;
     update_user_button(username);
     $('#selected_user').html(username ? userlink(username, {cls: "text-success", suffix: "?mod"}) : "the user");
     setVisible('#selection_header', !!sel?.tourn, "d-flex");
@@ -479,7 +488,7 @@
   }
 
   function update_user_info(data) {
-    set_section('#user-info', data["user-info"], "d-block");
+    set_section('#user-info', (data["user-info"] || "") + renderCommInfo(data["user-comm"]), "d-block");
     set_section('#user-profile', data["user-profile"], "d-block");
   }
 
@@ -638,7 +647,7 @@
 
   function set_tournament(tourn_id) {
     const checked = $(`#t_${tourn_id}`).is(':checked') ? 1 : 0;
-    $.post(`/chat/set_tournament/${tourn_id}/${checked}`);
+    $.post(`/chat/set_tournament/${encodeURIComponent(tourn_id)}/${checked}`);
   }
 
   function set_tournament_group(group) {
@@ -648,7 +657,7 @@
 
   function delete_tournament(tourn_id) {
     $(`#tt_${tourn_id}`).closest('div').remove();
-    $.post(`/chat/delete_tournament/${tourn_id}`).done(update_tournament_list);
+    $.post(`/chat/delete_tournament/${encodeURIComponent(tourn_id)}`).done(update_tournament_list);
   }
 
   function add_tournament() {

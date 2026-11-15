@@ -262,3 +262,85 @@ function renderSelection(sel) {
   return [`${sel.more ? loadMoreButton(sel.tourn.id, 1) : ""}${list_start}${chat}${list_end}`,
           `${sel.more ? loadMoreButton(sel.tourn.id, 2) : ""}${user_msgs}`];
 }
+
+// Header of a tournament group (with a checkbox to enable/disable the whole group).
+function renderTournamentGroup(group, suffix, name, desc, on) {
+  const id = `${group}${suffix}`;
+  return `<div class="form-check"><input class="form-check-input" type="checkbox" id="t_${id}" ` +
+         `onchange="set_tournament_group('${id}')"${on ? " checked" : ""}>` +
+         `<label class="form-check-label d-flex justify-content-between" for="t_${id}">` +
+         `<b>${escapeHtml(name)}</b><b>${escapeHtml(desc)}</b></label></div>`;
+}
+
+// A tournament of the lists; in the "Added" list (monitored) the checkbox removes the tournament.
+function renderTournamentItem(t, monitored) {
+  const id = escapeHtml(t.id);
+  const checked = monitored || (!t.swiss_off && t.active);
+  const disabled = !monitored && t.swiss_off;
+  const count = (!t.swiss_off || t.n) ? String(t.n).padStart(3, "0") : "&minus;&minus;&minus;";
+  const num = t.n > 0
+    ? `<button class="${t.n < 100 ? "btn-secondary" : "btn-primary"} align-baseline flex-grow-0 px-1 py-0" ` +
+      `onclick="select_message(event,'T${Number(t.first)}')">${count}</button>`
+    : `<span class="px-1">${count}</span>`;
+  const prefix = monitored ? "tt" : "t";
+  const label_for = monitored ? "" : ` for="t_${id}"`;
+  return `<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="${prefix}_${id}" ` +
+         `data-tourn="${id}" onchange="${monitored ? "delete_tournament" : "set_tournament"}(this.dataset.tourn)"` +
+         `${checked ? " checked" : ""}${disabled ? " disabled" : ""}>` +
+         `<label class="form-check-label d-flex justify-content-between${t.monitored ? " text-info" : ""}"${label_for}>` +
+         `<span>${num} ${renderTournamentLink(t)}</span><span>${escapeHtml(t.info)}</span></label></div>`;
+}
+
+// Returns the HTML of the four tabs of the tournament lists.
+function renderTournamentLists(data) {
+  const g = data.groups, list = data.list;
+  const tab = (state, title, desc) => renderTournamentGroup(state, "", `${g[state].n} ${title}`, desc, g[state].on) +
+    '<hr class="my-0">' + list.filter(t => t.state == state).map(t => renderTournamentItem(t, false)).join("");
+  return {
+    tournaments: renderTournamentGroup("started", "2", "All Ongoing", g.started.n, g.started.on) +
+                 renderTournamentGroup("created", "2", "All Created", g.created.n, g.created.on) +
+                 renderTournamentGroup("finished", "2", "All Finished", g.finished.n, g.finished.on) +
+                 '<hr class="mt-1 mb-2">' +
+                 renderTournamentGroup("monitored", "", "Added", g.monitored.n, g.monitored.on) +
+                 list.filter(t => t.monitored).map(t => renderTournamentItem(t, true)).join(""),
+    started: tab("started", "Started", "finishes in:"),
+    created: tab("created", "Created", "starts in:"),
+    finished: tab("finished", "Finished", "finished ago:"),
+  };
+}
+
+function renderActionItem(item) {
+  let title = escapeHtml(item.title);
+  const cls = escapeHtml(item.cls);
+  if (item.bold)
+    title = cls && !item.disabled ? `<b class="${cls}">${title}</b>` : `<b>${title}</b>`;
+  else if (cls && !item.disabled)
+    title = `<span class="${cls}">${title}</span>`;
+  const subject = /^\w+$/.test(item.subject) ? item.subject : "";
+  return `<button class="dropdown-item ${item.disabled ? "btn-secondary disabled" : "btn-primary"}" ` +
+         `onclick="warn_selected_user(this, '${subject}');">${title}</button>`;
+}
+
+// Recent comm warnings/timeouts of the selected user and the "Action" menu (warnings, shadowban, kid mode).
+function renderCommInfo(comm) {
+  if (!comm)
+    return "";
+  const parts = [];
+  if (comm.warnings > 0)
+    parts.push(`<span class="${comm.warnings > 1 ? "text-danger" : "text-warning"}"><b>${Number(comm.warnings)}</b> ` +
+               `comm warning${comm.warnings == 1 ? "" : "s"}</span>`);
+  if (comm.timeouts > 0)
+    parts.push(`<span class="${comm.timeouts >= 5 ? "text-danger" : "text-warning"}"><b>${Number(comm.timeouts)}</b> ` +
+               `timeout${comm.timeouts == 1 ? "" : "s"}</span>`);
+  if (comm.kid)
+    parts.push('<span class="text-warning">kid?</span>');
+  let info = parts.join(" + ");
+  if (comm.menu) {
+    const items = comm.menu.items.map(item => item === null ? '<div class="dropdown-divider my-1"></div>' : renderActionItem(item));
+    const button = `<button class="btn ${escapeHtml(comm.menu.cls)} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" ` +
+                   `id="warn-ban" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">` +
+                   `Action</button><span class="dropdown-menu" style="">${items.join("")}</span>`;
+    info = `<div class="d-flex justify-content-between"><span>${info}</span><span>${button}</span></div>`;
+  }
+  return info ? `<div>${info}</div>` : "";
+}

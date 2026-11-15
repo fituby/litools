@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta
 from dateutil import tz
 import json
-import html
 from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, get_client_id, shorten, add_timeout_msg
 from elements import log, log_exception, Error500
 from chat_re import ReUser, Lang
@@ -398,9 +397,6 @@ class Tournament:
     def get_name(self, short=True):
         return shorten(self.name, MAX_LEN_TOURNEY_NAME_SHORT if short else MAX_LEN_TOURNEY_NAME_LONG)
 
-    def get_link(self, short=True):
-        return f'<a href="{html.escape(self.get_url())}" target="_blank">{html.escape(self.get_name(short))}</a>'
-
     def get_status(self, now_utc):
         if now_utc < self.startsAt:
             return {'text': "Created", 'c': "text-info", 'i': f"Starts in {deltaperiod(self.startsAt, now_utc)}"}
@@ -581,34 +577,22 @@ class Tournament:
         self.multiline_reports = output
         return multi_messages, to_timeout
 
-    def get_list_item(self, now_utc, monitored=False):
-        checked = ' checked=""' if monitored or ((self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS)
-                                                 and self.is_active(now_utc)) else ""
-        disabled = "" if monitored or self.t_type != TournType.Swiss or CHAT_UPDATE_SWISS else ' disabled'
+    def get_list_item(self, now_utc):
+        """Data for the tournament lists of the chat page."""
         if now_utc < self.startsAt:
-            info = f'{deltaperiod(self.startsAt, now_utc, short=True)}'
+            info = deltaperiod(self.startsAt, now_utc, short=True)
         elif self.t_type == TournType.Arena and now_utc < self.finishesAt:
-            info = f'{deltaperiod(self.finishesAt, now_utc, short=True)}'
+            info = deltaperiod(self.finishesAt, now_utc, short=True)
         elif self.t_type == TournType.Arena:
-            info = f'{deltaperiod(now_utc, self.finishesAt, short=True)}'
+            info = deltaperiod(now_utc, self.finishesAt, short=True)
         else:
             info = f'started {deltaperiod(now_utc, self.startsAt, short=True)} ago'
-        num_messages = f'{len(self.messages):03d}' if self.t_type != TournType.Swiss \
-                                                      or CHAT_UPDATE_SWISS or len(self.messages) else "&minus;&minus;&minus;"
-        if len(self.messages) > 0:
-            tag = 'T'
-            i = max(0, len(self.messages) - NUM_MSGS_BEFORE)
-            num_class = "btn-secondary" if len(self.messages) < 100 else "btn-primary"
-            num_messages = f'<button class="brt {num_class} align-baseline flex-grow-0 px-1 py-0"  ' \
-                           f'onclick="select_message(event,\'{tag}{self.messages[i].id}\')">{num_messages}</button>'
-        else:
-            num_messages = f'<span class="px-1">{num_messages}</span>'
-        text_class = " text-info" if self.is_monitored else ""
-        id_prefix = "tt" if monitored else "t"
-        onchange = "delete_tournament" if monitored else "set_tournament"
-        return f"""<div class="form-check form-switch">
-          <input class="form-check-input" type="checkbox" id="{id_prefix}_{self.id}" 
-          onchange="{onchange}('{self.id}')"{checked}{disabled}>
-          <label class="form-check-label d-flex justify-content-between{text_class}" for="t_{self.id}">
-          <span>{num_messages} {self.get_link()}</span><span>{info}</span></label>
-        </div>"""
+        item = {'id': self.id, 'name': self.get_name(), 'url': self.get_url(), 'info': info, 'n': len(self.messages),
+                'active': self.is_active(now_utc)}
+        if self.messages:
+            item['first'] = self.messages[max(0, len(self.messages) - NUM_MSGS_BEFORE)].id
+        if self.t_type == TournType.Swiss and not CHAT_UPDATE_SWISS:
+            item['swiss_off'] = True
+        if self.is_monitored:
+            item['monitored'] = True
+        return item

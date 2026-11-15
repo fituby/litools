@@ -620,32 +620,18 @@ class ChatAnalysis:
         return self.state_reports + self.state_users + self.state_selected_msg[mod.id]
 
     def get_messages_nearby(self, msg_id, mod):
-        def get_warn_btn(subject_tag, btn_title, is_highlighted, user_name, is_disabled=False, txt_class=""):
-            if is_highlighted:
-                btn_title = f'<b class="{txt_class}">{btn_title}</b>' if txt_class and not is_disabled \
-                    else f'<b>{btn_title}</b>'
-            elif txt_class and not is_disabled:
-                btn_title = f'<span class="{txt_class}">{btn_title}</span>'
-            btn_class = "btn-secondary disabled" if is_disabled else "btn-primary"
-            return f'<button class="dropdown-item {btn_class}" onclick="warn(this, \'{user_name}\',\'{subject_tag}\');">' \
-                   f'{btn_title}</button>'
+        def get_warn_btn(subject_tag, btn_title, is_highlighted, is_disabled=False, txt_class=""):
+            return {'subject': subject_tag, 'title': btn_title, 'bold': bool(is_highlighted), 'disabled': bool(is_disabled),
+                    'cls': txt_class}
 
         def is_recent(times, key, time_now):
             return (times[key] is not None) and (delta_s(time_now, times[key]) <= RECENT_WARNING)
 
         def add_comm_info(user_data, user_msgs):
-            add_info = ""
+            """Recent warnings/timeouts of the user and the items of the Action menu (rendered by the page)."""
             with self.selected_user_lock[mod.id]:
-                if self.selected_user_num_recent_comm_warnings[mod.id] > 0:
-                    text_theme = "text-danger" if self.selected_user_num_recent_comm_warnings[mod.id] > 1 else "text-warning"
-                    add_info = f'<span class="{text_theme}"><b>{self.selected_user_num_recent_comm_warnings[mod.id]}</b> ' \
-                               f'comm warning{"" if self.selected_user_num_recent_comm_warnings[mod.id] == 1 else "s"}' \
-                               f'</span>'
-                if self.selected_user_num_recent_timeouts[mod.id] > 0:
-                    text_theme = "text-danger" if self.selected_user_num_recent_timeouts[mod.id] >= 5 else "text-warning"
-                    add_info = f'{add_info}{" + " if add_info else ""}<span class="{text_theme}">' \
-                               f'<b>{self.selected_user_num_recent_timeouts[mod.id]}</b> ' \
-                               f'timeout{"" if self.selected_user_num_recent_timeouts[mod.id] == 1 else "s"}</span>'
+                comm = {'warnings': self.selected_user_num_recent_comm_warnings[mod.id],
+                        'timeouts': self.selected_user_num_recent_timeouts[mod.id], 'kid': False, 'menu': None}
             if mod.is_mod() and user_msgs and not user_msgs[-1].is_official:
                 user_name = user_data.name
                 is_timed_out = False
@@ -697,57 +683,50 @@ class ChatAnalysis:
                     reasons[last_timeout_reason] += 1
                 buttons = []
                 if is_timed_out or is_recent_timeout:
-                    buttons.append(get_warn_btn('shaming', "Warn: Accusations", reasons[Reason.Shaming], user_name,
+                    buttons.append(get_warn_btn('shaming', "Warn: Accusations", reasons[Reason.Shaming],
                                                 is_disabled=is_recent(last_time, 'shaming', now_utc)))
-                    buttons.append(get_warn_btn('insult', "Warn: Insult", reasons[Reason.Offensive], user_name,
+                    buttons.append(get_warn_btn('insult', "Warn: Insult", reasons[Reason.Offensive],
                                                 is_disabled=is_recent(last_time, 'insult', now_utc)))
-                    buttons.append(get_warn_btn('spam', "Warn: Spam", reasons[Reason.Spam], user_name,
+                    buttons.append(get_warn_btn('spam', "Warn: Spam", reasons[Reason.Spam],
                                                 is_disabled=is_recent(last_time, 'spam', now_utc)))
-                    buttons.append(get_warn_btn('trolling', "Warn: Trolling", reasons[Reason.Other], user_name,
+                    buttons.append(get_warn_btn('trolling', "Warn: Trolling", reasons[Reason.Other],
                                                 is_disabled=is_recent(last_time, 'trolling', now_utc)))
-                    buttons.append(get_warn_btn('ad', "Warn: Ads", False, user_name,
+                    buttons.append(get_warn_btn('ad', "Warn: Ads", False,
                                                 is_disabled=is_recent(last_time, 'ad', now_utc)))
-                    buttons.append(get_warn_btn('team_ad', "Warn: Team Ad", False, user_name,
+                    buttons.append(get_warn_btn('team_ad', "Warn: Team Ad", False,
                                                 is_disabled=is_recent(last_time, 'team_ad', now_utc)))
-                    buttons.append('<div class="dropdown-divider my-1"></div>')
+                    buttons.append(None)  # divider
                     is_SBable = user_data.notes and (is_banable or self.selected_user_num_recent_comm_warnings[mod.id]
                                                      or self.selected_user_num_recent_timeouts[mod.id])
-                    buttons.append(get_warn_btn('SB', "Shadowban", True, user_name, txt_class="text-danger",
+                    buttons.append(get_warn_btn('SB', "Shadowban", True, txt_class="text-danger",
                                                 is_disabled=is_SBed or not is_SBable))
                 kid_sus = ChatAnalysis.re_kid_years.search(user_data.profile.bio)
                 if kid_sus:
-                    add_info = f'{add_info}{" + " if add_info else ""}<span class="text-warning">' \
-                               f'kid?</span>'
+                    comm['kid'] = True
                     if not is_kid and not is_SBed:
                         user_data.bio_add = f'<button class="btn btn-danger text-nowrap align-baseline flex-grow-0 py-0 ' \
-                                            f'px-1 ml-1" onclick="warn(this, \'{user_name}\',\'kidMode_Note\');">' \
-                                            f'Kid+Note</button>'
+                                            f'px-1 ml-1" data-user="{html.escape(user_name)}" ' \
+                                            f'onclick="warn(this, this.dataset.user, \'kidMode_Note\');">Kid+Note</button>'
                 if buttons or (not is_kid and not is_SBed):
-                    buttons.append(get_warn_btn('kidMode', "Kid Mode", kid_sus, user_name, txt_class="text-warning",
+                    buttons.append(get_warn_btn('kidMode', "Kid Mode", kid_sus, txt_class="text-warning",
                                                 is_disabled=is_kid))
                 if buttons:
-                    btn_class = "btn-warning" if not was_kid and (kid_sus or len(buttons) > 1) else "btn-secondary"
-                    button_warn = f'<button class="btn {btn_class} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" '\
-                        f'id="warn-ban" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"' \
-                        f'style="cursor:pointer;">Action</button><span class="dropdown-menu" style="">' \
-                        f'{"".join(buttons)}</span>'
-                    add_info = f'<div class="d-flex justify-content-between">' \
-                               f'<span>{add_info}</span><span>{button_warn}</span></div>'
-            return add_info
+                    comm['menu'] = {'cls': "btn-warning" if not was_kid and (kid_sus or len(buttons) > 1) else "btn-secondary",
+                                    'items': buttons}
+            return comm
 
         state = self.get_selected_state(mod)
 
         def create_output(selected, user_data=None, user_msgs=None):
             data = {'selected': selected}
             if user_data:
-                user_info = user_data.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES)
-                add_info = add_comm_info(user_data, user_msgs)
-                if add_info:
-                    user_info = f'{user_info}<div>{add_info}</div>'
+                comm = add_comm_info(user_data, user_msgs)  # before get_profile(): may add the Kid+Note button
                 data.update({'selected-user': user_data.name, 'user-profile': user_data.get_profile(),
-                             'user-info': user_info, 'mod-notes': user_data.notes, 'mod-log': user_data.mod_log})
+                             'user-info': user_data.get_user_info(CHAT_CREATED_DAYS_AGO, CHAT_NUM_PLAYED_GAMES),
+                             'user-comm': comm, 'mod-notes': user_data.notes, 'mod-log': user_data.mod_log})
             else:
-                data.update({'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': ""})
+                data.update({'selected-user': "", 'mod-notes': "", 'mod-log': "", 'user-info': "", 'user-profile': "",
+                             'user-comm': None})
             # Fingerprint of the content: the page gets the data again only when it has changed
             content = json.dumps(data, sort_keys=True, default=str).encode()
             data['selected_version'] = hashlib.sha1(content).hexdigest()[:16]
@@ -997,71 +976,26 @@ class ChatAnalysis:
             if self.state_tournaments + self.state_reports == self.cache_tournaments['state_tournaments']:
                 return self.cache_tournaments.copy()
 
-            # Lists
-            def get_group_desc(group, group_name, desc, suffix=""):
-                checked = ' checked' if self.tournament_groups[group] else ""
-                return f'<div class="form-check">' \
-                       f'<input class="form-check-input" type="checkbox" id="t_{group}{suffix}" ' \
-                           f'onchange="set_tournament_group(\'{group}{suffix}\')"{checked}>' \
-                       f'<label class="form-check-label d-flex justify-content-between" for="t_{group}{suffix}">' \
-                           f'<b>{group_name}</b><b>{desc}</b></label>' \
-                       f'</div>'
-
             now_utc = datetime.now(tz=tz.tzutc())
             if active_tournaments is None:
                 active_tournaments = self.get_time_sorted_tournaments(now_utc, active_only=False)
-            num_monitored = 0
-            num_started = 0
-            num_created = 0
-            num_finished = 0
-            num_monitored_enabled = 0
-            num_started_enabled = 0
-            num_created_enabled = 0
-            num_finished_enabled = 0
+            counts = {group: [0, 0] for group in self.tournament_groups}  # [enabled, all]
+            items = []
             for tourney in active_tournaments:
-                if tourney.is_monitored:
-                    num_monitored += 1
+                state = tourney.get_state(now_utc)
+                groups = [state, "monitored"] if tourney.is_monitored else [state]
+                for group in groups:
+                    counts[group][1] += 1
                     if tourney.is_enabled:
-                        num_monitored_enabled += 1
-                if tourney.is_created(now_utc):
-                    num_created += 1
-                    if tourney.is_enabled:
-                        num_created_enabled += 1
-                elif tourney.is_ongoing(now_utc):
-                    num_started += 1
-                    if tourney.is_enabled:
-                        num_started_enabled += 1
-                else:
-                    num_finished += 1
-                    if tourney.is_enabled:
-                        num_finished_enabled += 1
-            n_monitored = f"{num_monitored}" if num_monitored == num_monitored_enabled \
-                else f"{num_monitored_enabled} / {num_monitored}"
-            n_started = f"{num_started}" if num_started == num_started_enabled \
-                else f"{num_started_enabled} / {num_started}"
-            n_created = f"{num_created}" if num_created == num_created_enabled \
-                else f"{num_created_enabled} / {num_created}"
-            n_finished = f"{num_finished}" if num_finished == num_finished_enabled \
-                else f"{num_finished_enabled} / {num_finished}"
+                        counts[group][0] += 1
+                item = tourney.get_list_item(now_utc)
+                item['state'] = state
+                items.append(item)
             self.cache_tournaments = {
-                'tournaments': [
-                    get_group_desc("started", "All Ongoing", n_started, suffix="2"),
-                    get_group_desc("created", "All Created", n_created, suffix="2"),
-                    get_group_desc("finished", "All Finished", n_finished, suffix="2"),
-                    '<hr class="mt-1 mb-2">',
-                    get_group_desc("monitored", "Added", n_monitored)
-                ],
-                'started': [get_group_desc("started", f"{n_started} Started", "finishes in:"), '<hr class="my-0">'],
-                'created': [get_group_desc("created", f"{n_created} Created", "starts in:"), '<hr class="my-0">'],
-                'finished': [get_group_desc("finished", f"{n_finished} Finished", "finished ago:"), '<hr class="my-0">']
-            }
-            for tournament in active_tournaments:
-                state = tournament.get_state(now_utc)
-                self.cache_tournaments[state].append(tournament.get_list_item(now_utc))
-                if tournament.is_monitored:
-                    self.cache_tournaments['tournaments'].append(tournament.get_list_item(now_utc, monitored=True))
-            for state, t in self.cache_tournaments.items():
-                self.cache_tournaments[state] = "".join(t)
+                'groups': {group: {'on': self.tournament_groups[group],
+                                   'n': f"{n_all}" if n_enabled == n_all else f"{n_enabled} / {n_all}"}
+                           for group, (n_enabled, n_all) in counts.items()},
+                'list': items}
             self.cache_tournaments['state_tournaments'] = self.state_tournaments + self.state_reports
             return self.cache_tournaments.copy()
 
