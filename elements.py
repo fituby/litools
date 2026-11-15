@@ -102,7 +102,7 @@ def flair_to_text(flair):
 def get_flair_element(flair, size=30):
     if not flair:
         return ""
-    return f'<abbr class="user-flair text-info pr-1" title="{html.escape(flair_to_text(flair))}" style="text-decoration:none;">' \
+    return f'<abbr class="text-decoration-none user-flair text-info pe-1" title="{html.escape(flair_to_text(flair))}">' \
            f'<img src="https://lichess1.org/assets/______0/flair/img/{html.escape(flair)}.webp" ' \
            f'style="max-width:{size}px;"></abbr>'
 
@@ -275,13 +275,13 @@ class User:
                 title = f'<span class="text-warning">{self.title}</span> '
         else:
             title = ""
-        return f'{title}<a href="https://lichess.org/@/{html.escape(self.id)}{postfix}" class="pr-1" target="_blank">' \
+        return f'{title}<a href="https://lichess.org/@/{html.escape(self.id)}{postfix}" class="pe-1" target="_blank">' \
                f'{html.escape(self.name)}</a>'
 
     def get_short_name(self, max_len=10):
         if len(self.name) > max_len:
             title_name = f'{self.title} {self.name}'.strip()
-            return f'<abbr title="{html.escape(title_name)}" style="text-decoration:none;">' \
+            return f'<abbr class="text-decoration-none" title="{html.escape(title_name)}">' \
                    f'{html.escape(shorten(self.name, max_len))}</abbr>'
         return html.escape(self.name)
 
@@ -294,7 +294,7 @@ class User:
     def get_patron(self):
         if not self.patron:
             return ""
-        return '<abbr title="Lichess Patron" class="text-info px-1" style="text-decoration:none;">' \
+        return '<abbr title="Lichess Patron" class="text-decoration-none text-info px-1">' \
                '<i class="fas fa-gem"></i></abbr>'
 
     def get_flair(self):
@@ -303,7 +303,7 @@ class User:
     def get_verified(self):
         if not self.verified:
             return ""
-        return '<abbr title="Verified" class="text-info px-1" style="text-decoration:none;">' \
+        return '<abbr title="Verified" class="text-decoration-none text-info px-1">' \
                '<i class="fas fa-check"></i></abbr>'
 
     def get_tosViolation(self):
@@ -323,22 +323,22 @@ class User:
             if country_name[0] == '_':
                 country_name = country_name[1:]
         if country_name:
-            return f'<abbr class="px-1" title="{html.escape(country_name)}" style="text-decoration:none;">{country_img}</abbr>'
+            return f'<abbr class="text-decoration-none px-1" title="{html.escape(country_name)}">{country_img}</abbr>'
         return f'<span class="px-1">{country_img}</span>'
 
     def get_name_info(self, limits_created_days_ago):
         part1 = f'{self.get_flair()}{self.get_patron()}{self.get_name()}{self.get_disabled()}{self.get_verified()}'
         part2 = f'{self.get_tosViolation()}{self.get_country()} {self.get_created(limits_created_days_ago)}'
-        return f'<div class="mr-2">{part1}{part2}</div>'
+        return f'<div class="me-2">{part1}{part2}</div>'
 
     def get_num_games(self, limits_num_played_games):
         if self.num_games == 0 and self.num_rated_games == 0:
             return ""
-        class_games = f' class="text-danger"' if self.num_rated_games <= limits_num_played_games[0] \
-            else f' class="text-warning"' if self.num_rated_games <= limits_num_played_games[1] else ""
-        return f'<div><abbr{class_games} title="Number of rated games" style="text-decoration:none;">' \
-               f'<b>{self.num_rated_games:,}</b></abbr> / <abbr title="Total number of games" ' \
-               f'style="text-decoration:none;">{self.num_games:,}</abbr> games</div>'
+        class_games = "text-danger" if self.num_rated_games <= limits_num_played_games[0] \
+            else "text-warning" if self.num_rated_games <= limits_num_played_games[1] else ""
+        return f'<div><abbr class="text-decoration-none {class_games}" title="Number of rated games">' \
+               f'<b>{self.num_rated_games:,}</b></abbr> / <abbr class="text-decoration-none" title="Total number of games">' \
+               f'{self.num_games:,}</abbr> games</div>'
 
     def get_user_info(self, limits_created_days_ago, limits_num_played_games):
         return f'<div class="d-flex justify-content-between align-items-baseline mt-3">' \
@@ -358,9 +358,9 @@ class User:
         now_utc = datetime.now(tz=tz.tzutc())
         created_ago = timestamp_to_ago(self.createdAt, now_utc)
         days = (now_utc - self.get_createdAt()).days
-        class_created = ' class="text-danger"' if days <= limits_created_days_ago[0] \
-            else ' class="text-warning"' if days <= limits_created_days_ago[1] else ""
-        return f'<abbr{class_created} title="Account created {created_ago}" style="text-decoration:none;">' \
+        class_created = "text-danger" if days <= limits_created_days_ago[0] \
+            else "text-warning" if days <= limits_created_days_ago[1] else ""
+        return f'<abbr class="text-decoration-none {class_created}" title="Account created {created_ago}">' \
                f'<b>{created_ago}</b></abbr>'
 
     def get_seenAt(self):
@@ -371,7 +371,7 @@ class User:
             return ""
         now_utc = datetime.now(tz=tz.tzutc())
         seen_ago = timestamp_to_ago(self.seenAt, now_utc)
-        return f'<abbr title="Account active {seen_ago}" style="text-decoration:none;">' \
+        return f'<abbr class="text-decoration-none" title="Account active {seen_ago}">' \
                f'<b>{seen_ago}</b></abbr>'
 
     def get_profile(self):
@@ -465,8 +465,8 @@ class VariantPlayed:
             if abs(self.progress) > BOOST_SUS_PROGRESS:
                 progress = f"{progress}progress: +{self.progress}" if self.progress > 0 \
                     else f"{progress}progress: &minus;{abs(self.progress)}"
-                class_rating = "" if not self.num_recent_games else ' class="text-danger" style="text-decoration:none;"' \
-                    if self.num_games >= BOOST_SUS_NUM_GAMES else ' class="text-warning" style="text-decoration:none;"'
+                class_rating = "" if not self.num_recent_games else ' class="text-decoration-none text-danger"' \
+                    if self.num_games >= BOOST_SUS_NUM_GAMES else ' class="text-decoration-none text-warning"'
             if progress:
                 rating = f'<abbr title="{progress}"{class_rating}>{rating}</abbr>'
         return rating
@@ -513,7 +513,7 @@ class VariantPlayed:
                 if not is_min_stable or not is_max_stable:
                     str_detailed_progress = f'{self.min_rating}{"" if is_min_stable else "?"}&hellip;' \
                                             f'{self.max_rating}{"" if is_max_stable else "?"} {str_detailed_progress}'
-                str_range = f'<abbr title="{str_detailed_progress}" style="text-decoration:none;">{str_range}</abbr>'
+                str_range = f'<abbr class="text-decoration-none" title="{str_detailed_progress}">{str_range}</abbr>'
             str_num_recent_games = "&ndash;" if not self.num_recent_games else f"{self.num_recent_games:,}"
             rows_recent_games = f'<td class="text-center">{str_num_recent_games}</td>' \
                                 f'<td class="text-center">{str_range}</td>'
@@ -527,11 +527,11 @@ class VariantPlayed:
                    f'onclick="add_to_notes(this)" data-selection=\'{link}\'>{name}</button>'
         row_class = ' class="text-muted"' if not self.num_recent_games else ""
         row = f'''<tr{row_class}>
-                    <td class="text-left">{name}</td>
-                    <td class="text-left">{perf_link}</td>
-                    <td class="text-left">{self.get_rating()}</td>
+                    <td class="text-start">{name}</td>
+                    <td class="text-start">{perf_link}</td>
+                    <td class="text-start">{self.get_rating()}</td>
                     {rows_recent_games}
-                    <td class="text-right">{self.num_games:,}</td>
+                    <td class="text-end">{self.num_games:,}</td>
                   </tr>'''
         return row
 
@@ -572,18 +572,18 @@ class Variants:
             return ""
         str_games = f'Number of games played among the last ' \
                     f'{num_games} game{"" if num_games == 1 else "s"} analyzed'
-        rows_recent_games = f'<th class="text-center" style="cursor:default;"><abbr title="{str_games}"' \
-                            f' style="text-decoration:none;"><i class="fas fa-hashtag"></i></abbr></th>' \
-                            f'<th class="text-center" style="cursor:default;">Range</th>' if self.are_recent_games else ""
+        rows_recent_games = f'<th class="text-center"><abbr class="text-decoration-none" title="{str_games}"' \
+                            f'><i class="fas fa-hashtag"></i></abbr></th>' \
+                            f'<th class="text-center">Range</th>' if self.are_recent_games else ""
         table = f'''<div class="column">
             <table id="variants_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
               <thead><tr>
-                <th class="text-left" style="cursor:default;">Variant</th>
+                <th class="text-start">Variant</th>
                 <th></th>
-                <th class="text-left" style="cursor:default;">Rating</th>
+                <th class="text-start">Rating</th>
                 {rows_recent_games}
-                <th class="text-right" style="cursor:default;"><abbr title="Total number of rated games played" 
-                    style="text-decoration:none;"># games</abbr></th>
+                <th class="text-end"><abbr class="text-decoration-none" title="Total number of rated games played" 
+                   ># games</abbr></th>
               </tr></thead>
               {"".join(rows)}
             </table>
@@ -784,7 +784,7 @@ class Games:
     def get_num(self):
         str_s = "" if len(self.games) == 1 else "s"
         str_num = f'<abbr title="{len(self.games)} latest game{str_s} analyzed ({self.max_num_games} requested)" ' \
-                  f'style="text-decoration:none;"><b>{len(self.games)} game{str_s}</b></abbr>'
+                  f'class="text-decoration-none"><b>{len(self.games)} game{str_s}</b></abbr>'
         first_createdAt: datetime = None
         if self.games:
             first_createdAt = datetime.fromtimestamp(self.games[-1]['createdAt'] // 1000, tz=tz.tzutc())
@@ -835,7 +835,7 @@ def timestamp_to_ago(ts_ms, now_utc=None, short=False):
 
 
 def datetime_to_abbr_ago(dt, now_utc=None, short=False):
-    return f'<abbr title="{dt:%Y-%m-%d %H:%M:%S} UTC" style="text-decoration:none;">' \
+    return f'<abbr class="text-decoration-none" title="{dt:%Y-%m-%d %H:%M:%S} UTC">' \
            f'{datetime_to_ago(dt, now_utc, short)}</abbr>'
 
 
@@ -843,7 +843,7 @@ def datetime_to_abbr_in(dt, now_utc, short=False):
     str_period = datetime_to_ago(now_utc, dt, short)
     if " ago" in str_period:
         str_period = f'in {str_period.replace(" ago", "")}'
-    return f'<abbr title="{dt:%Y-%m-%d %H:%M:%S} UTC" style="text-decoration:none;">{str_period}</abbr>'
+    return f'<abbr class="text-decoration-none" title="{dt:%Y-%m-%d %H:%M:%S} UTC">{str_period}</abbr>'
 
 def timestamp_to_abbr_ago(ts_ms, now_utc=None, short=False):
     t = datetime.fromtimestamp(ts_ms // 1000, tz=tz.tzutc())
@@ -1070,8 +1070,8 @@ def get_notes(username, mod, mod_log_data=None):
                 if note_time else ""
             is_mod_note = note.get('mod', False)
             str_mod = "" if is_mod_note else "<br>User Note"
-            info.append(f'<tr><td class="text-left text-nowrap mr-2">{author}:{str_time}{str_mod}</td>'
-                        f'<td class="text-left text-wrap" style="{STYLE_WORD_BREAK}">{text}</td></tr>')
+            info.append(f'<tr><td class="text-start text-nowrap me-2">{author}:{str_time}{str_mod}</td>'
+                        f'<td class="text-start text-wrap" style="{STYLE_WORD_BREAK}">{text}</td></tr>')
     except Exception as exception:
         log_exception(exception)
         if not info:
@@ -1151,10 +1151,10 @@ def get_table_row_for_actions(actions, now_utc):
     date = f'{actions[0].get_date(now_utc).replace(" ago", "")}&hellip;<br>{actions[-1].get_date(now_utc)}'
     action_class = actions[0].get_class(now_utc)
     row = f'<tr>' \
-          f'<td class="text-left align-middle {actions[0].get_date_class(now_utc)}">{date}</td>' \
-          f'<td class="text-left align-middle">{actions[0].get_mod_name()}</td>' \
-          f'<td class="text-left align-middle {action_class}">{actions[0].get_full_action()}</td>' \
-          f'<td class="text-right align-middle {action_class}" style="font-size:23px">' \
+          f'<td class="text-start align-middle {actions[0].get_date_class(now_utc)}">{date}</td>' \
+          f'<td class="text-start align-middle">{actions[0].get_mod_name()}</td>' \
+          f'<td class="text-start align-middle {action_class}">{actions[0].get_full_action()}</td>' \
+          f'<td class="text-end align-middle {action_class}" style="font-size:23px">' \
           f'<b>&times;{len(actions)}</b></td>' \
           f'</tr>'
     return row
@@ -1342,7 +1342,7 @@ class ModAction:
             return f'<a class="text-info" href="https://lichess.org/game/{self.details[5:]}" ' \
                    f'target="_blank">{self.get_action()}</a>'
         if self.details:
-            style = f' style="text-decoration:none;"' if self.is_warning() else ""
+            style = ' class="text-decoration-none"' if self.is_warning() else ""
             return f'<abbr title="{self.details}"{style}>{self.get_action()}</abbr>'
         else:
             return self.get_action()
@@ -1381,9 +1381,9 @@ class ModAction:
     def get_table_row(self, now_utc):
         class_mod = " table-warning" if self.is_new(now_utc) else ""
         row = f'<tr>' \
-              f'<td class="text-left align-middle {self.get_date_class(now_utc)}">{self.get_date(now_utc)}</td>' \
-              f'<td class="text-left align-middle{class_mod}">{self.get_mod_name()}</td>' \
-              f'<td colspan="2" class="text-left align-middle {self.get_class(now_utc)}">{self.get_full_action()}</td>' \
+              f'<td class="text-start align-middle {self.get_date_class(now_utc)}">{self.get_date(now_utc)}</td>' \
+              f'<td class="text-start align-middle{class_mod}">{self.get_mod_name()}</td>' \
+              f'<td colspan="2" class="text-start align-middle {self.get_class(now_utc)}">{self.get_full_action()}</td>' \
               f'</tr>'
         return row
 

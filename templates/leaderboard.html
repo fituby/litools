@@ -9,33 +9,33 @@
                      "antichess", "atomic", "horde", "kingOfTheHill", "racingKings", "threeCheck"] %}
       {% set name = var[0].upper() + var[1:] %}
       {% if variant.lower() == var.lower() %}
-      <span class="pr-2">{{name}}</span>
+      <span class="pe-2">{{name}}</span>
       {% else %}
-      <a class="pr-2" href="/lb/{{var}}">{{name}}</a>
+      <a class="pe-2" href="/lb/{{var}}">{{name}}</a>
       {% endif %}
       {% endfor %}
     </div>
     <div class="position-relative mt-5 mb-2">
-      <div class="position-absolute row align-items-baseline">
-        <p class="pr-2 m-0">Mode</p>
+      <div class="position-absolute d-flex flex-wrap align-items-baseline">
+        <p class="pe-2 m-0">Mode</p>
         {{ mode_buttons() }}
       </div>
       <h4 class="text-center text-warning my-2">{{variant}} Leaderboard</h4>
     </div>
-    <div class="text-muted row justify-content-center mx-3">{{dt}} UTC</div>
-    <div class="row justify-content-center">
+    <div class="text-muted d-flex justify-content-center mx-3">{{dt}} UTC</div>
+    <div class="d-flex justify-content-center">
       <div class="flex-grow-1" style="max-width: 1000px;">
         <table id="lb_table" class="table table-sm table-striped table-hover text-center text-nowrap mb-5">
           <thead><tr>
             <th>Place <i class="fas fa-sort text-muted"></i></th>
             <th class="d-none d-lg-table-cell">Flair <i class="fas fa-sort text-muted"></i></th>
-            <th class="text-left">Player <i class="fas fa-sort text-muted"></i></th>
+            <th class="text-start">Player <i class="fas fa-sort text-muted"></i></th>
             <th>Flag <i class="fas fa-sort text-muted"></i></th>
             <th>Rating <i class="fas fa-sort text-muted"></i></th>
             <th># Games <i class="fas fa-sort text-muted"></i></th>
             <th>Online <i class="fas fa-sort text-muted"></i></th>
-            <th><abbr class="pr-2 abbr-plain" title="# {{variant}} Games"># {{variant}}</abbr> <i class="fas fa-sort text-muted"></i></th>
-            <th class="text-left">Created <i class="fas fa-sort text-muted"></i></th>
+            <th><abbr class="pe-2 abbr-plain" title="# {{variant}} Games"># {{variant}}</abbr> <i class="fas fa-sort text-muted"></i></th>
+            <th class="text-start">Created <i class="fas fa-sort text-muted"></i></th>
           </tr></thead>
         </table>
       </div>
@@ -53,7 +53,7 @@
   const ASSETS = "https://lichess1.org/assets/______0";
 
   function abbr(title, content) {
-    return `<abbr class="pr-2 abbr-plain" title="${escapeHtml(title)}">${content}</abbr>`;
+    return `<abbr class="pe-2 abbr-plain" title="${escapeHtml(title)}">${content}</abbr>`;
   }
 
   function number_cell(value, cls) {
@@ -64,7 +64,7 @@
   // 0 place, 1 username, 2 rating, 3 #games, 4 flair, 5 seen-at, 6 country, 7 #variant games,
   // 8 created-ago, 9 -, 10 seen-ago, 11 created-at, 12 flair name
   $(function() {
-    $("body").tooltip({selector: '[data-toggle=tooltip]'});
+    $("body").tooltip({selector: '[data-bs-toggle=tooltip]'});
     $('#lb_table').DataTable({
       searching: true, paging: false, info: false,
       order: [[8, "desc"]],
@@ -78,12 +78,12 @@
         }
       }, {
         targets: [2],
-        className: "text-left align-middle",
+        className: "text-start align-middle",
         data: null,
         render: data => userlink(data[1])
       }, {
         targets: [3],
-        className: "text-left align-middle py-0",
+        className: "text-start align-middle py-0",
         data: null,
         render: (data, type) => {
           const country = data[6];
@@ -101,22 +101,22 @@
         render: (data, type) => type != 'display' ? data[2] : number_cell(data[2], "text-warning")
       }, {
         targets: [5],
-        className: "text-right align-middle pr-3",
+        className: "text-end align-middle pe-3",
         data: null,
         render: (data, type) => type != 'display' ? -data[3] : number_cell(data[3], "text-muted")
       }, {
         targets: [6],
-        className: "d-none d-lg-table-cell text-left align-middle py-0",
+        className: "d-none d-lg-table-cell text-start align-middle py-0",
         data: null,
         render: (data, type) => type != 'display' ? data[5] : abbr(data[5], escapeHtml(data[10]))
       }, {
         targets: [7],
-        className: "text-right align-middle pr-3",
+        className: "text-end align-middle pe-3",
         data: null,
         render: (data, type) => type != 'display' ? -data[7] : number_cell(data[7], "text-muted")
       }, {
         targets: [8],
-        className: "text-left align-middle pr-3",
+        className: "text-start align-middle pe-3",
         data: null,
         render: (data, type) => type != 'display' ? data[11] : abbr(data[11], escapeHtml(data[8]))
       }],

@@ -139,14 +139,12 @@ class GameAnalysis:
         stats_num = sum([num for variant, num in stats.variant_num.items() if variant not in exclude_variants]) \
             if exclude_variants else stats.num
         if text_classes:
-            color = f' class="{text_classes[1]}"' if stats_num >= limits[1] else f' class="{text_classes[0]}"' \
-                if stats_num >= limits[0] else ""
+            color = text_classes[1] if stats_num >= limits[1] else text_classes[0] if stats_num >= limits[0] else ""
         else:
-            color = ' class="text-danger"' if stats_num >= limits[1] else ' class="text-warning"' \
-                if stats_num >= limits[0] else ""
+            color = "text-danger" if stats_num >= limits[1] else "text-warning" if stats_num >= limits[0] else ""
         score = (10 * stats_num / limits[1]) if stats_num >= limits[1] \
             else 1 + (stats_num - limits[0]) / (limits[1] - limits[0]) if stats_num >= limits[0] else 0
-        abbr = f'<abbr title="{str_info}"{color} style="text-decoration:none;">{stats_num:,}</abbr>'
+        abbr = f'<abbr title="{str_info}" class="text-decoration-none {color}">{stats_num:,}</abbr>'
         return StatsDesc(abbr, score, median, nums, self.is_sandbagging)
 
     def calc(self):
@@ -174,7 +172,7 @@ class GameAnalysis:
         max_date = datetime.now(tz=tz.tzutc()) + timedelta(days=1)
         link = f'https://lichess.org/@/{{username}}/search?dateMax={max_date:%Y-%m-%d}&turnsMax={num_moves}{{perf_index}}' \
                f'&mode=1&players.a={{user_id}}&players.{winner_loser}={{user_id}}&sort.field=d&sort.order=desc'
-        link_open = f'<a class="ml-2" href="{link}" target="_blank">open</a>'
+        link_open = f'<a class="ms-2" href="{link}" target="_blank">open</a>'
         info = f'{link}'
         if BOOST_ADD_INFO:
             add_info = []
@@ -206,13 +204,13 @@ class GameAnalysis:
                     info = f'{info}, {str_incl} {self.streak.num} games streak'
                 info = f"{info}."
         self.row = f'''<tr>
-                    <td class="text-left"><button class="btn btn-primary p-0" style="min-width: 120px;" 
+                    <td class="text-start"><button class="btn btn-primary p-0" style="min-width: 120px;" 
                         onclick="add_to_notes(this)" data-selection=\'{info}\'>{self.max_num_moves}</button>{link_open}</td>
-                    <td class="text-right pr-2">{stats_bad_games.abbr}</td>
+                    <td class="text-end pe-2">{stats_bad_games.abbr}</td>
                     <td class="text-center px-2">{stats_streak.abbr}</td>
-                    <td class="text-right pr-2">{stats_resign.abbr}</td>
-                    <td class="text-right pr-2">{stats_timeout.abbr}</td>
-                    <td class="text-right pr-2">{stats_out_of_time.abbr}</td>
+                    <td class="text-end pe-2">{stats_resign.abbr}</td>
+                    <td class="text-end pe-2">{stats_timeout.abbr}</td>
+                    <td class="text-end pe-2">{stats_out_of_time.abbr}</td>
                   </tr>'''
 
     def set_best_row(self):
@@ -234,7 +232,7 @@ class GameAnalysis:
             link = f'https://lichess.org/@/{{username}}/search?turnsMax={num_moves}&mode=1&players.a={{user_id}}' \
                    f'&players.b={opp_name.lower()}&players.{winner_loser}={{user_id}}&sort.field=d&sort.order=desc'
             btn_class = "btn-warning" if num_games >= 5 else "btn-primary"
-            opps.append(f'<span class="d-flex flex-wrap align-items-baseline"><button class="btn {btn_class} py-0 mr-1" '
+            opps.append(f'<span class="d-flex flex-wrap align-items-baseline"><button class="btn {btn_class} py-0 me-1" '
                         f'onclick="add_to_notes(this)" data-selection=\'{link}\'>{num_games} games</button> '
                         f'<a href="{link}" target="_blank"> vs {opp_name}</a></span>')
         separator = '<span class="mx-1">,</span>'
@@ -313,13 +311,13 @@ class UserTournament:
     def get_official(self):
         if not self.is_official:
             return ""
-        return '<abbr title="Official" class="text-info pr-2" style="text-decoration:none;">' \
+        return '<abbr title="Official" class="text-decoration-none text-info pe-2">' \
                '<i class="fas fa-chess-knight"></i></abbr>'
 
     def get_ongoing(self):
         if self.is_finished:
             return ""
-        return '<abbr title="Not finished" class="text-info pr-2" style="text-decoration:none;">' \
+        return '<abbr title="Not finished" class="text-decoration-none text-info pe-2">' \
                '<i class="fas fa-running"></i></abbr>'
 
     def get_performance(self):
@@ -348,7 +346,7 @@ class UserTournament:
         url = f'https://lichess.org/{tourney_type}/{self.tournament_id}'
         name_link = f'<a href="{url}"{class_name} target="_blank">{name}</a>'
         if self.date:
-            name_link = f'<abbr title="{self.date} UTC" class="pr-2" style="text-decoration:none;">{name_link}</abbr>'
+            name_link = f'<abbr title="{self.date} UTC" class="text-decoration-none pe-2">{name_link}</abbr>'
         return url, name_link
 
     def get_table_row(self):
@@ -366,13 +364,13 @@ class UserTournament:
         else:
             score = f"{self.score:,}" if self.is_arena else f"<b>{self.score:,}</b>"
         row = f'''<tr>
-                    <td class="text-left"><button class="btn btn-primary py-0 mr-2" onclick="add_to_notes(this)" 
+                    <td class="text-start"><button class="btn btn-primary py-0 me-2" onclick="add_to_notes(this)" 
                         data-selection=\'{tournament_url}\'><i class="fas fa-plus"></i></button>{name}</td>
                     <td class="text-center{place_class}">{place}</td>
-                    <td class="text-right">{self.num_games:,}</td>
-                    <td class="text-right">{performance}</td>
-                    <td class="text-right">{score}</td>
-                    <td class="text-right">{self.num_players:,}</td>
+                    <td class="text-end">{self.num_games:,}</td>
+                    <td class="text-end">{performance}</td>
+                    <td class="text-end">{score}</td>
+                    <td class="text-end">{self.num_players:,}</td>
                   </tr>'''
         return row
 
@@ -520,14 +518,14 @@ class Boost:
             analysis = f'<div class="my-3">{analysis}</div>'
         user_name = html.escape(self.user.name)
         best_tournaments = f'<a href="https://lichess.org/@/{user_name}/tournaments/best" target="_blank" ' \
-                           f'class="btn btn-secondary flex-grow-1 py-0 mr-1" role="button">Best tournaments&hellip;</a>'
+                           f'class="btn btn-secondary flex-grow-1 py-0 me-1" role="button">Best tournaments&hellip;</a>'
         games = f'<a href="https://lichess.org/mod/{user_name}/games" target="_blank" ' \
                 f'class="btn btn-secondary flex-grow-1 py-0" role="button">Games&hellip;</a>'
         if mod.boost_ring_tool:
             class_boost_ring = "btn-warning" if self.enable_sandbagging and self.enable_boosting else "btn-secondary"
             additional_tools = f'<div class="d-flex justify-content-between mb-2 px-1">' \
                                f'<a href="https://{mod.boost_ring_tool}/?user={user_name}" target="_blank" ' \
-                               f'class="btn {class_boost_ring} flex-grow-1 py-0 mr-1" ' \
+                               f'class="btn {class_boost_ring} flex-grow-1 py-0 me-1" ' \
                                f'role="button">Boost ring tool&hellip;</a>{best_tournaments}{games}</div>'
         else:
             additional_tools = f'<div class="d-flex justify-content-between mb-2 px-1">{best_tournaments}{games}</div>' \
@@ -619,7 +617,7 @@ class Boost:
             button = f'<button class="btn btn-primary mt-3 py-0" onclick="add_to_notes(this)" ' \
                      f'data-selection=\'{link}\'>{title}</button>'
             self.perf_charts = f'<div class="d-flex align-items-baseline justify-content-center">{button}' \
-                               f'<a class="ml-2" href="{link}" target="_blank">open</a></div>{chart}'
+                               f'<a class="ms-2" href="{link}" target="_blank">open</a></div>{chart}'
             if num_games >= 20 and sum(sizes) > 3 * num_games:
                 n = 0
                 cumulative_size = 0
@@ -649,7 +647,7 @@ class Boost:
                     button = f'<button class="btn btn-primary mt-2 py-0" onclick="add_to_notes(this)" ' \
                              f'data-selection=\'{link}\'>The last {period} day{"" if period == 1 else "s"}</button>'
                     self.perf_charts = f'{self.perf_charts}<div class="d-flex align-items-baseline justify-content-center">'\
-                                       f'{button}<a class="ml-2" href="{link}" target="_blank">open</a></div>{chart}'
+                                       f'{button}<a class="ms-2" href="{link}" target="_blank">open</a></div>{chart}'
         except:
             pass
 
@@ -725,21 +723,21 @@ class Boost:
             link = f'https://lichess.org/@/{self.user.name}/tournaments/recent'
             table = f'''<table id="tournaments_table" class="table table-sm table-striped table-hover text-center text-nowrap mt-3">
                   <thead><tr>
-                    <th class="text-left" style="cursor:default;">
+                    <th class="text-start">
                         <button class="btn btn-primary p-0" style="min-width:120px;" 
                             onclick="add_to_notes(this)" data-selection=\'{link}\'>Tournaments</button>
-                        <a class="ml-2" href="{link}" target="_blank">open</a>
+                        <a class="ms-2" href="{link}" target="_blank">open</a>
                     </th>
-                    <th class="text-center" style="cursor:default;">
-                        <abbr title="Place" style="text-decoration:none;"><i class="fas fa-trophy"></i></abbr></th>
-                    <th class="text-right" style="cursor:default;">
-                        <abbr title="# games" style="text-decoration:none;"><i class="fas fa-hashtag"></i></abbr></th>
-                    <th class="text-right" style="cursor:default;">
-                        <abbr title="Performance" style="text-decoration:none;"><i class="fas fa-chart-line"></i></abbr></th>
-                    <th class="text-right" style="cursor:default;">
-                        <abbr title="Score" style="text-decoration:none;"><i class="fas fa-plus"></i></abbr></th>
-                    <th class="text-right" style="cursor:default;">
-                        <abbr title="# players" style="text-decoration:none;"><i class="fas fa-users"></i></abbr></th>
+                    <th class="text-center">
+                        <abbr class="text-decoration-none" title="Place"><i class="fas fa-trophy"></i></abbr></th>
+                    <th class="text-end">
+                        <abbr class="text-decoration-none" title="# games"><i class="fas fa-hashtag"></i></abbr></th>
+                    <th class="text-end">
+                        <abbr class="text-decoration-none" title="Performance"><i class="fas fa-chart-line"></i></abbr></th>
+                    <th class="text-end">
+                        <abbr class="text-decoration-none" title="Score"><i class="fas fa-plus"></i></abbr></th>
+                    <th class="text-end">
+                        <abbr class="text-decoration-none" title="# players"><i class="fas fa-users"></i></abbr></th>
                   </tr></thead>
                   {"".join(rows)}
                 </table>'''
@@ -768,16 +766,16 @@ class Boost:
                 table = f'''<table id="{table_name.lower()}_table" class="table table-sm table-striped table-hover 
                             text-center text-nowrap mt-3 mb-0">
                       <thead><tr>
-                        <th class="text-left" style="cursor:default;">{table_name}</th>
-                        <th class="text-right pr-2" style="cursor:default;">
-                            <abbr title="# games" style="text-decoration:none;"><i class="fas fa-hashtag"></i></abbr></th>
-                        <th class="text-center" style="cursor:default;">Streak</th>
-                        <th class="text-right pr-2" style="cursor:default;">
-                            <abbr title="Resigned" style="text-decoration:none;"><i class="fas fa-pray"></i></abbr></th>
-                        <th class="text-right pr-2" style="cursor:default;"><abbr title="Left the game" 
-                            style="text-decoration:none;"><i class="far fa-hourglass"></i></abbr></th>
-                        <th class="text-right pr-2" style="cursor:default;"><abbr title="Out of time" 
-                            style="text-decoration:none;"><i class="far fa-clock"></i></i></abbr></th>
+                        <th class="text-start">{table_name}</th>
+                        <th class="text-end pe-2">
+                            <abbr class="text-decoration-none" title="# games"><i class="fas fa-hashtag"></i></abbr></th>
+                        <th class="text-center">Streak</th>
+                        <th class="text-end pe-2">
+                            <abbr class="text-decoration-none" title="Resigned"><i class="fas fa-pray"></i></abbr></th>
+                        <th class="text-end pe-2"><abbr class="text-decoration-none" title="Left the game" 
+                           ><i class="far fa-hourglass"></i></abbr></th>
+                        <th class="text-end pe-2"><abbr class="text-decoration-none" title="Out of time" 
+                           ><i class="far fa-clock"></i></i></abbr></th>
                       </tr></thead>
                       {str_rows}
                     </table>{str_opps}'''
@@ -1045,14 +1043,14 @@ class ModLogData:
                 f'<th scope="col">Auto</th>' \
             f'</tr>' \
             f'<tr>' \
-                f'<th scope="row" class="text-left">Sandbagging</th>' \
+                f'<th scope="row" class="text-start">Sandbagging</th>' \
                 f'<td class="{class_sandbag_manual_active}">{self.sandbag_manual.get_active()}</td>' \
                 f'<td class="{class_sandbag_auto_active}">{self.sandbag_auto.get_active()}</td>' \
                 f'<td class="{class_sandbag_manual_total}">{self.sandbag_manual.get_total()}</td>' \
                 f'<td class="{class_sandbag_auto_total}">{self.sandbag_auto.get_total()}</td>' \
             f'</tr>' \
             f'<tr>' \
-                f'<th scope="row" class="text-left">Boosting</th>' \
+                f'<th scope="row" class="text-start">Boosting</th>' \
                 f'<td class="{class_boost_manual_active}">{self.boost_manual.get_active()}</td>' \
                 f'<td class="{class_boost_auto_active}">{self.boost_auto.get_active()}</td>' \
                 f'<td class="{class_boost_manual_total}">{self.boost_manual.get_total()}</td>' \
@@ -1067,8 +1065,8 @@ class ModLogData:
             show = " show"
         header = f'Mod Log: <b>{self.num_total}</b> item{"" if self.num_total == 1 else "s"}'
         mod_log_table = f'<div><div class="card border-0"><div>' \
-            f'<button class="btn btn-secondary col py-0" type="button" data-toggle="collapse" ' \
-            f'data-target="#collapseModLog" aria-expanded="{expanded}" aria-controls="collapseModLog">{header}</button>' \
+            f'<button class="btn btn-secondary col py-0" type="button" data-bs-toggle="collapse" ' \
+            f'data-bs-target="#collapseModLog" aria-expanded="{expanded}" aria-controls="collapseModLog">{header}</button>' \
             f'</div><div id="collapseModLog" class="collapse{show}">' \
             f'<div class="card card-body p-0">{self.mod_log_table}</div></div></div>' if self.mod_log_table else ""
         return f'{mod_log_summary}{mod_log_table}'

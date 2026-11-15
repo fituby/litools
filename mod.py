@@ -111,11 +111,11 @@ class Mod:
         if not self.id or not self.name:
             return f'<p class="mb-2">You\'re logged in as an anonymous</p>{Mod.login_button}'
         try:
-            name = f'<p class="ml-2 mb-2">You\'re logged in as <a href="https://lichess.org/@/{self.id}" ' \
+            name = f'<p class="ms-2 mb-2">You\'re logged in as <a href="https://lichess.org/@/{self.id}" ' \
                    f'target="_blank">{self.name}</a></p>'
-            logout = f'<a href="/logout" class="btn btn-lg btn-primary ml-3 mb-2">Log out</a>' \
+            logout = f'<a href="/logout" class="btn btn-lg btn-primary ms-3 mb-2">Log out</a>' \
                 if self.current_session else ""
-            return f'<div class="row align-items-baseline">{logout}{name}</div>'
+            return f'<div class="d-flex flex-wrap align-items-baseline">{logout}{name}</div>'
         except Exception as exception:
             log_exception(exception)
             return f'<div class="col my-2"><h2 class="text-danger text-center">Error</h2>' \
@@ -135,9 +135,9 @@ class Mod:
                 is_current = self.current_session and self.current_session == session.tokenHash
                 session_tag = f'<span>{len(rows) + 1} &mdash; {session.tokenHash[:8].replace("-", "&amp;")}</span>'
                 if is_current:
-                    session_tag = f'{session_tag}<span class="text-warning ml-2">CURRENT</span>'
+                    session_tag = f'{session_tag}<span class="text-warning ms-2">CURRENT</span>'
                 row = f'<tr id="{session.tokenHash}">' \
-                      f'<td class="text-left align-baseline">{session_tag}</td>' \
+                      f'<td class="text-start align-baseline">{session_tag}</td>' \
                       f'<td class="align-baseline">{datetime_to_abbr_ago(session.seenAt, now_tz)}</td>' \
                       f'<td class="align-baseline">{datetime_to_abbr_ago(session.createdAt, now_tz)}</td>' \
                       f'<td class="align-baseline">{datetime_to_abbr_in(session.expiresAt, now_tz)}</td>'
@@ -174,7 +174,7 @@ class Mod:
         if not self.name:
             return ""
         field_class = "" if self.current_session else " disabled"
-        field = f'<a href="/" class="btn btn-secondary{field_class} ml-2 py-0">{self.name}</a>'
+        field = f'<a href="/" class="btn btn-secondary{field_class} ms-2 py-0">{self.name}</a>'
         return f'<div class="d-flex flex-row align-items-baseline z-index-1 p-2" ' \
                f'style="position:absolute;top:0px;right:0px;z-index:1">{field}</div>'
 

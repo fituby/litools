@@ -15,7 +15,7 @@
       {% if mod.is_chat() %}
       <div class="card border-success m-2" style="min-width:400px;">
         <div class="card-body">
-          <a href="/chat" class="stretched-link" style="text-decoration:none;">
+          <a href="/chat" class="text-decoration-none stretched-link">
             <h4 class="card-title text-success text-center">Public Chats</h4>
           </a>
           <p class="card-text">Monitoring (1) dubious words/phrases and (2) messages sent in a row or in a short period
@@ -34,7 +34,7 @@
       {% if mod.is_alt() %}
       <div class="card border-danger m-2" style="min-width:400px;">
         <div class="card-body">
-          <a href="/alt" class="stretched-link" style="text-decoration:none;">
+          <a href="/alt" class="text-decoration-none stretched-link">
             <h4 class="card-title text-danger text-center">Alts</h4>
           </a>
           <p class="card-text">Analyzing publicly available user information to determine similarities.</p>
@@ -53,7 +53,7 @@
       {% if mod.is_mod() %}
       <div class="card border-warning m-2" style="min-width:400px;">
         <div class="card-body">
-          <a href="/search" class="stretched-link" style="text-decoration:none;">
+          <a href="/search" class="text-decoration-none stretched-link">
             <h4 class="card-title text-warning text-center">User Search</h4>
           </a>
           <p class="card-text">Search for users by regex pattern on their username.</p>
@@ -69,7 +69,7 @@
       {% if mod.is_mod() %}
       <div class="card border-success m-2" style="min-width:400px;">
         <div class="card-body">
-          <a href="/comms" class="stretched-link" style="text-decoration:none;">
+          <a href="/comms" class="text-decoration-none stretched-link">
             <h4 class="card-title text-success text-center">Public Comms</h4>
           </a>
           <p class="card-text">History of public messages in arena and broadcast chats.</p>
@@ -84,7 +84,7 @@
       {% if mod.is_alt() %}
       <div class="card border-danger m-2" style="min-width:400px;">
         <div class="card-body">
-          <a href="/fp" class="stretched-link" style="text-decoration:none;">
+          <a href="/fp" class="text-decoration-none stretched-link">
             <h4 class="card-title text-danger text-center">Footprints</h4>
           </a>
           <p class="card-text">Analyzing opening moves to determine similarities.</p>
@@ -99,7 +99,7 @@
       {% if mod.is_boost() %}
       <div class="card border-warning m-2" style="min-width:400px;">
         <div class="card-body">
-          <a href="/boost" class="stretched-link" style="text-decoration:none;">
+          <a href="/boost" class="text-decoration-none stretched-link">
             <h4 class="card-title text-warning text-center">Sandbag/Boost</h4>
           </a>
           <p class="card-text">Analyzing the last N games of the player whose name is entered in the top field.</p>
@@ -114,7 +114,7 @@
       {% endif %}
       <div class="card border-info m-2" style="min-width:400px;">
         <div class="card-body">
-          <a href="/lb/{{variant}}" class="stretched-link" style="text-decoration:none;">
+          <a href="/lb/{{variant}}" class="text-decoration-none stretched-link">
             <h4 class="card-title text-info text-center">Leaderboards</h4>
           </a>
           <p class="card-text">Top 200 of all chess variants.</p>
@@ -139,7 +139,7 @@
     {{mod.sessions_info()|safe}}
   </div>
   {% else %}
-  <div class="row justify-content-center my-2">
+  <div class="d-flex justify-content-center my-2">
     <a href="/login" class="btn btn-lg btn-primary mt-5">Log in</a>
   </div>
   {% endif %}

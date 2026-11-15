@@ -706,7 +706,7 @@ class ChatAnalysis:
                     comm['kid'] = True
                     if not is_kid and not is_SBed:
                         user_data.bio_add = f'<button class="btn btn-danger text-nowrap align-baseline flex-grow-0 py-0 ' \
-                                            f'px-1 ml-1" data-user="{html.escape(user_name)}" ' \
+                                            f'px-1 ms-1" data-user="{html.escape(user_name)}" ' \
                                             f'onclick="warn(this, this.dataset.user, \'kidMode_Note\');">Kid+Note</button>'
                 if buttons or (not is_kid and not is_SBed):
                     buttons.append(get_warn_btn('kidMode', "Kid Mode", kid_sus, txt_class="text-warning",

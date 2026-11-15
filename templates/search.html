@@ -5,8 +5,8 @@
 <div class="container mt-2">
     <div class="justify-content-around">
         <div class="position-relative mt-5 mb-2">
-            <div class="position-absolute row align-items-baseline">
-                <p class="pr-2 m-0">Mode</p>
+            <div class="position-absolute d-flex flex-wrap align-items-baseline">
+                <p class="pe-2 m-0">Mode</p>
                 {{ mode_buttons() }}
             </div>
             <h4 class="text-center text-primary my-2">User Search</h4>
@@ -15,29 +15,24 @@
             <div class="col-12 col-md-9 col-lg-9">
                 <form id="search_form" onsubmit="doSearch(); return false;">
                     <div class="input-group">
-                        <div class="input-group-prepend">
-                            <select id="match_type" class="custom-select"
-                                style="max-width: 120px; border-top-right-radius: 0; border-bottom-right-radius: 0;">
-                                <option value="regex" selected>Regex</option>
-                                <option value="fast-regex">Fast Regex</option>
-                                <option value="exact">Exact</option>
-                                <option value="leet">Leet/Sub</option>
-                            </select>
-                        </div>
+                        <select id="match_type" class="form-select" style="max-width: 140px;">
+                            <option value="regex" selected>Regex</option>
+                            <option value="fast-regex">Fast Regex</option>
+                            <option value="exact">Exact</option>
+                            <option value="leet">Leet/Sub</option>
+                        </select>
                         <input type="text" id="search_query" class="form-control" placeholder="Enter search pattern"
                             autofocus />
-                        <div class="input-group-append">
-                            <button id="search_btn" class="btn btn-primary" type="submit">
-                                <i class="fas fa-search"></i> Search
-                            </button>
-                        </div>
+                        <button id="search_btn" class="btn btn-primary" type="submit">
+                            <i class="fas fa-search"></i> Search
+                        </button>
                     </div>
                 </form>
                 <small class="text-muted mt-1 d-block">
-                    <code class="ml-2">regex</code>: standard regex
-                    <code class="ml-3">fast-regex</code>: start-of-line regex
-                    <code class="ml-3">exact</code>: exact string match
-                    <code class="ml-3">leet</code>: leetspeak match
+                    <code class="ms-2">regex</code>: standard regex
+                    <code class="ms-3">fast-regex</code>: start-of-line regex
+                    <code class="ms-3">exact</code>: exact string match
+                    <code class="ms-3">leet</code>: leetspeak match
                 </small>
             </div>
             <div class="col-12 col-md-3 col-lg-3 d-flex align-items-center justify-content-end mt-2 mt-md-0">
@@ -69,13 +64,13 @@
         <div id="search_error" class="text-center text-danger mb-2" style="display:none;"></div>
         <div id="search_spinner" class="text-center mb-3" style="display:none;">
             <div class="spinner-border text-primary" role="status">
-                <span class="sr-only">Searching...</span>
+                <span class="visually-hidden">Searching...</span>
             </div>
             <p class="text-muted mt-1">Searching... This may take a while for broad patterns.</p>
         </div>
         <div id="search_results" style="display:none;">
-            <div class="row justify-content-center">
-                <div class="column flex-grow-1" style="max-width: 1200px;">
+            <div class="d-flex justify-content-center">
+                <div class="flex-grow-1" style="max-width: 1200px;">
                     <table id="search_table"
                         class="table table-sm table-striped table-hover text-center text-nowrap mb-5">
                         <thead>
@@ -87,7 +82,7 @@
                                 <th>Player <i class="fas fa-sort text-muted"></i></th>
                                 <th># Games <i class="fas fa-sort text-muted"></i></th>
                                 <th>Online <i class="fas fa-sort text-muted"></i></th>
-                                <th class="text-left">Created <i
+                                <th class="text-start">Created <i
                                         class="fas fa-sort text-muted"></i></th>
                                 <th>Status <i class="fas fa-sort text-muted"></i></th>
                             </tr>
@@ -109,7 +104,7 @@
     let searchTable = null;
 
     $(function () {
-        $("body").tooltip({ selector: '[data-toggle=tooltip]' });
+        $("body").tooltip({ selector: '[data-bs-toggle=tooltip]' });
     });
 
     function flagButtons(username) {
@@ -117,13 +112,13 @@
         const u = escapeHtml(username);
         const class_obv = (flag === 'obvious') ? "btn-danger" : "btn-outline-danger";
         const class_bord = (flag === 'borderline') ? "btn-warning" : "btn-outline-warning";
-        return `<button id="btn_obvious_${u}" onclick="setFlag('${u}', 'obvious')" class="btn btn-sm ${class_obv} mr-1 px-2 py-0">Obv</button>
-                <button id="btn_borderline_${u}" onclick="setFlag('${u}', 'borderline')" class="btn btn-sm ${class_bord} mr-1 px-2 py-0">Bord</button>
+        return `<button id="btn_obvious_${u}" onclick="setFlag('${u}', 'obvious')" class="btn btn-sm ${class_obv} me-1 px-2 py-0">Obv</button>
+                <button id="btn_borderline_${u}" onclick="setFlag('${u}', 'borderline')" class="btn btn-sm ${class_bord} me-1 px-2 py-0">Bord</button>
                 <button id="btn_null_${u}" onclick="setFlag('${u}', null)" class="btn btn-sm btn-outline-secondary px-2 py-0">Clear</button>`;
     }
 
     function image(url, title) {
-        return `<abbr class="pr-2 abbr-plain" title="${escapeHtml(title)}"><img src="${url}" style="max-width:30px;"></abbr>`;
+        return `<abbr class="pe-2 abbr-plain" title="${escapeHtml(title)}"><img src="${url}" style="max-width:30px;"></abbr>`;
     }
 
     // Columns of a result row:
@@ -155,16 +150,16 @@
         }
     }, {
         targets: [3],
-        className: "text-left align-middle",
+        className: "text-start align-middle",
         data: null,
         render: (data, type) => {
             const username = data[0];
             if (type != 'display') return username;
             let badges = '';
-            if (data[9]) badges += ' <span class="badge badge-danger" title="TOS Violation">TOS</span>';
-            if (data[10]) badges += ' <span class="badge badge-secondary" title="Disabled">Closed</span>';
-            if (data[11]) badges += ' <span class="badge badge-success" title="Patron">Patron</span>';
-            if (data[12]) badges += ' <span class="badge badge-info" title="Verified">Verified</span>';
+            if (data[9]) badges += ' <span class="badge bg-danger" title="TOS Violation">TOS</span>';
+            if (data[10]) badges += ' <span class="badge bg-secondary" title="Disabled">Closed</span>';
+            if (data[11]) badges += ' <span class="badge bg-success" title="Patron">Patron</span>';
+            if (data[12]) badges += ' <span class="badge bg-info" title="Verified">Verified</span>';
             const flag = flags[username];
             const c = (flag === 'obvious') ? "text-danger" : (flag === 'borderline') ? "text-warning" : "";
             const u = escapeHtml(username);
@@ -172,7 +167,7 @@
         }
     }, {
         targets: [4],
-        className: "text-right align-middle pr-3",
+        className: "text-end align-middle pe-3",
         data: null,
         render: (data, type) => {
             if (type != 'display') return -data[4];
@@ -180,14 +175,14 @@
         }
     }, {
         targets: [5],
-        className: "text-left align-middle py-0",
+        className: "text-start align-middle py-0",
         data: null,
-        render: (data, type) => type != 'display' ? data[5] : `<abbr class="pr-2 abbr-plain" title="${escapeHtml(data[5])}">${escapeHtml(data[6])}</abbr>`
+        render: (data, type) => type != 'display' ? data[5] : `<abbr class="pe-2 abbr-plain" title="${escapeHtml(data[5])}">${escapeHtml(data[6])}</abbr>`
     }, {
         targets: [6],
-        className: "text-left align-middle pr-3",
+        className: "text-start align-middle pe-3",
         data: null,
-        render: (data, type) => type != 'display' ? data[7] : `<abbr class="pr-2 abbr-plain" title="${escapeHtml(data[7])}">${escapeHtml(data[8])}</abbr>`
+        render: (data, type) => type != 'display' ? data[7] : `<abbr class="pe-2 abbr-plain" title="${escapeHtml(data[7])}">${escapeHtml(data[8])}</abbr>`
     }, {
         targets: [7],
         className: "align-middle",
@@ -239,7 +234,7 @@
                 $('#search_table_wrapper .col-sm-12.col-md-6:empty').hide();
                 $('#search_table_wrapper .col-sm-12.col-md-6').removeClass('col-md-6').addClass('col-md-4');
                 $('#search_table_filter label').addClass("d-flex align-items-baseline");
-                $('#search_table_filter label input').addClass("ml-2");
+                $('#search_table_filter label input').addClass("ms-2");
                 if ($('#review_panel').is(":visible"))
                     toggleReview();
             })
@@ -277,12 +272,12 @@
         const tbody = $('#review_table tbody').empty();
         for (const [username, type] of Object.entries(flags)) {
             const u = escapeHtml(username);
-            const badge = type === 'obvious' ? '<span class="badge badge-danger">Obvious</span>' : '<span class="badge badge-warning text-dark">Borderline</span>';
+            const badge = type === 'obvious' ? '<span class="badge bg-danger">Obvious</span>' : '<span class="badge bg-warning text-dark">Borderline</span>';
             $('<tr>').append(
                 $('<td>').html(userlink(username, {cls: "text-info"})),
                 $('<td>').html(badge),
                 $('<td>').html(
-                    `<button id="btn_close_${u}" class="btn btn-sm btn-danger mr-1 px-2 py-0" onclick="closeAccount('${u}')">Close</button>
+                    `<button id="btn_close_${u}" class="btn btn-sm btn-danger me-1 px-2 py-0" onclick="closeAccount('${u}')">Close</button>
                      <button class="btn btn-sm btn-secondary px-2 py-0" onclick="setFlag('${u}', null)">Unflag</button>`
                 )
             ).appendTo(tbody);

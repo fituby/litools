@@ -6,29 +6,29 @@
   <div class="row justify-content-center my-2">
     <div class="col" style="width:420px;min-height:97vh;">
       <div class="d-flex flex-row justify-content-between align-items-baseline mb-1" style="max-width:500px;">
-        <button class="btn p-0 mb-1 collapsed" type="button" data-toggle="collapse" data-target="#collapse_settings" aria-expanded="false" aria-controls="collapse_settings" onclick="show_settings($(this).is('.collapsed'));">
+        <button class="btn p-0 mb-1 collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_settings" aria-expanded="false" aria-controls="collapse_settings" onclick="show_settings($(this).is('.collapsed'));">
           <i class="fas fa-cog text-secondary" style="font-size:23px"></i>
         </button>
-        <div id="hide_flairs" class="custom-control custom-switch d-none">
-          <input class="custom-control-input" type="checkbox" role="switch" id="switchHideFlairs" checked="" onchange="update_hide_flairs(event)">
-          <label class="custom-control-label" for="switchHideFlairs">Hide flairs</label>
+        <div id="hide_flairs" class="form-check form-switch d-none">
+          <input class="form-check-input" type="checkbox" role="switch" id="switchHideFlairs" checked="" onchange="update_hide_flairs(event)">
+          <label class="form-check-label" for="switchHideFlairs">Hide flairs</label>
         </div>
-        <div id="autoselect_setting" class="custom-control custom-switch d-none">
-          <input class="custom-control-input" type="checkbox" role="switch" id="switchAutoSelect" checked="" onchange="update_autoselect(event)">
-          <label class="custom-control-label" for="switchAutoSelect">Auto select on Dismiss</label>
+        <div id="autoselect_setting" class="form-check form-switch d-none">
+          <input class="form-check-input" type="checkbox" role="switch" id="switchAutoSelect" checked="" onchange="update_autoselect(event)">
+          <label class="form-check-label" for="switchAutoSelect">Auto select on Dismiss</label>
         </div>
       </div>
       <div id="settings" style="max-width:500px;">
         <div class="card border-0">
-          <div id="collapse_settings" class="collapse" aria-labelledby="set_settings" data-parent="#settings">
+          <div id="collapse_settings" class="collapse" aria-labelledby="set_settings" data-bs-parent="#settings">
             <div class="card-body p-0">
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
-                <p class="pr-2 m-0">Mode</p>
+                <p class="pe-2 m-0">Mode</p>
                 {{ mode_buttons("py-1") }}
               </div>
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
-                <p class="pr-2 m-0">Update</p>
-                <div class="btn-group btn-group-toggle">
+                <p class="pe-2 m-0">Update</p>
+                <div class="btn-group">
                   <button id="update_frequency_1" class="btn btn-secondary py-1" type="button" onclick="update_frequency(1);">Fast</button>
                   <button id="update_frequency_2" class="btn btn-secondary py-1" type="button" onclick="update_frequency(2);">Medium</button>
                   <button id="update_frequency_3" class="btn btn-secondary py-1" type="button" onclick="update_frequency(3);">Slow</button>
@@ -36,8 +36,8 @@
                 </div>
               </div>
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
-                <span class="pr-2 m-0">Filter scores</span>
-                <div class="btn-group btn-group-toggle">
+                <span class="pe-2 m-0">Filter scores</span>
+                <div class="btn-group">
                   <button id="filter_score_0" class="btn btn-secondary py-1" type="button" onclick="filter_score(0);">All</button>
                   <button id="filter_score_20" class="btn btn-secondary py-1" type="button" onclick="filter_score(20);">20+</button>
                   <button id="filter_score_40" class="btn btn-warning py-1" type="button" onclick="filter_score(40);">40+</button>
@@ -45,8 +45,8 @@
                 </div>
               </div>
               <div class="d-flex flex-row justify-content-between align-items-baseline mb-1">
-                <span class="pr-2 m-0">Languages</span>
-                <div class="btn-group btn-group-toggle">
+                <span class="pe-2 m-0">Languages</span>
+                <div class="btn-group">
                   {% for i, name, abbr in [(1, "English", "En"), (2, "Russian", "Ru"), (3, "German", "De"), (4, "Spanish", "Es"),
                                            (5, "Italian", "It"), (6, "Hindi", "Hi"), (7, "French", "Fr"), (8, "Turkish", "Tr"),
                                            (0, "Spam, links, etc.", "Spam")] %}
@@ -61,39 +61,39 @@
       <div id="tournament_settings" class="mb-1" style="max-width:500px;">
         <div class="card border-0">
           <div class="d-flex flex-row justify-content-between align-items-baseline p-0" id="set_tournaments" style="box-shadow: none;">
-            <p class="pr-2 m-0">Chats</p>
+            <p class="pe-2 m-0">Chats</p>
             <div class="btn-group" role="group">
-              <button id="tab_tournaments" class="btn btn-secondary px-2 py-1" type="button" data-toggle="collapse" data-target="#collapse_tournaments" aria-expanded="false" aria-controls="collapse_tournaments" onclick="check_collapse('tournaments');">Monitored</button>
-              <button id="tab_started" class="btn btn-secondary px-2 py-1" type="button" data-toggle="collapse" data-target="#collapse_started" aria-expanded="false" aria-controls="collapse_started" onclick="check_collapse('started');">Ongoing</button>
-              <button id="tab_created" class="btn btn-secondary px-2 py-1" type="button" data-toggle="collapse" data-target="#collapse_created" aria-expanded="false" aria-controls="collapse_created" onclick="check_collapse('created');">Created</button>
-              <button id="tab_finished" class="btn btn-secondary px-2 py-1" type="button" data-toggle="collapse" data-target="#collapse_finished" aria-expanded="false" aria-controls="collapse_finished" onclick="check_collapse('finished');">Finished</button>
+              <button id="tab_tournaments" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_tournaments" aria-expanded="false" aria-controls="collapse_tournaments" onclick="check_collapse('tournaments');">Monitored</button>
+              <button id="tab_started" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_started" aria-expanded="false" aria-controls="collapse_started" onclick="check_collapse('started');">Ongoing</button>
+              <button id="tab_created" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_created" aria-expanded="false" aria-controls="collapse_created" onclick="check_collapse('created');">Created</button>
+              <button id="tab_finished" class="btn btn-secondary px-2 py-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapse_finished" aria-expanded="false" aria-controls="collapse_finished" onclick="check_collapse('finished');">Finished</button>
             </div>
           </div>
           <div style="max-height:50vh;overflow-y:auto;">
-            <div id="collapse_tournaments" class="collapse" aria-labelledby="set_tournaments" data-parent="#tournament_settings">
+            <div id="collapse_tournaments" class="collapse" aria-labelledby="set_tournaments" data-bs-parent="#tournament_settings">
               <div class="card-body px-2">
                 <div class="d-flex flex-row">
-                  <label for="tournament_link" class="m-0 mr-1">Link:</label>
-                  <input id="tournament_link" type="text" class="flex-grow-1 py-0 mr-1">
+                  <label for="tournament_link" class="m-0 me-1">Link:</label>
+                  <input id="tournament_link" type="text" class="flex-grow-1 py-0 me-1">
                   <button id="btn_add_tournament" class="btn btn-primary flex-grow-0 py-0" onclick="add_tournament()">Add</button>
                 </div>
                 <fieldset id="tournaments_tournaments">
                 </fieldset>
               </div>
             </div>
-            <div id="collapse_started" class="collapse" aria-labelledby="set_tournaments" data-parent="#tournament_settings">
+            <div id="collapse_started" class="collapse" aria-labelledby="set_tournaments" data-bs-parent="#tournament_settings">
               <div class="card-body px-2">
                 <fieldset id="tournaments_started">
                 </fieldset>
               </div>
             </div>
-            <div id="collapse_created" class="collapse" aria-labelledby="set_tournaments" data-parent="#tournament_settings">
+            <div id="collapse_created" class="collapse" aria-labelledby="set_tournaments" data-bs-parent="#tournament_settings">
               <div class="card-body px-2">
                 <fieldset id="tournaments_created">
                 </fieldset>
               </div>
             </div>
-            <div id="collapse_finished" class="collapse" aria-labelledby="set_tournaments" data-parent="#tournament_settings">
+            <div id="collapse_finished" class="collapse" aria-labelledby="set_tournaments" data-bs-parent="#tournament_settings">
               <div class="card-body px-2">
                 <fieldset id="tournaments_finished">
                 </fieldset>
@@ -106,11 +106,11 @@
         <div class="col align-content-start px-1" style="min-width:350px;max-width:500px;">
           <div id="selection_header" class="d-none user-select-none justify-content-between py-1" style="background-color:rgba(128,128,128,0.2);">
             <span>
-              <button id="btn_filter_msgs" class="btn btn-outline-success align-baseline py-0 px-1 mr-1" type="button" onclick="filter_toggle()">
-                <abbr id="abbr_filter_msgs" title="Show only the selected user's messages" class="user-select-none" style="text-decoration:none;">Process</abbr>
+              <button id="btn_filter_msgs" class="btn btn-outline-success align-baseline py-0 px-1 me-1" type="button" onclick="filter_toggle()">
+                <abbr id="abbr_filter_msgs" title="Show only the selected user's messages" class="text-decoration-none user-select-none">Process</abbr>
               </button>
               <button id="btn_refresh_selected" class="btn btn-outline-secondary align-baseline px-1 py-0" type="button" style="border-color:transparent;" onclick="refresh_selected()">
-                <abbr id="selected_tournament_update" title="reload" class="user-select-none" style="text-decoration:none;"><i class="fas fa-redo-alt"></i></abbr>
+                <abbr id="selected_tournament_update" title="reload" class="text-decoration-none user-select-none"><i class="fas fa-redo-alt"></i></abbr>
               </button>
               <span id="selected_tournament">Tournament</span>:
             </span>
@@ -127,22 +127,22 @@
             </div>
             <textarea id="notes" class="form-control mt-1" rows="3" oninput='update_notes()' readonly></textarea>
             <div id="btn_notes" class="d-none user-select-none justify-content-between px-1 py-1">
-              <span id="notes_username" class="align-self-center mr-2"></span>
-              <button class="btn btn-secondary nav-item dropdown-toggle align-baseline flex-grow-1 mr-1 px-1 py-1" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">Ban</button>
+              <span id="notes_username" class="align-self-center me-2"></span>
+              <button class="btn btn-secondary nav-item dropdown-toggle align-baseline flex-grow-1 me-1 px-1 py-1" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">Ban</button>
               <span class="dropdown-menu" style="">
                 <button class="dropdown-item btn-primary" onclick="custom_timeout(1);">Public Shaming</button>
                 <button class="dropdown-item btn-primary" onclick="custom_timeout(2);">Offensive Language</button>
                 <button class="dropdown-item btn-primary" onclick="custom_timeout(3);">Spamming</button>
                 <button class="dropdown-item btn-primary" onclick="custom_timeout(4);">Inappropriate Behaviour</button>
               </span>
-              <button class="btn btn-warning align-baseline flex-grow-1 px-1 py-1 mr-1" onclick="send_note()">Add note</button>
-              <button class="btn btn-secondary align-baseline flex-grow-1 px-1 py-1 mr-1" onclick="copyTextToClipboard($('#notes').val())">Copy</button>
+              <button class="btn btn-warning align-baseline flex-grow-1 px-1 py-1 me-1" onclick="send_note()">Add note</button>
+              <button class="btn btn-secondary align-baseline flex-grow-1 px-1 py-1 me-1" onclick="copyTextToClipboard($('#notes').val())">Copy</button>
               <button class="btn btn-secondary align-baseline flex-grow-1 px-1 py-1" onclick="clear_notes()">Clear</button>
             </div>
           </div>
         </div>
         <div class="col align-content-start mb-3 px-1">
-          <div id="user-info" class="col d-none align-content-start mr-2 px-0" style="min-width:350px;max-width:500px;">
+          <div id="user-info" class="col d-none align-content-start me-2 px-0" style="min-width:350px;max-width:500px;">
           </div>
           <div id="mod-notes" class="col d-none flex-wrap align-content-start px-0" style="min-width:350px;max-width:500px;">
           </div>
@@ -155,7 +155,7 @@
     </div>
     <div id="chat_downloading" class="col d-flex justify-content-center mt-5">
       <div class="spinner-border spinner-blue-only text-secondary" role="status"></div>
-      <span class="ml-3 text-secondary">Checking chats&hellip;</span>
+      <span class="ms-3 text-secondary">Checking chats&hellip;</span>
     </div>
     <div id="clean_messages" class="col d-none justify-content-center mt-5">
       <h5 class="text-success">Everything is clean as of <span id="update_time">now</span>.<br>Thank you for your great work! <i class="far fa-heart"></i></h5>

@@ -198,9 +198,9 @@ class Alt:
 
     def get_mutual_teams_row(self, alts):
         team_names = sorted([Alt.team_cache[team] for team in self.teams])
-        cells = [f'<td class="text-left">{self.user.get_name("?mod")}</td>'
-                 f'<td class="text-center"><abbr title="{html.escape(", ".join(team_names))}"'
-                 f' style="text-decoration:none;">{len(self.teams)}</abbr></td>']
+        cells = [f'<td class="text-start">{self.user.get_name("?mod")}</td>'
+                 f'<td class="text-center"><abbr class="text-decoration-none" title="{html.escape(", ".join(team_names))}"'
+                 f'>{len(self.teams)}</abbr></td>']
         for alt in alts:
             player_id = alt.user.id
             if player_id == self.user.id:
@@ -209,8 +209,8 @@ class Alt:
                 mutual_teams = self.teams.intersection(alt.teams)
                 if mutual_teams:
                     team_names = sorted([Alt.team_cache[team] for team in mutual_teams])
-                    cells.append(f'<td class="text-center"><abbr title="{html.escape(", ".join(team_names))}"'
-                                 f' style="text-decoration:none;">{len(mutual_teams)}</abbr></td>')
+                    cells.append(f'<td class="text-center"><abbr class="text-decoration-none" title="{html.escape(", ".join(team_names))}"'
+                                 f'>{len(mutual_teams)}</abbr></td>')
                 else:
                     cells.append('<td class="text-center">&mdash;</td>')
         row = f'<tr>{"".join(cells)}</tr>'
@@ -236,7 +236,7 @@ class Alt:
             if output else ""
 
     def get_mutual_games_row(self, alts):
-        cells = [f'<td class="text-left">{self.user.get_name("?mod")}</td>']
+        cells = [f'<td class="text-start">{self.user.get_name("?mod")}</td>']
         for alt in alts:
             player_id = alt.user.id
             if player_id == self.user.id:
@@ -267,8 +267,8 @@ class Alt:
         header = f'Mod Log: <b>{self.num_mod_log_items}</b> item{"" if self.num_mod_log_items == 1 else "s"}'
         id_collapse = f'collapseModLog_{self.user.id}'
         mod_log = f'<div><div class="card border-0"><div>' \
-                  f'<button class="btn btn-secondary col py-0" type="button" data-toggle="collapse" ' \
-                  f'data-target="#{id_collapse}" aria-expanded="false" aria-controls="{id_collapse}">{header}</button>' \
+                  f'<button class="btn btn-secondary col py-0" type="button" data-bs-toggle="collapse" ' \
+                  f'data-bs-target="#{id_collapse}" aria-expanded="false" aria-controls="{id_collapse}">{header}</button>' \
                   f'</div><div id="{id_collapse}" class="collapse">' \
                   f'<div class="card card-body p-0">{self.user.mod_log}</div></div></div>' if self.user.mod_log else ""
         return f"{main}{num_games}{profile}{self.mod_notes}{mod_log}{variants}{self.get_errors()}"
@@ -533,7 +533,7 @@ class Alts:
                  w-auto text-nowrap mt-2">
                   <thead><tr>
                     <th></th>
-                    <th><abbr title="The total number of teams a player is a member of" style="text-decoration:none;">
+                    <th><abbr class="text-decoration-none" title="The total number of teams a player is a member of">
                         <i class="fas fa-hashtag"></i></abbr></th>
                     {"".join(header_alts)}
                   </tr></thead>
@@ -566,7 +566,7 @@ class Alts:
         info = []
         for player in self.players:
             player_id = player.user.id
-            cells = [f'<td class="text-left">{player.user.get_name("?mod")}</td>']
+            cells = [f'<td class="text-start">{player.user.get_name("?mod")}</td>']
             player_info = []
             for alt in self.players:
                 alt_id = alt.user.id
@@ -630,7 +630,7 @@ class Alts:
                 str_created = f'{created_days_ago:,d} day{"" if created_days_ago == 1 else "s"} ago'
                 if str_created != created_ago:
                     str_created = f'{str_created} / {created_ago}'
-                str_created = f'<abbr title="{str_created}" style="text-decoration:none;">{created_days_ago:,d}</abbr>'
+                str_created = f'<abbr class="text-decoration-none" title="{str_created}">{created_days_ago:,d}</abbr>'
             else:
                 str_created = "&mdash;"
             seenAt = player.user.get_seenAt()
@@ -640,30 +640,30 @@ class Alts:
                 str_seen = f'{seen_days_ago:,d} day{"" if seen_days_ago == 1 else "s"} ago'
                 if str_seen != seen_ago:
                     str_seen = f'{str_seen} / {seen_ago}'
-                str_seen = f'<abbr title="{str_seen}" style="text-decoration:none;">{seen_days_ago:,d}</abbr>'
+                str_seen = f'<abbr class="text-decoration-none" title="{str_seen}">{seen_days_ago:,d}</abbr>'
             else:
                 str_seen = "&mdash;"
             other_alts = [alt.user.name for alt in self.players if alt.user.id != player.user.id]
             class_num_games = " text-danger" if len(player.games) < 25 else " text-warning" if len(player.games) < 60 else ""
-            row_num_games = f'<td class="text-right{class_num_games}">{len(player.games)}</td>' if self.is_step2 else ""
-            rows.append(f'<tr><td class="text-left">{player.user.get_name("?mod")}</td>'
+            row_num_games = f'<td class="text-end{class_num_games}">{len(player.games)}</td>' if self.is_step2 else ""
+            rows.append(f'<tr><td class="text-start">{player.user.get_name("?mod")}</td>'
                         f'{row_num_games}'
-                        f'<td class="text-right">{str_created}</td>'
-                        f'<td class="text-right">{str_seen}</td>'
-                        f'<td class="text-right"><button class="btn btn-primary py-0 px-2"'
+                        f'<td class="text-end">{str_created}</td>'
+                        f'<td class="text-end">{str_seen}</td>'
+                        f'<td class="text-end"><button class="btn btn-primary py-0 px-2"'
                         f' onclick="set_alts(\'{" ".join(other_alts)}\')">Exclude</button></td></tr>')
-        th_num_games = f'<th class="text-right"><abbr title="# games analysed" style="text-decoration:none;">' \
+        th_num_games = f'<th class="text-end"><abbr class="text-decoration-none" title="# games analysed">' \
                        f'<i class="fas fa-hashtag"></i></abbr></th>' if self.is_step2 else ""
         table = f'''<div class="column">
                     <table id="creation_table" class="table table-sm table-striped table-hover text-center
                      text-nowrap mt-2">
                       <thead><tr>
                         <th></th>{th_num_games}
-                        <th class="text-right"><abbr title="Created days ago" style="text-decoration:none;">
+                        <th class="text-end"><abbr class="text-decoration-none" title="Created days ago">
                             Created</abbr></th>
-                        <th class="text-right"><abbr title="Active days ago" style="text-decoration:none;">
+                        <th class="text-end"><abbr class="text-decoration-none" title="Active days ago">
                             Active</abbr></th>
-                        <th class="text-left">&larr;days ago</th>
+                        <th class="text-start">&larr;days ago</th>
                       </tr></thead>
                       {"".join(rows)}
                     </table>
@@ -682,7 +682,7 @@ class Alts:
                     player_list = ", ".join(links)
                 wait_s = deltainterval(max(1, self.wait_insights_refresh_s), True, True)
                 refresh_openings = f'<div id="refresh-openings" class="d-flex align-items-center mt-3">' \
-                                   f'<button class="btn btn-warning py-0 px-2 mr-2"' \
+                                   f'<button class="btn btn-warning py-0 px-2 me-2"' \
                                    f' onclick="refresh_openings()">Refresh openings</button>' \
                                    f'<span>for {player_list} after {wait_s} as Lichess doesn\'t allow' \
                                    f' too frequent requests via API :(</span></div>'

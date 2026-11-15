@@ -55,7 +55,7 @@ function flairText(flair) {
 }
 
 function flairElement(flair, size) {
-  return `<abbr class="user-flair text-info pr-1" title="${escapeHtml(flairText(flair))}" style="text-decoration:none;">` +
+  return `<abbr class="text-decoration-none user-flair text-info pe-1" title="${escapeHtml(flairText(flair))}">` +
          `<img src="https://lichess1.org/assets/______0/flair/img/${escapeHtml(flair)}.webp" style="max-width:${size}px;"></abbr>`;
 }
 
@@ -80,7 +80,7 @@ function relativeTime(m, base_ms) {
   const dt = a < 60 ? `${a}s` : a < 300 ? `${Math.floor(a / 60)}m${String(a % 60).padStart(2, "0")}s` : `${roundEven(a / 60)}m`;
   const text = ds < 0 ? `&minus;${dt} ` : ds > 0 ? `+${dt} ` : "== ";
   const title = m.d == null ? `${utcTime(m.tm)} or before` : `${utcTime(m.tm - m.d * 1000)}…${utcTime(m.tm)}`;
-  let html = `<abbr title="${title}" class="user-select-none" style="text-decoration:none;">${text}</abbr>`;
+  let html = `<abbr title="${title}" class="text-decoration-none user-select-none">${text}</abbr>`;
   if (m.fl)
     html += flairElement(m.fl, 17);
   return html;
@@ -98,8 +98,8 @@ function banButtons(m, id, {add_reason = null, fn = "timeout", idle_class = "btn
       : i === best ? `<b class="text-warning">${text}</b>` : `<b>${text}</b>`;
     return `<button class="dropdown-item btn-primary" onclick="${fn}('${id}', ${i});">${label}</button>`;
   };
-  let html = `<button class="btn ${score >= 50 ? "btn-warning" : idle_class} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" ` +
-             `data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">Ban</button>` +
+  let html = `<button class="btn ${score >= 50 ? "btn-warning" : idle_class} nav-item dropdown-toggle align-baseline me-1 px-1 py-0" ` +
+             `data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">Ban</button>` +
              `<span class="dropdown-menu" style="">${[1, 2, 3, 4].map(item).join("")}</span>`;
   if (best_ban || (best && score >= 50))
     html = `<button class="btn btn-danger align-baseline flex-grow-0 py-0 px-1" ` +
@@ -155,7 +155,7 @@ function renderMessage(m, o) {
   const dismiss_name = o.exclusion ? (excluded ? "Include" : "Exclude") : (o.dismiss_name || "Dismiss");
   const dismiss_fn = o.exclusion ? "toggle_excluded" : "set_ok";
   const dismiss = (buttons & BTN_DISMISS)
-    ? `<button class="btn ${o.dismiss_name || o.exclusion ? "btn-secondary" : "btn-primary"} text-nowrap align-baseline flex-grow-0 py-0 px-1 ml-1" ` +
+    ? `<button class="btn ${o.dismiss_name || o.exclusion ? "btn-secondary" : "btn-primary"} text-nowrap align-baseline flex-grow-0 py-0 px-1 ms-1" ` +
       `onclick="${dismiss_fn}('${id}');">${dismiss_name}</button> ` : "";
   const ban = (buttons & BTN_BAN) ? banButtons(m, id, {add_reason: o.add_reason ?? null}) : "";
   const text = messageText(m, excluded);
@@ -169,7 +169,7 @@ function renderMessage(m, o) {
     div = `<div id="msg${id}"${attrs} class="${cls}" style="${WORD_BREAK}"${onclick}>${time}${user} <b>${score_html}</b> ${text}</div>`;
   else if (buttons & BTN_BAN)
     div = `<div id="msg${id}"${attrs} class="${cls}" style="${WORD_BREAK}"${onclick}><div class="d-flex justify-content-between">` +
-          `<span>${ban}${time}${user} ${text}</span> <span class="text-nowrap"><b class="pl-2">${score_html}</b>${dismiss}</span></div></div>`;
+          `<span>${ban}${time}${user} ${text}</span> <span class="text-nowrap"><b class="ps-2">${score_html}</b>${dismiss}</span></div></div>`;
   else
     div = `<div id="msg${id}"${attrs} class="${cls}"${onclick}><div class="d-flex justify-content-between">` +
           `<span class="d-flex flex-row">${ban}${time}${user}</span><span class="d-flex flex-row">${score_html}${dismiss}</span></div>` +
@@ -223,9 +223,9 @@ function renderMultiReport(r) {
   const dismiss = `<button class="btn btn-primary align-baseline flex-grow-0 px-1 py-0" onclick="set_multi_ok('${id}')">Dismiss</button>`;
   const ban = banButtons(m, id, {add_reason: REASON_SPAM, fn: "timeout_multi", idle_class: "btn-success", pass_reason: true});
   const header = `<div class="user-select-none px-1" style="${PANEL_BG}">` +
-                 `<div class="d-flex justify-content-between">${renderTournamentLink(r.tourn)}<span class="ml-1">${renderStatus(r.tourn.status)}</span></div>` +
+                 `<div class="d-flex justify-content-between">${renderTournamentLink(r.tourn)}<span class="ms-1">${renderStatus(r.tourn.status)}</span></div>` +
                  `<div class="d-flex justify-content-between mb-1"><span>${ban}${user}</span>` +
-                 `<span class="align-items-baseline ml-1"><span${score_cls}>${score}</span> ${dismiss}</span></div></div>`;
+                 `<span class="align-items-baseline ms-1"><span${score_cls}>${score}</span> ${dismiss}</span></div></div>`;
   const msgs = r.msgs.map(x => x === null ? HR_DOTTED : renderMessage(x, {tag: 'B', show_hidden: true, add_user: false,
                                                                          exclusion: true, add_reason: REASON_SPAM})).join("");
   return `<div id="mmsg${id}" data-mscore="${Number(r.score)}" class="col rounded m-1 px-0 pb-1" style="${PANEL_BG}min-width:350px;">${header}${msgs}</div>`;
@@ -337,8 +337,8 @@ function renderCommInfo(comm) {
   let info = parts.join(" + ");
   if (comm.menu) {
     const items = comm.menu.items.map(item => item === null ? '<div class="dropdown-divider my-1"></div>' : renderActionItem(item));
-    const button = `<button class="btn ${escapeHtml(comm.menu.cls)} nav-item dropdown-toggle align-baseline mr-1 px-1 py-0" ` +
-                   `id="warn-ban" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">` +
+    const button = `<button class="btn ${escapeHtml(comm.menu.cls)} nav-item dropdown-toggle align-baseline me-1 px-1 py-0" ` +
+                   `id="warn-ban" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="cursor:pointer;">` +
                    `Action</button><span class="dropdown-menu" style="">${items.join("")}</span>`;
     info = `<div class="d-flex justify-content-between"><span>${info}</span><span>${button}</span></div>`;
   }

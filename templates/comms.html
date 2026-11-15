@@ -3,18 +3,18 @@
 
 {% block main %}
 <div class="container-fluid mt-2" style="max-width:100vw;min-height:60vh;">
-  <h4 class="text-left text-success my-2">Public Messages</h4>
+  <h4 class="text-start text-success my-2">Public Messages</h4>
   <div class="d-flex flex-row flex-wrap justify-content-left mt-1 mb-3">
-    <table class="col-auto mr-5"><tbody>
+    <table class="col-auto me-5"><tbody>
       <tr>
-        <td class="py-1 pr-2"><label for="username" class="m-0">Username:</label></td>
+        <td class="py-1 pe-2"><label for="username" class="m-0">Username:</label></td>
         <td class="d-flex">
-          <input id="username" class="search-field flex-grow-1 mr-1" type="text">
+          <input id="username" class="search-field flex-grow-1 me-1" type="text">
           <button id="go" class="btn btn-primary py-0" type="button" disabled style="min-height:100%;" onclick="find_msgs()">Go</button>
         </td>
       </tr>
       <tr>
-        <td class="py-1 pr-2"><label for="num_msgs" class="m-0">Maximum:</label></td>
+        <td class="py-1 pe-2"><label for="num_msgs" class="m-0">Maximum:</label></td>
         <td>
           <select id="num_msgs" class="w-100">
             {% for n in [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000] %}
@@ -24,23 +24,23 @@
         </td>
       </tr>
     </tbody></table>
-    <table class="col-auto mr-5"><tbody>
+    <table class="col-auto me-5"><tbody>
       <tr>
-        <td class="py-1 pr-2"><label for="date_begin" class="text-nowrap m-0">From:</label></td>
+        <td class="py-1 pe-2"><label for="date_begin" class="text-nowrap m-0">From:</label></td>
         <td class="w-100"><input id="date_begin" class="search-field w-100" type="date"></td>
       </tr>
       <tr>
-        <td class="py-1 pr-2"><label for="date_end" class="text-nowrap m-0">To:</label></td>
+        <td class="py-1 pe-2"><label for="date_end" class="text-nowrap m-0">To:</label></td>
         <td class="w-100"><input id="date_end" class="search-field w-100" type="date"></td>
       </tr>
     </tbody></table>
     <table class="col-5"><tbody>
       <tr>
-        <td class="py-1 pr-2"><label for="text" class="m-0">Text:</label></td>
+        <td class="py-1 pe-2"><label for="text" class="m-0">Text:</label></td>
         <td><input id="text" class="search-field w-100" type="text"></td>
       </tr>
       <tr>
-        <td class="py-1 pr-2 text-nowrap"><label for="tournId" class="m-0">Tournament ID:</label></td>
+        <td class="py-1 pe-2 text-nowrap"><label for="tournId" class="m-0">Tournament ID:</label></td>
         <td><input id="tournId" class="search-field w-100" type="text"></td>
       </tr>
     </tbody></table>
@@ -79,7 +79,7 @@
   }
 
   $(function() {
-    $("body").tooltip({selector: '[data-toggle=tooltip]'});
+    $("body").tooltip({selector: '[data-bs-toggle=tooltip]'});
     $(".search-field").on('input change', values_changed);
     onEnter(".search-field", () => {
       if (!$('#go').prop('disabled'))
@@ -99,32 +99,32 @@
       searching: true, paging: false, info: true,
       columnDefs: [{
         targets: [0],
-        className: "col-1 pr-3 text-left align-middle text-nowrap user-select-none",
+        className: "col-1 pe-3 text-start align-middle text-nowrap user-select-none",
         data: null,
         render: (data, type) => (type != 'display' || !data[0].includes(' ')) ? data[0] : data[0].split(' ')[0]
       }, {
         targets: [1],
-        className: "col-1 text-left align-middle text-nowrap user-select-none",
+        className: "col-1 text-start align-middle text-nowrap user-select-none",
         data: null,
         render: (data, type) => (type != 'display' || !data[0].includes(' ')) ? data[0] : data[0].split(' ')[1]
       }, {
         targets: [2],
-        className: "col-1 text-left align-middle text-nowrap user-select-none",
+        className: "col-1 text-start align-middle text-nowrap user-select-none",
         data: null,
         render: (data, type) => {
           if (type != 'display' || !data[1].length) return data[1];
           const id = escapeHtml(data[1]);
           const color = TOURNAMENT_COLORS[hash_code(data[1]) % TOURNAMENT_COLORS.length];
-          return `<a href="https://lichess.org/tournament/${id}" target="_blank" style="color: var(--${color});" onclick="open_tournament(event);">${id}</a>`;
+          return `<a href="https://lichess.org/tournament/${id}" target="_blank" style="color: var(--bs-${color});" onclick="open_tournament(event);">${id}</a>`;
         }
       }, {
         targets: [3],
-        className: "col-1 text-left align-middle text-nowrap user-select-none",
+        className: "col-1 text-start align-middle text-nowrap user-select-none",
         data: null,
         render: (data, type) => type != 'display' ? data[2] : userlink(data[2], {cls: "text-info"})
       }, {
         targets: [4],
-        className: "col-8 text-left text-break align-middle",
+        className: "col-8 text-start text-break align-middle",
         data: null,
         render: data => data[3]  // already HTML-escaped by the server
       }],

@@ -2,7 +2,7 @@
 {% from 'macros.html' import mode_setting, datatables %}
 
 {% macro choice_buttons(name, labels) %}
-<td class="btn-group btn-group-toggle d-flex flex-row justify-content-between align-items-baseline w-100 px-1">
+<td class="btn-group d-flex flex-row justify-content-between align-items-baseline w-100 px-1">
   {% for label in labels %}
   <button id="{{name}}_{{loop.index0}}" class="col-4 btn btn-secondary py-0" type="button" onclick="select_choice('{{name}}', {{loop.index0}});">{{label}}</button>
   {% endfor %}
@@ -11,7 +11,7 @@
 
 {% block main %}
 <div class="container-fluid mt-2" style="max-width:100vw;min-height:60vh;">
-  <h4 class="text-left text-success my-2">Footprints</h4>
+  <h4 class="text-start text-success my-2">Footprints</h4>
   <div class="d-flex justify-content-center px-1">
     <div class="d-flex flex-row flex-wrap justify-content-around mt-1 mb-2" style="max-width: 1200px;">
       <div class="flex-column mx-5" style="width:420px;min-width:370px;max-width:500px;">
@@ -27,7 +27,7 @@
               </label>
             </td>
             <td class="w-100 px-1"><input id="min-date" class="w-100" type="date"></td>
-            <td class="pr-1">optional</td>
+            <td class="pe-1">optional</td>
           </tr>
           <tr>
             <td>
@@ -36,7 +36,7 @@
               </label>
             </td>
             <td class="w-100 px-1"><input id="max-date" class="w-100" type="date"></td>
-            <td class="pr-1">optional</td>
+            <td class="pe-1">optional</td>
           </tr>
         </tbody></table>
       </div>
@@ -63,9 +63,9 @@
       {% for variants in [variants1, variants2] %}
       <tr>
         {% for variant in variants.values() %}
-        <td><button id="{{variant.id}}" data-variant="{{variant.id}}" class="d-flex align-items-center btn w-100 pr-2" type="button" onclick="select_variant(this);">
+        <td><button id="{{variant.id}}" data-variant="{{variant.id}}" class="d-flex align-items-center btn w-100 pe-2" type="button" onclick="select_variant(this);">
           {{variant.flair25|safe}}
-          <span class="ml-2">{{variant.name}}</span>
+          <span class="ms-2">{{variant.name}}</span>
         </button></td>
         {% endfor %}
       </tr>
@@ -78,7 +78,7 @@
       <div id="progress" class="d-none flex-grow-1">
         <div class="progress"><div class="progress-bar bg-success" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div></div>
       </div>
-      <button id="btn-cancel" class="btn btn-danger flex-grow-0 d-none ml-2" type="button" onclick="cancel();">Cancel</button>
+      <button id="btn-cancel" class="btn btn-danger flex-grow-0 d-none ms-2" type="button" onclick="cancel();">Cancel</button>
     </div>
     <button id="btn-analyze" class="btn btn-primary d-none flex-grow-1" type="button" disabled style="max-width: 1000px;" onclick="analyze();">Analyze</button>
   </div>
@@ -87,7 +87,7 @@
     <div class="d-flex flex-column align-items-center flex-grow-1 mx-3">
       <div id="msgs_downloading" class="d-none justify-content-left align-items-center my-3">
         <div class="spinner-border text-muted" role="status"></div>
-        <span id="downloading_text" class="ml-3 text-muted text-truncate"></span>
+        <span id="downloading_text" class="ms-3 text-muted text-truncate"></span>
       </div>
     </div>
   </div>
@@ -96,7 +96,7 @@
   <div id="results" class="d-none justify-content-center">
     <table id="res-table" class="table table-sm table-striped table-hover text-center text-nowrap mb-5" style="min-width:300px;">
       <thead><tr>
-        <th class="text-left">Player</th>
+        <th class="text-start">Player</th>
         <th>Similarity</th>
       </tr></thead>
     </table>
@@ -114,7 +114,7 @@
   let polling = false;
 
   $(function() {
-    $("body").tooltip({selector: '[data-toggle=tooltip]'});
+    $("body").tooltip({selector: '[data-bs-toggle=tooltip]'});
     select_choice('rated', 0);
     select_choice('color', 0);
     $('#max-date').val(new Date().toJSON().slice(0, 10));
@@ -138,12 +138,12 @@
       order: [[1, "desc"]],
       columnDefs: [{
         targets: [0],
-        className: "text-left align-middle pl-2",
+        className: "text-start align-middle ps-2",
         data: null,
         render: (data, type) => type == 'display' ? userlink(data['username']) : `player:${data['username'].toLowerCase()}`
       }, {
         targets: [1],
-        className: "text-right align-middle pr-2",
+        className: "text-end align-middle pe-2",
         data: null,
         render: (data, type) => type == 'display' ? Math.round(data['score']) : data['score']
       }],

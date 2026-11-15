@@ -1,5 +1,5 @@
 {% macro mode_buttons(btn_class="") %}
-<div class="btn-group btn-group-toggle">
+<div class="btn-group">
   <button id="mode_0" class="btn btn-secondary {{btn_class}}" type="button" onclick="update_mode(0);">Auto</button>
   <button id="mode_1" class="btn btn-secondary {{btn_class}}" type="button" onclick="update_mode(1);">Dark</button>
   <button id="mode_2" class="btn btn-secondary {{btn_class}}" type="button" onclick="update_mode(2);">Light</button>
@@ -8,7 +8,7 @@
 
 {% macro mode_setting(wrapper_class="d-flex flex-row justify-content-between align-items-baseline mt-5 mb-2") %}
 <div class="{{wrapper_class}}">
-  <p class="pr-2 m-0">Mode</p>
+  <p class="pe-2 m-0">Mode</p>
   {{ mode_buttons() }}
 </div>
 {% endmacro %}
@@ -16,13 +16,13 @@
 {% macro datatables() %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net/1.13.11/jquery.dataTables.min.js"
         integrity="sha384-xbKh5PcHqYD2znaTJ+mPamIq8ERw8yRfp72NI8CGRg51FffJAXidmePtdkmCjEh9" crossorigin="anonymous"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net-bs4/1.13.11/dataTables.bootstrap4.min.js"
-        integrity="sha384-vCX+UFRnh1Gp0hr9dL82snXI1HvdBaApGHMjbewoGQ69VkYcHt9jvTy+Q4CAWwPX" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/datatables.net-bs5/1.13.11/dataTables.bootstrap5.min.js"
+        integrity="sha384-PgPBH0hy6DTJwu7pTf6bkRqPlf/+pjUBExpr/eIfzszlGYFlF9Wi9VTAJODPhgCO" crossorigin="anonymous"></script>
 {% endmacro %}
 
 {% macro spinner(id, text, cls="d-none justify-content-center align-items-center my-3", text_id=None) %}
 <div id="{{id}}" class="{{cls}}">
   <div class="spinner-border text-secondary" role="status"></div>
-  <span{% if text_id %} id="{{text_id}}"{% endif %} class="ml-3 text-secondary text-truncate">{{text|safe}}</span>
+  <span{% if text_id %} id="{{text_id}}"{% endif %} class="ms-3 text-secondary text-truncate">{{text|safe}}</span>
 </div>
 {% endmacro %}

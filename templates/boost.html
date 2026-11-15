@@ -7,7 +7,7 @@
     <div class="flex-col" style="width:420px;min-width:370px;max-width:500px;">
       <div class="d-flex flex-row justify-content-around mb-1">
         <button class="btn text-secondary py-1 px-1" type="button" title="Select all" onclick="set_perf_types(0x3FFF);"><i class="fas fa-check"></i></button>
-        <div class="btn-group btn-group-toggle">
+        <div class="btn-group">
           {% for i, name, abbr in [(0, "Ultra Bullet", "UB"), (1, "Bullet", "Bu"), (2, "Blitz", "Bl"), (3, "Rapid", "Ra"),
                                    (4, "Classical", "Cl"), (5, "Correspondence", "Co"), (7, "Chess 960", "C9"),
                                    (6, "Crazyhouse", "Zh"), (8, "King Of The Hill", "KH"), (9, "Three Check", "3+"),
@@ -19,10 +19,10 @@
       </div>
       <table class="w-100 mt-2"><tbody>
         <tr class="align-items-baseline">
-          <td><label for="userlink" class="text-nowrap m-0 mr-1">User / #games:</label></td>
+          <td><label for="userlink" class="text-nowrap m-0 me-1">User / #games:</label></td>
           <td class="px-1">
             <div class="d-flex">
-              <input id="userlink" class="w-100 mr-1" type="text">
+              <input id="userlink" class="w-100 me-1" type="text">
               <select id="num-games" class="flex-shrink-1">
                 <option value="100">100</option>
                 <option value="200">200</option>
@@ -51,16 +51,16 @@
     <div class="col mt-3" style="min-width:370px;max-width:800px;">
       <div id="notes-section" class="d-none mt-3">
         <div class="d-flex user-select-none justify-content-between px-1 py-1">
-          <span id="label_add_notes" class="d-none text-info align-self-center mr-2">Add note + </span>
+          <span id="label_add_notes" class="d-none text-info align-self-center me-2">Add note + </span>
           <span>Warn:</span>
           <div class="btn-group">
-            <button id="warn_sandbag" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" type="button" onclick="mod_action('warn_sandbagging')">
+            <button id="warn_sandbag" class="btn btn-secondary align-baseline flex-grow-1 p-0 me-1" type="button" onclick="mod_action('warn_sandbagging')">
               <abbr title="Warning: Sandbagging" class="abbr-plain">Sandbag</abbr>
             </button>
-            <button id="warn_fail_to_start" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" type="button" onclick="mod_action('warn_failure_to_start')">
+            <button id="warn_fail_to_start" class="btn btn-secondary align-baseline flex-grow-1 p-0 me-1" type="button" onclick="mod_action('warn_failure_to_start')">
               <abbr title="Warning: Failure to start tournament games" class="abbr-plain">FailToStart</abbr>
             </button>
-            <button id="warn_boost" class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" type="button" onclick="mod_action('warn_boosting')">
+            <button id="warn_boost" class="btn btn-secondary align-baseline flex-grow-1 p-0 me-1" type="button" onclick="mod_action('warn_boosting')">
               <abbr title="Warning: Boosting" class="abbr-plain">Boost</abbr>
             </button>
           </div>
@@ -70,8 +70,8 @@
         </div>
         <textarea id="notes" class="form-control" rows="5" oninput="update_notes()"></textarea>
         <div id="btn_actions" class="d-none user-select-none justify-content-between px-1 py-1">
-          <button class="btn btn-warning align-baseline flex-grow-1 p-0 mr-1" type="button" onclick="send_note()">Add note</button>
-          <button class="btn btn-secondary align-baseline flex-grow-1 p-0 mr-1" type="button" onclick="copyTextToClipboard($('#notes').val())">Copy</button>
+          <button class="btn btn-warning align-baseline flex-grow-1 p-0 me-1" type="button" onclick="send_note()">Add note</button>
+          <button class="btn btn-secondary align-baseline flex-grow-1 p-0 me-1" type="button" onclick="copyTextToClipboard($('#notes').val())">Copy</button>
           <button class="btn btn-secondary align-baseline flex-grow-1 p-0" type="button" onclick="clear_notes()">Clear</button>
         </div>
         <div id="notes-header" class="d-none mt-3"></div>
