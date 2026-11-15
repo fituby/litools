@@ -78,6 +78,9 @@
 {% block libs %}{{ datatables() }}<script src="{{url_for('static', filename='chat_render.js')}}"></script>{% endblock %}
 
 {% block scripts %}
+<style>
+  .chat-btn:hover, .chat-btn:focus {background-color: rgba(128,128,128,0.25);}
+</style>
 <script>
   const TOURNAMENT_COLORS = ['blue', 'indigo', 'purple', 'pink', 'red', 'orange', 'yellow', 'green', 'teal', 'cyan', 'gray'];
   const TOURNAMENT_URLS = ["https://lichess.org/tournament/", "https://lichess.org/swiss/", "https://lichess.org/broadcast/"];
@@ -121,9 +124,12 @@
           if (type != 'display' || !tourn.length) return name;
           const color = TOURNAMENT_COLORS[hash_code(tourn) % TOURNAMENT_COLORS.length];
           const href = known?.u ? safeUrl(known.u) : `https://lichess.org/tournament/${tourn}`;
-          return `<a href="${escapeHtml(href)}" target="_blank" title="${escapeHtml(known ? `${name} (${tourn})` : tourn)}" ` +
-                 `class="d-inline-block text-truncate align-bottom" style="max-width:14em;color:var(--bs-${color});" ` +
-                 `data-tourn="${escapeHtml(tourn)}" data-msg="${Number(data[0])}" onclick="open_chat(event, this);">${escapeHtml(name)}</a>`;
+          const title = `${known ? `${name} (${tourn})` : tourn}\nClick: show the chat\nCtrl+click: open on Lichess`;
+          return `<a href="${escapeHtml(href)}" target="_blank" title="${escapeHtml(title)}" ` +
+                 `class="btn chat-btn text-truncate text-decoration-none align-baseline py-0 px-1" ` +
+                 `style="max-width:14em;border-color:var(--bs-${color});" ` +
+                 `data-tourn="${escapeHtml(tourn)}" data-msg="${Number(data[0])}" onclick="open_chat(event, this);">` +
+                 `<i class="far fa-comments me-1" style="color:var(--bs-${color});"></i>${escapeHtml(name)}</a>`;
         }
       }, {
         targets: [2],
@@ -246,16 +252,21 @@
       `<button id="chat_${direction}" class="btn btn-secondary w-100 py-0 my-1" onclick="load_more_chat('${direction}')">${text}</button>`;
     let html = chat_more.before ? button("before", "Load earlier") : "";
     let day = "";
+    const user = chat_msgs.find(m => m.id == chat_selected)?.u;
     for (const m of chat_msgs) {
       const time = new Date(m.tm).toISOString();
       if (time.substring(0, 10) != day) {
         day = time.substring(0, 10);
         html += `<div class="text-center text-muted small my-1">${day}</div>`;
       }
-      const cls = m.id == chat_selected ? "border border-success rounded" : "";
-      html += `<div id="cm${Number(m.id)}" class="px-1 ${cls}" style="${WORD_BREAK}">` +
+      const is_selected = m.id == chat_selected, is_user = m.u === user;
+      const cls = is_selected ? "border border-success rounded" : "";
+      const style = is_selected ? highlightStyle(0.3) : is_user ? highlightStyle(0.2) : "";
+      const name = is_user ? `<b><u>${escapeHtml(m.u)}</u></b>` : escapeHtml(m.u);
+      html += `<div id="cm${Number(m.id)}" class="px-1 ${cls}" style="${WORD_BREAK}${style}">` +
               `<span class="text-muted user-select-none me-1" title="${time.substring(11, 19)} UTC">${time.substring(11, 16)}</span>` +
-              `${userlink(m.u, {cls: "text-info"})} ${messageText(m)}</div>`;
+              `<a class="text-info" href="https://lichess.org/@/${escapeHtml(m.u.toLowerCase())}" target="_blank">${name}</a> ` +
+              `${messageText(m)}</div>`;
     }
     if (!chat_msgs.length)
       html += '<div class="text-muted p-2">No messages.</div>';
