@@ -77,7 +77,7 @@
                   <input id="tournament_link" type="text" class="flex-grow-1 py-0 me-1">
                   <button id="btn_add_tournament" class="btn btn-primary flex-grow-0 py-0" onclick="add_tournament()">Add</button>
                 </div>
-                <fieldset id="tournaments_tournaments">
+                <fieldset id="tournaments_tournaments" class="mt-2">
                 </fieldset>
               </div>
             </div>
@@ -181,6 +181,7 @@
   const SCORE_FILTERS = [0, 20, 40, 60];
   const NUM_LANGS = 9;
   const TOURNAMENT_TABS = ["tournaments", "started", "created", "finished"];
+  const TOURNAMENT_GROUP_NAMES = {started: "ongoing", created: "created", finished: "finished"};
   const ERROR_RETRY_MS = 5000;
 
   let notes_user = "";
@@ -671,8 +672,13 @@
   }
 
   function set_tournament_group(group) {
-    const checked = $(`#t_${group}`).is(':checked') ? 1 : 0;
-    $.post(`/chat/set_tournament_group/${group}/${checked}`).done(update_tournament_list);
+    const checkbox = $(`#t_${group}`);
+    const checked = checkbox.is(':checked');
+    if (!checked && !confirm(`Disable all ${TOURNAMENT_GROUP_NAMES[group]} tournaments?`)) {
+      checkbox.prop('checked', true);
+      return;
+    }
+    $.post(`/chat/set_tournament_group/${group}/${checked ? 1 : 0}`).done(update_tournament_list);
   }
 
   function delete_tournament(tourn_id) {

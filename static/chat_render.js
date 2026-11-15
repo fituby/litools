@@ -263,12 +263,11 @@ function renderSelection(sel) {
           `${sel.more ? loadMoreButton(sel.tourn.id, 2) : ""}${user_msgs}`];
 }
 
-// Header of a tournament group (with a checkbox to enable/disable the whole group).
-function renderTournamentGroup(group, suffix, name, desc, on) {
-  const id = `${group}${suffix}`;
-  return `<div class="form-check"><input class="form-check-input" type="checkbox" id="t_${id}" ` +
-         `onchange="set_tournament_group('${id}')"${on ? " checked" : ""}>` +
-         `<label class="form-check-label d-flex justify-content-between" for="t_${id}">` +
+// Header of a tournament group with a checkbox to enable/disable the whole group.
+function renderTournamentGroup(group, name, desc, on) {
+  return `<div class="form-check"><input class="form-check-input" type="checkbox" id="t_${group}" ` +
+         `onchange="set_tournament_group('${group}')"${on ? " checked" : ""}>` +
+         `<label class="form-check-label d-flex justify-content-between" for="t_${group}">` +
          `<b>${escapeHtml(name)}</b><b>${escapeHtml(desc)}</b></label></div>`;
 }
 
@@ -294,15 +293,10 @@ function renderTournamentItem(t, monitored) {
 // Returns the HTML of the four tabs of the tournament lists.
 function renderTournamentLists(data) {
   const g = data.groups, list = data.list;
-  const tab = (state, title, desc) => renderTournamentGroup(state, "", `${g[state].n} ${title}`, desc, g[state].on) +
+  const tab = (state, title, desc) => renderTournamentGroup(state, `${g[state].n} ${title}`, desc, g[state].on) +
     '<hr class="my-0">' + list.filter(t => t.state == state).map(t => renderTournamentItem(t, false)).join("");
   return {
-    tournaments: renderTournamentGroup("started", "2", "All Ongoing", g.started.n, g.started.on) +
-                 renderTournamentGroup("created", "2", "All Created", g.created.n, g.created.on) +
-                 renderTournamentGroup("finished", "2", "All Finished", g.finished.n, g.finished.on) +
-                 '<hr class="mt-1 mb-2">' +
-                 renderTournamentGroup("monitored", "", "Added", g.monitored.n, g.monitored.on) +
-                 list.filter(t => t.monitored).map(t => renderTournamentItem(t, true)).join(""),
+    tournaments: list.filter(t => t.monitored).map(t => renderTournamentItem(t, true)).join(""),
     started: tab("started", "Started", "finishes in:"),
     created: tab("created", "Created", "starts in:"),
     finished: tab("finished", "Finished", "finished ago:"),
