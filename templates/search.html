@@ -244,7 +244,7 @@
                     toggleReview();
             })
             .fail(xhr => {
-                if (xhr.status === 400)
+                if (xhr.status === 401)
                     $('#search_error').text('Authentication required. Please log in again.').show();
                 else
                     $('#search_error').text('Search failed. Status: ' + xhr.status).show();

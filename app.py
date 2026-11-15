@@ -2,6 +2,7 @@ from flask import Flask, Response, render_template, request, make_response, sess
 from flask_compress import Compress
 from flask_minify import minify
 from waitress import serve
+from functools import wraps
 import logging
 import threading
 import base64
@@ -52,377 +53,260 @@ mod_cache = {}
 re_state = re.compile(r'[\w-]')
 
 
+def with_mod(page=False, mod_only=False, update_theme=False, update_seenAt=False):
+    """Passes the logged-in moderator to the view as its first argument.
+    Without a valid login, pages redirect to /login and API requests get 401."""
+    def decorator(view):
+        @wraps(view)
+        def wrapper(*args, **kwargs):
+            try:
+                mod = get_mod(request.cookies, update_theme=update_theme, update_seenAt=update_seenAt)
+            except Exception:
+                return redirect('/login') if page else Response(status=401)
+            if mod_only and not mod.is_mod():
+                return Response(status=401)
+            return view(mod, *args, **kwargs)
+        return wrapper
+    return decorator
+
+
 @app.route('/lb/<variant>', methods=['GET'])
 @app.route('/lb/<variant>/', methods=['GET'])
-def create_leaderboard(variant):
-    try:
-        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
-    except:
-        return make_response(redirect('/login'))
+@with_mod(page=True, update_theme=True, update_seenAt=True)
+def create_leaderboard(mod, variant):
     leaderboard, lb_last_update, variant = update_leaderboard(non_mod, variant)
     dt = f"{lb_last_update:%d %B %H:%M}" if lb_last_update else ""
-    resp = make_response(render_template('/leaderboard.html', variant=variant, dt=dt, mod=mod, view=mod.view, icon="L/"))
-    return resp
+    return render_template('/leaderboard.html', variant=variant, dt=dt, mod=mod, view=mod.view, icon="L/")
 
 
 @app.route("/lb_<variant>.txt")
-def make_leaderboard(variant):
-    try:
-        mod = get_mod(request.cookies)
-    except:
-        return Response(status=400)
+@with_mod()
+def make_leaderboard(mod, variant):
     leaderboard, lb_last_update, variant = update_leaderboard(mod, variant)
-    resp = make_response({'data': leaderboard})
-    return resp
+    return {'data': leaderboard}
 
 
 @app.route('/boost/', methods=['GET', 'POST'])
 @app.route('/boost', methods=['GET', 'POST'])
-def create_boost():
-    try:
-        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
-    except:
-        return make_response(redirect('/login'))
+@with_mod(page=True, update_theme=True, update_seenAt=True)
+def create_boost(mod):
     boost_user = request.form.get("user", None) if request.method == 'POST' else None
-    resp = make_response(render_template('/boost.html', boost_user=boost_user, embed_lichess=get_embed_lichess(),
-                                         mod=mod, view=mod.view, icon="B/"))
-    return resp
+    return render_template('/boost.html', boost_user=boost_user, embed_lichess=get_embed_lichess(),
+                           mod=mod, view=mod.view, icon="B/")
 
 
 @app.route('/boost/<user>/', methods=['POST'])
-def get_boost_user(user):
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
+@with_mod(update_seenAt=True)
+def get_boost_user(mod, user):
     before = request.form.get("before", None)
     num_games = request.form.get("num_games", None)
     perf_type = request.form.get("perf_type", None)
     boost = get_boost_data(user.lower(), mod, num_games, before, perf_type)
-    resp = make_response(boost.get_output(mod))
-    return resp
+    return boost.get_output(mod)
 
 
 @app.route('/boost/<user>/tournaments/', methods=['GET'])
-def create_tournaments(user):
-    try:
-        mod = get_mod(request.cookies)
-    except:
-        return Response(status=400)
+@with_mod()
+def create_tournaments(mod, user):
     boost = get_boost_data(user.lower(), mod)
-    resp = make_response(boost.get_tournaments(mod))
-    return resp
+    return boost.get_tournaments(mod)
 
 
 @app.route('/boost/send_note', methods=['POST'])
-def boost_send_note():
-    try:
-        mod = get_mod(request.cookies)
-    except:
-        return Response(status=400)
+@with_mod()
+def boost_send_note(mod):
     user = request.form.get("user", None)
     note = request.form.get("note", None)
-    data = send_boost_note(note, user, mod)
-    resp = make_response(data)
-    return resp
+    return send_boost_note(note, user, mod)
 
 
 @app.route('/boost/mod_action', methods=['POST'])
-def boost_mod_action():
-    try:
-        mod = get_mod(request.cookies)
-    except:
-        return Response(status=400)
+@with_mod()
+def boost_mod_action(mod):
     user = request.form.get("user", None)
     action = request.form.get("action", None)
-    data = send_mod_action(action, user, mod)
-    resp = make_response(data)
-    return resp
+    return send_mod_action(action, user, mod)
 
 
 @app.route('/alt/', methods=['GET', 'POST'])
 @app.route('/alt', methods=['GET', 'POST'])
-def create_alt():
-    try:
-        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
-    except:
-        return make_response(redirect('/login'))
-    alts = request.form.get("alts", None) if request.method == 'POST' else None
-    num_games = request.form.get("num_games", None) if request.method == 'POST' else None
-    date_begin = request.form.get("date_begin", None) if request.method == 'POST' else None
-    date_end = request.form.get("date_end", None) if request.method == 'POST' else None
-    resp = make_response(render_template('/alt.html', embed_lichess=get_embed_lichess(), mod=mod, view=mod.view, icon="A/",
-                                         alts=alts, num_games=num_games, date_begin=date_begin, date_end=date_end))
-    return resp
+@with_mod(page=True, update_theme=True, update_seenAt=True)
+def create_alt(mod):
+    form = request.form if request.method == 'POST' else {}
+    return render_template('/alt.html', embed_lichess=get_embed_lichess(), mod=mod, view=mod.view, icon="A/",
+                           alts=form.get("alts"), num_games=form.get("num_games"),
+                           date_begin=form.get("date_begin"), date_end=form.get("date_end"))
 
 
 @app.route('/alts/<step>/', methods=['POST'])
-def get_alts(step):
-    try:
-        mod = get_mod(request.cookies, update_theme=True)
-    except:
-        return Response(status=400)
+@with_mod(update_theme=True)
+def get_alts(mod, step):
     alt_names = request.form.get("alts", None)
     num_games = request.form.get("num_games", None)
     date_begin = request.form.get("date_begin", None)
     date_end = request.form.get("date_end", None)
     force_refresh_openings = bool(request.form.get("force_refresh_openings", False))
-    resp = Alts.get_response(step, alt_names, num_games, date_begin, date_end, force_refresh_openings, mod)
-    return make_response(resp)
+    return Alts.get_response(step, alt_names, num_games, date_begin, date_end, force_refresh_openings, mod)
 
 
 @app.route('/chat/', methods=['GET'])
 @app.route('/chat', methods=['GET'])
-def create_chat():
-    try:
-        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
-    except:
-        return make_response(redirect('/login'))
-    resp = make_response(render_template('/chat.html', update_frequency=chat.i_update_frequency,
-                                         mod=mod, view=mod.view, icon="C/"))
-    return resp
+@with_mod(page=True, update_theme=True, update_seenAt=True)
+def create_chat(mod):
+    return render_template('/chat.html', update_frequency=chat.i_update_frequency, mod=mod, view=mod.view, icon="C/")
 
 
 @app.route('/chat/update/<state>', methods=['POST'])
-def get_chat_update(state):
-    try:
-        get_mod(request.cookies)  # can be omitted
-    except:
-        return Response(status=400)
-    resp = make_response(chat.get_tournaments_data(state))
-    return resp
+@with_mod()
+def get_chat_update(mod, state):
+    return chat.get_tournaments_data(state)
 
 
 @app.route('/chat/process/<state>', methods=['POST'])
-def get_chat_process(state):
-    try:
-        mod = get_mod(request.cookies)
-    except:
-        return Response(status=400)
-    data = chat.get_all_data(mod, state)
-    return make_response(data)
+@with_mod()
+def get_chat_process(mod, state):
+    return chat.get_all_data(mod, state)
 
 
 @app.route('/chat/set_msg_ok/<msg_id>', methods=['POST'])
-def chat_set_msg_ok(msg_id):
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
+@with_mod(update_seenAt=True)
+def chat_set_msg_ok(mod, msg_id):
     chat.set_msg_ok(msg_id)
-    resp = make_response(chat.get_all(mod))
-    return resp
+    return chat.get_all(mod)
 
 
 @app.route('/chat/timeout/<msg_id>/<reason>', methods=['POST'])
-def chat_timeout(msg_id, reason):
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
+@with_mod(update_seenAt=True)
+def chat_timeout(mod, msg_id, reason):
     chat.timeout(msg_id, reason, mod)
-    resp = make_response(chat.get_all(mod))
-    return resp
+    return chat.get_all(mod)
 
 
 @app.route('/chat/timeout_multi/<msg_id>/<reason>', methods=['POST'])
-def chat_timeout_multi(msg_id, reason):
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
+@with_mod(update_seenAt=True)
+def chat_timeout_multi(mod, msg_id, reason):
     chat.timeout_multi(msg_id, reason, mod)
-    resp = make_response(chat.get_all(mod))
-    return resp
+    return chat.get_all(mod)
 
 
 @app.route('/chat/set_multi_msg_ok/<msg_id>', methods=['POST'])
-def chat_set_multi_msg_ok(msg_id):
-    try:
-        get_mod(request.cookies, update_seenAt=True)  # can be omitted
-    except:
-        return Response(status=400)
+@with_mod(update_seenAt=True)
+def chat_set_multi_msg_ok(mod, msg_id):
     chat.set_multi_msg_ok(msg_id)
-    return '', 204
+    return Response(status=204)
 
 
 @app.route('/chat/warn/<username>/<subject>', methods=['POST'])
-def chat_warn(username, subject):
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
+@with_mod(update_seenAt=True)
+def chat_warn(mod, username, subject):
     chat.warn(username, subject, mod)
-    resp = make_response(chat.get_all(mod))
-    return resp
+    return chat.get_all(mod)
 
 
 @app.route('/chat/set_update/<update_frequency>', methods=['POST'])
-def chat_set_update(update_frequency):
-    try:
-        get_mod(request.cookies)  # can be omitted
-    except:
-        return Response(status=400)
+@with_mod()
+def chat_set_update(mod, update_frequency):
     chat.set_update(update_frequency)
-    return '', 204
+    return Response(status=204)
 
 
 @app.route('/chat/select_message/<msg_id>', methods=['POST'])
-def chat_select_message(msg_id):
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
-    resp = make_response(chat.select_message(msg_id, mod))
-    return resp
+@with_mod(update_seenAt=True)
+def chat_select_message(mod, msg_id):
+    return chat.select_message(msg_id, mod)
 
 
 @app.route('/chat/refresh_selected', methods=['POST'])
-def chat_refresh_selected():
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
-    resp = make_response(chat.refresh_selected(mod, room_mod, auto_mod))
-    return resp
+@with_mod(update_seenAt=True)
+def chat_refresh_selected(mod):
+    return chat.refresh_selected(mod, room_mod, auto_mod)
 
 
 @app.route('/chat/clear_errors/<tourn_id>', methods=['POST'])
-def chat_clear_errors(tourn_id):
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
+@with_mod(update_seenAt=True)
+def chat_clear_errors(mod, tourn_id):
     chat.clear_errors(tourn_id)
-    resp = make_response(chat.get_all(mod))
-    return resp
+    return chat.get_all(mod)
 
 
 @app.route('/chat/set_tournament/<tourn_id>/<checked>', methods=['POST'])
-def chat_set_tournament(tourn_id, checked):
-    try:
-        get_mod(request.cookies, update_seenAt=True)  # can be omitted
-    except:
-        return Response(status=400)
-    is_checked = (checked == '1')
-    chat.set_tournament(tourn_id, is_checked)
+@with_mod(update_seenAt=True)
+def chat_set_tournament(mod, tourn_id, checked):
+    chat.set_tournament(tourn_id, checked == '1')
     return Response(status=204)
 
 
 @app.route('/chat/set_tournament/<tourn_id>', methods=['POST'])
-def chat_flip_tournament(tourn_id):
-    try:
-        get_mod(request.cookies, update_seenAt=True)  # can be omitted
-    except:
-        return Response(status=400)
+@with_mod(update_seenAt=True)
+def chat_flip_tournament(mod, tourn_id):
     chat.set_tournament(tourn_id, None)
     return Response(status=204)
 
 
 @app.route('/chat/delete_tournament/<tourn_id>', methods=['POST'])
-def chat_delete_tournament(tourn_id):
-    try:
-        get_mod(request.cookies, update_seenAt=True)  # can be omitted
-    except:
-        return Response(status=400)
-    resp = make_response(chat.delete_tournament(tourn_id))
-    return resp
+@with_mod(update_seenAt=True)
+def chat_delete_tournament(mod, tourn_id):
+    return chat.delete_tournament(tourn_id)
 
 
 @app.route('/chat/set_tournament_group/<group>/<checked>', methods=['POST'])
-def chat_set_tournament_group(group, checked):
-    try:
-        get_mod(request.cookies, update_seenAt=True)  # can be omitted
-    except:
-        return Response(status=400)
-    is_checked = (checked == '1')
-    resp = make_response(chat.set_tournament_group(group, is_checked))
-    return resp
+@with_mod(update_seenAt=True)
+def chat_set_tournament_group(mod, group, checked):
+    return chat.set_tournament_group(group, checked == '1')
 
 
 @app.route('/chat/set_tournament_group/<group>', methods=['POST'])
-def chat_flip_tournament_group(group):
-    try:
-        get_mod(request.cookies, update_seenAt=True)  # can be omitted
-    except:
-        return Response(status=400)
-    resp = make_response(chat.set_tournament_group(group, None))
-    return resp
+@with_mod(update_seenAt=True)
+def chat_flip_tournament_group(mod, group):
+    return chat.set_tournament_group(group, None)
 
 
 @app.route('/chat/add_tournament', methods=['POST'])
-def chat_add_tournament():
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
+@with_mod(update_seenAt=True)
+def chat_add_tournament(mod):
     page = request.form.get("page", "")
     data = chat.add_tournament(page, non_mod, room_mod)  # add `, auto_mod` to auto time out after adding a tournament
     data.update(chat.get_all(mod))
-    resp = make_response(data)
-    return resp
+    return data
 
 
 @app.route('/chat/load_more/<tourn_id>', methods=['POST'])
-def chat_load_more(tourn_id):
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
-    resp = make_response(chat.load_more(tourn_id, mod))
-    return resp
+@with_mod(update_seenAt=True)
+def chat_load_more(mod, tourn_id):
+    return chat.load_more(tourn_id, mod)
 
 
 @app.route('/chat/send_note', methods=['POST'])
-def chat_send_note():
-    try:
-        mod = get_mod(request.cookies)
-    except:
-        return Response(status=400)
+@with_mod()
+def chat_send_note(mod):
     note = request.form.get("note", None)
     user = request.form.get("user", None)
     data = chat.send_note(note, user, mod)
-    #resp = make_response(data)  # needs 'user-info', see chat.send_note() --> workaround:
-    all_data = chat.get_all(mod)
+    all_data = chat.get_all(mod)  # the page also needs 'user-info', which send_note() doesn't return
     all_data.update(data)
-    resp = make_response(all_data)
-    return resp
+    return all_data
 
 
 @app.route('/chat/custom_timeout', methods=['POST'])
-def custom_timeout():
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
-    data = request.form.to_dict(flat=False)
-    msg_ids = data.get("ids[]", None)
-    reason = data.get("reason", 0)
-    if isinstance(reason, list):
-        reason = reason[0]
+@with_mod(update_seenAt=True)
+def custom_timeout(mod):
+    msg_ids = request.form.getlist("ids[]") or None
+    reason = request.form.get("reason", 0)
     chat.custom_timeout(msg_ids, reason, mod)
-    resp = make_response(chat.get_all(mod))
-    return resp
+    return chat.get_all(mod)
 
 
 @app.route('/comms/', methods=['GET'])
 @app.route('/comms', methods=['GET'])
-def create_comms():
-    try:
-        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
-    except:
-        return make_response(redirect('/login'))
-    resp = make_response(render_template('/comms.html', mod=mod, view=mod.view, icon="C/"))
-    return resp
+@with_mod(page=True, update_theme=True, update_seenAt=True)
+def create_comms(mod):
+    return render_template('/comms.html', mod=mod, view=mod.view, icon="C/")
 
 
 @app.route('/comms', methods=['POST'])
-def query_comms():
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
-    data = request.form.to_dict()
+@with_mod(update_seenAt=True)
+def query_comms(mod):
+    data = request.form
     username = data.get("username", "").strip()
     text = data.get("text", "").strip()
     tournId = data.get("tournId", "").strip()
@@ -432,118 +316,77 @@ def query_comms():
     msgs = chat.msgs_query(username, text, tournId, date_begin, date_end, num_msgs, mod)
     if msgs is None:
         return Response(status=401)
-    resp = make_response(msgs)
-    return resp
+    return msgs
 
 
 @app.route('/fp/', methods=['GET'])
 @app.route('/fp', methods=['GET'])
-def create_fp():
-    try:
-        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
-        if not mod.is_mod():
-            return Response(status=401)
-    except:
-        return make_response(redirect('/login'))
-    resp = make_response(render_template('/fp.html', mod=mod, variants1=variants1, variants2=variants2, view=mod.view, icon="F/"))
-    return resp
+@with_mod(page=True, mod_only=True, update_theme=True, update_seenAt=True)
+def create_fp(mod):
+    return render_template('/fp.html', mod=mod, variants1=variants1, variants2=variants2, view=mod.view, icon="F/")
 
 
 @app.route('/fp/analyze', methods=['POST'])
-def analyze_fp():
+@with_mod(mod_only=True, update_theme=True, update_seenAt=True)
+def analyze_fp(mod):
     try:
-        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
-        if not mod.is_mod():
-            return Response(status=401)
-        data = request.form.to_dict()
-        variants = data.get("variants", None)
-        player = data.get("player", None)
-        num_games = data.get("num_games", None)
-        date_begin = data.get("date_begin", None)
-        date_end = data.get("date_end", None)
-        rated = data.get("rated", None)
-        color = data.get("color", None)
-        error = analyze_footprints(mod, variants, player, num_games, date_begin, date_end, rated, color)
-        if error:
-            return Response(error, status=400)
-        return Response(status=204)
-    except:
+        data = request.form
+        error = analyze_footprints(mod, data.get("variants"), data.get("player"), data.get("num_games"),
+                                   data.get("date_begin"), data.get("date_end"), data.get("rated"), data.get("color"))
+    except Exception as exception:
+        log_exception(exception)
         return Response(status=400)
+    if error:
+        return Response(error, status=400)
+    return Response(status=204)
 
 
 @app.route('/fp/cancel', methods=['POST'])
-def cancel_fp():
-    try:
-        mod = get_mod(request.cookies, update_theme=False, update_seenAt=True)
-        if not mod.is_mod():
-            return Response(status=401)
-        cancel_footprints(mod)
-    except:
-        return Response(status=400)
+@with_mod(mod_only=True, update_seenAt=True)
+def cancel_fp(mod):
+    cancel_footprints(mod)
     return Response(status=204)
 
 
 @app.route('/fp/data', methods=['POST'])
-def get_fp_data():
-    try:
-        mod = get_mod(request.cookies, update_theme=False, update_seenAt=True)
-        if not mod.is_mod():
-            return Response(status=401)
-        return get_footprints(mod)
-    except:
-        return Response(status=400)
+@with_mod(mod_only=True, update_seenAt=True)
+def get_fp_data(mod):
+    return get_footprints(mod)
 
 
 @app.route('/search/', methods=['GET'])
 @app.route('/search', methods=['GET'])
-def create_search():
-    try:
-        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
-    except:
-        return make_response(redirect('/login'))
-    resp = make_response(render_template('/search.html', mod=mod, view=mod.view, icon=""))
-    return resp
+@with_mod(page=True, update_theme=True, update_seenAt=True)
+def create_search(mod):
+    return render_template('/search.html', mod=mod, view=mod.view, icon="")
 
 
 @app.route('/search', methods=['POST'])
-def query_search():
-    try:
-        mod = get_mod(request.cookies, update_seenAt=True)
-    except:
-        return Response(status=400)
+@with_mod(update_seenAt=True)
+def query_search(mod):
     query = request.form.get("query", None)
     if not query:
-        return make_response({'data': [], 'error': 'No query provided'})
+        return {'data': [], 'error': 'No query provided'}
     match_type = request.form.get("match_type", "regex")
-    data = search_users(query, mod, match_type)
-    return make_response(data)
+    return search_users(query, mod, match_type)
 
 
 @app.route('/mod/close_account', methods=['POST'])
-def close_account_route():
-    try:
-        mod = get_mod(request.cookies)
-    except:
-        return Response(status=400)
+@with_mod()
+def close_account_route(mod):
     user = request.form.get("user", None)
     if not user:
-        return make_response({'error': 'No user provided'})
-    is_ok = close_account(user, mod)
-    if is_ok:
-        return make_response({'status': 'success'})
-    else:
-        return make_response({'error': 'Failed to close account'})
+        return {'error': 'No user provided'}
+    if close_account(user, mod):
+        return {'status': 'success'}
+    return {'error': 'Failed to close account'}
 
 
 @app.route('/set_mode/<mode>', methods=['POST'])
-def set_mode(mode):
-    try:
-        mod = get_mod(request.cookies)
-    except:
-        return Response(status=400)
+@with_mod()
+def set_mode(mod, mode):
     mod.view.set_mode(mode)
-    resp = Response(status=204)
-    return resp
+    return Response(status=204)
 
 
 def chat_loop():
@@ -655,38 +498,27 @@ def get_auth_error(args, error_title):
 
 
 @app.route("/", methods=['GET'])
-def index():
-    try:
-        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
-        resp = create_main_page(mod)
-        return resp
-    except:
-        return make_response(redirect('/login'))
+@with_mod(page=True, update_theme=True, update_seenAt=True)
+def index(mod):
+    return create_main_page(mod)
 
 
-@app.route('/log/<lines>/<page>', methods=['GET'])
-@app.route('/log/<lines>/<page>/', methods=['GET'])
-@app.route('/log/<lines>', defaults={'page': 0}, methods=['GET'])
-@app.route('/log/<lines>/', defaults={'page': 0}, methods=['GET'])
+@app.route('/log/<int:lines>/<int:page>', methods=['GET'])
+@app.route('/log/<int:lines>/<int:page>/', methods=['GET'])
+@app.route('/log/<int:lines>', defaults={'page': 0}, methods=['GET'])
+@app.route('/log/<int:lines>/', defaults={'page': 0}, methods=['GET'])
 @app.route("/log", defaults={'lines': 100, 'page': 0}, methods=['GET'])
 @app.route("/log/", defaults={'lines': 100, 'page': 0}, methods=['GET'])
-def log_data(lines, page):
-    try:
-        mod = get_mod(request.cookies, update_theme=True, update_seenAt=True)
-        view = mod.view if mod else View()
-        reverse = False if request.args.get('reverse', "true").lower() in ["false", "0"] else True
-        text = log_read(int(lines), int(page), reverse) if mod.is_admin else f"Version: {LITOOLS_VERSION[1:]}"
-        return make_response(render_template('/log.html', view=view, icon="", log=text))
-    except:
-        return make_response(redirect('/login'))
+@with_mod(page=True, update_theme=True, update_seenAt=True)
+def log_data(mod, lines, page):
+    reverse = request.args.get('reverse', "true").lower() not in ["false", "0"]
+    text = log_read(lines, page, reverse) if mod.is_admin else f"Version: {LITOOLS_VERSION[1:]}"
+    return render_template('/log.html', view=mod.view, icon="", log=text)
 
 
 @app.route("/logout", methods=['GET'])
-def logout():
-    try:
-        mod = get_mod(request.cookies)
-    except:
-        return make_response(redirect('/login'))
+@with_mod(page=True)
+def logout(mod):
     try:
         mod.logout()
         token1 = request.cookies.get('token')
@@ -805,11 +637,8 @@ def oauth2_callback():
 
 
 @app.route('/revoke_token/<token_hash>', methods=['DELETE'])
-def revoke_token(token_hash):
-    try:
-        get_mod(request.cookies)  # can be omitted
-    except:
-        return Response(status=400)
+@with_mod()
+def revoke_token(mod, token_hash):
     is_deleted = Mod.revoke_token(token_hash)
     if is_deleted:
         return Response(status=204)
