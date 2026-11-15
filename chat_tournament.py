@@ -53,6 +53,7 @@ class Tournament:
         self.max_score = 0
         self.total_score = 0
         self.is_monitored = is_monitored
+        self.is_frequent = False
         self.is_enabled = True
         self.link = link
         self.last_update: datetime = None
@@ -142,7 +143,7 @@ class Tournament:
         return monitored + deltaseconds(now_utc, self.startsAt)
 
     def update_period(self, now_utc):
-        if self.is_monitored:
+        if self.is_frequent:
             return 1
         if self.is_ongoing(now_utc):
             if self.t_type != TournType.Study or len(self.messages) > 5:
@@ -611,4 +612,6 @@ class Tournament:
             item['swiss_off'] = True
         if self.is_monitored:
             item['monitored'] = True
+        if self.is_frequent:
+            item['frequent'] = True
         return item

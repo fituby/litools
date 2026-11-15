@@ -298,6 +298,12 @@ def chat_delete_tournament(mod, tourn_id):
     return chat.delete_tournament(tourn_id)
 
 
+@app.route('/chat/set_frequent/<tourn_id>/<checked>', methods=['POST'])
+@with_mod(update_seenAt=True)
+def chat_set_frequent(mod, tourn_id, checked):
+    return chat.set_frequent(tourn_id, checked == '1')
+
+
 @app.route('/chat/set_tournament_group/<group>/<checked>', methods=['POST'])
 @with_mod(update_seenAt=True)
 def chat_set_tournament_group(mod, group, checked):

@@ -682,8 +682,14 @@
   }
 
   function delete_tournament(tourn_id) {
-    $(`#tt_${tourn_id}`).closest('div').remove();
+    $(`#tt_${tourn_id}`).remove();
     $.post(`/chat/delete_tournament/${encodeURIComponent(tourn_id)}`).done(update_tournament_list);
+  }
+
+  function set_frequent(tourn_id, is_frequent) {
+    if (is_frequent && !confirm("Check this chat as often as possible? Use it only while you need it."))
+      return;
+    $.post(`/chat/set_frequent/${encodeURIComponent(tourn_id)}/${is_frequent ? 1 : 0}`).done(update_tournament_list);
   }
 
   function add_tournament() {

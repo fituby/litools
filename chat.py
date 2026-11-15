@@ -809,24 +809,31 @@ class ChatAnalysis:
         tournament = self.tournaments.get(tourn_id)
         if tournament:
             tournament.is_monitored = False
+            tournament.is_frequent = False
+            self.state_tournaments += 1
         else:
             self.add_error(f"WARNING: No tournament \"{tourn_id}\" to delete", False)
             self.state_reports += 1
         return self.get_tournaments()
 
+    def set_frequent(self, tourn_id, is_frequent):
+        """Checks an added tournament's chat as often as possible instead of on the normal schedule."""
+        tournament = self.tournaments.get(tourn_id)
+        if tournament and tournament.is_monitored:
+            tournament.is_frequent = is_frequent
+            self.state_tournaments += 1
+        else:
+            self.add_error(f"WARNING: No added tournament \"{tourn_id}\"", False)
+            self.state_reports += 1
+        return self.get_tournaments()
+
     def set_tournament_group(self, group, checked):
-        if group.endswith("2"):
-            group = group[:-1]
         now_utc = datetime.now(tz=tz.tzutc())
         active_tournaments = self.get_time_sorted_tournaments(now_utc, active_only=False)
-        if group in self.tournament_groups:
+        if group in self.tournament_groups and group != "monitored":
             if checked is None:
                 checked = not self.tournament_groups[group]
-            self.tournament_groups[group] = True if group == "monitored" else checked
-            if group == "monitored":
-                for tourney in active_tournaments:
-                    if tourney.is_monitored:
-                        tourney.is_monitored = False
+            self.tournament_groups[group] = checked
             if group == "created":
                 for tourney in active_tournaments:
                     if tourney.is_created(now_utc):

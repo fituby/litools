@@ -271,23 +271,33 @@ function renderTournamentGroup(group, name, desc, on) {
          `<b>${escapeHtml(name)}</b><b>${escapeHtml(desc)}</b></label></div>`;
 }
 
-// A tournament of the lists; in the "Added" list (monitored) the checkbox removes the tournament.
-function renderTournamentItem(t, monitored) {
+// A tournament of the lists: with a switch to enable/disable it, or, in the list of added tournaments,
+// with buttons to check it as often as possible and to remove it from the list.
+function renderTournamentItem(t, added) {
   const id = escapeHtml(t.id);
-  const checked = monitored || (!t.swiss_off && t.active);
-  const disabled = !monitored && t.swiss_off;
   const count = (!t.swiss_off || t.n) ? String(t.n).padStart(3, "0") : "&minus;&minus;&minus;";
   const num = t.n > 0
     ? `<button class="btn ${t.n < 100 ? "btn-secondary" : "btn-primary"} align-baseline flex-grow-0 px-1 py-0" ` +
       `onclick="select_message(event,'T${Number(t.first)}')">${count}</button>`
     : `<span class="px-1">${count}</span>`;
-  const prefix = monitored ? "tt" : "t";
-  const label_for = monitored ? "" : ` for="t_${id}"`;
-  return `<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="${prefix}_${id}" ` +
-         `data-tourn="${id}" onchange="${monitored ? "delete_tournament" : "set_tournament"}(this.dataset.tourn)"` +
-         `${checked ? " checked" : ""}${disabled ? " disabled" : ""}>` +
-         `<label class="form-check-label d-flex justify-content-between${t.monitored ? " text-info" : ""}"${label_for}>` +
-         `<span>${num} ${renderTournamentLink(t)}</span><span>${escapeHtml(t.info)}</span></label></div>`;
+  const text = `<span>${num} ${renderTournamentLink(t)}</span>`;
+  if (added) {
+    const icon_btn = "btn btn-link text-decoration-none align-baseline p-0 ms-2";
+    const frequent = t.frequent
+      ? `<button class="${icon_btn} text-warning" title="Checked as often as possible. Click to use the normal schedule" ` +
+        `data-tourn="${id}" onclick="set_frequent(this.dataset.tourn, false)"><i class="fas fa-bolt"></i></button>`
+      : `<button class="${icon_btn} text-muted" title="Check as often as possible" ` +
+        `data-tourn="${id}" onclick="set_frequent(this.dataset.tourn, true)"><i class="fas fa-bolt"></i></button>`;
+    const remove = `<button class="${icon_btn} text-muted" title="Remove from the added tournaments" ` +
+                   `data-tourn="${id}" onclick="delete_tournament(this.dataset.tourn)"><i class="fas fa-times"></i></button>`;
+    return `<div id="tt_${id}" class="d-flex justify-content-between align-items-baseline text-info">${text}` +
+           `<span class="text-nowrap ms-1">${escapeHtml(t.info)}${frequent}${remove}</span></div>`;
+  }
+  const checked = !t.swiss_off && t.active;
+  return `<div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="t_${id}" ` +
+         `data-tourn="${id}" onchange="set_tournament(this.dataset.tourn)"${checked ? " checked" : ""}${t.swiss_off ? " disabled" : ""}>` +
+         `<label class="form-check-label d-flex justify-content-between${t.monitored ? " text-info" : ""}" for="t_${id}">` +
+         `${text}<span>${escapeHtml(t.info)}</span></label></div>`;
 }
 
 // Returns the HTML of the four tabs of the tournament lists.
