@@ -42,7 +42,19 @@ class Messages(Model):
         database = db
 
 
+class Chats(Model):
+    id = CharField(primary_key=True)
+    type = IntegerField()
+    name = CharField(null=True)
+    url = CharField(null=True)
+    startsAt = DateTimeField(null=True)
+    checkedAt = DateTimeField(index=True)
+
+    class Meta:
+        database = db
+
+
 Messages.add_index(SQL('CREATE INDEX IF NOT EXISTS "messages_username_nocase" ON "messages" ("username" COLLATE NOCASE)'))
 
 db.connect()
-db.create_tables([Mods, Authentication, Messages], safe=True)
+db.create_tables([Mods, Authentication, Messages, Chats], safe=True)

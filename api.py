@@ -31,6 +31,7 @@ class ApiType:
     AtUsernameFollowing = Endpoint('@/username/following')
     ApiTournamentId = Endpoint('api/tournament/id')
     ApiSwiss = Endpoint('api/swiss')
+    ApiBroadcastRound = Endpoint('api/broadcast/round')
     ApiTournament = Endpoint('api/tournament')
     TournamentCalendar = Endpoint('tournament/calendar')
     TournamentId = Endpoint('tournament', API_TOURNEY_PAGE_DELAY)

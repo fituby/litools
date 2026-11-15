@@ -46,12 +46,11 @@
     </tbody></table>
     <p class="mt-2">* Text is case insensitive. Time is in UTC.</p>
   </div>
-  <div class="d-flex flex-row flex-wrap justify-content-around my-2">
-    <div class="flex-column flex-grow-1 mx-3">
+  <div class="d-flex flex-row flex-wrap my-2">
+    <div class="flex-column mx-3" style="flex:1 1 0;min-width:300px;">
       {{ spinner("msgs_downloading", "Downloading messages&hellip;", cls="d-none justify-content-left align-items-center my-3") }}
       <table id="msgs_table" class="d-none table table-sm table-striped table-hover text-center mb-5">
         <thead><tr>
-          <th class="text-nowrap">Date <i class="fas fa-sort text-muted"></i></th>
           <th class="text-nowrap">Time <i class="fas fa-sort text-muted"></i></th>
           <th class="text-nowrap">Tournament <i class="fas fa-sort text-muted"></i></th>
           <th class="text-nowrap">Player <i class="fas fa-sort text-muted"></i></th>
@@ -60,6 +59,15 @@
       </table>
       <div id="not_authorised" class="d-none text-danger">Not authorised.</div>
     </div>
+    <div id="chat_panel" class="d-none flex-column rounded me-3 mb-3"
+         style="flex:0 0 33%;max-width:33%;min-width:300px;position:sticky;top:0.5rem;align-self:flex-start;height:calc(100vh - 1rem);background-color:rgba(128,128,128,0.2);">
+      <div class="d-flex justify-content-between align-items-baseline px-2 py-1">
+        <span class="text-break"><b id="chat_name"></b><small id="chat_start" class="text-muted text-nowrap ms-2"></small></span>
+        <button class="btn btn-link text-muted text-decoration-none align-baseline p-0 ms-2" title="Close" onclick="close_chat()">
+          <i class="fas fa-times"></i></button>
+      </div>
+      <div id="chat_msgs" class="px-1 pb-1" style="flex:1 1 auto;overflow-y:auto;position:relative;"></div>
+    </div>
   </div>
   <div id="mode" style="width:300px;min-width:250px;max-width:300px;">
     {{ mode_setting() }}
@@ -67,7 +75,7 @@
 </div>
 {% endblock %}
 
-{% block libs %}{{ datatables() }}{% endblock %}
+{% block libs %}{{ datatables() }}<script src="{{url_for('static', filename='chat_render.js')}}"></script>{% endblock %}
 
 {% block scripts %}
 <script>
@@ -97,36 +105,36 @@
     }
     $('#msgs_table').DataTable({
       searching: true, paging: false, info: true,
+      // Rows: [message id, "YYYY-MM-DD HH:MM", chat id, username, HTML-escaped text]
       columnDefs: [{
         targets: [0],
         className: "col-1 pe-3 text-start align-middle text-nowrap user-select-none",
         data: null,
-        render: (data, type) => (type != 'display' || !data[0].includes(' ')) ? data[0] : data[0].split(' ')[0]
+        render: data => data[1]
       }, {
         targets: [1],
         className: "col-1 text-start align-middle text-nowrap user-select-none",
         data: null,
-        render: (data, type) => (type != 'display' || !data[0].includes(' ')) ? data[0] : data[0].split(' ')[1]
+        render: (data, type) => {
+          const tourn = data[2], known = chat_names[tourn];
+          const name = known ? known.n : tourn;
+          if (type != 'display' || !tourn.length) return name;
+          const color = TOURNAMENT_COLORS[hash_code(tourn) % TOURNAMENT_COLORS.length];
+          const href = known?.u ? safeUrl(known.u) : `https://lichess.org/tournament/${tourn}`;
+          return `<a href="${escapeHtml(href)}" target="_blank" title="${escapeHtml(known ? `${name} (${tourn})` : tourn)}" ` +
+                 `class="d-inline-block text-truncate align-bottom" style="max-width:14em;color:var(--bs-${color});" ` +
+                 `data-tourn="${escapeHtml(tourn)}" data-msg="${Number(data[0])}" onclick="open_chat(event, this);">${escapeHtml(name)}</a>`;
+        }
       }, {
         targets: [2],
         className: "col-1 text-start align-middle text-nowrap user-select-none",
         data: null,
-        render: (data, type) => {
-          if (type != 'display' || !data[1].length) return data[1];
-          const id = escapeHtml(data[1]);
-          const color = TOURNAMENT_COLORS[hash_code(data[1]) % TOURNAMENT_COLORS.length];
-          return `<a href="https://lichess.org/tournament/${id}" target="_blank" style="color: var(--bs-${color});" onclick="open_tournament(event);">${id}</a>`;
-        }
+        render: (data, type) => type != 'display' ? data[3] : userlink(data[3], {cls: "text-info"})
       }, {
         targets: [3],
-        className: "col-1 text-start align-middle text-nowrap user-select-none",
-        data: null,
-        render: (data, type) => type != 'display' ? data[2] : userlink(data[2], {cls: "text-info"})
-      }, {
-        targets: [4],
         className: "col-8 text-start text-break align-middle",
         data: null,
-        render: data => data[3]  // already HTML-escaped by the server
+        render: data => data[4]  // already HTML-escaped by the server
       }],
       deferRender: true,
     });
@@ -149,7 +157,8 @@
     }).done(data => {
       $('#msgs_table, #msgs_table_wrapper').removeClass("d-none");
       setVisible('#not_authorised', false, "d-flex");
-      table.clear().rows.add(data).draw();
+      chat_names = data.chats;
+      table.clear().rows.add(data.msgs).draw();
       $('#mode').addClass("d-none");
     }).fail(() => {
       $('#msgs_table, #msgs_table_wrapper').addClass("d-none");
@@ -158,17 +167,105 @@
     }).always(() => setVisible('#msgs_downloading', false, "d-flex"));
   }
 
-  // Chats are stored by ID only; an ID that is not an arena is a broadcast round.
-  function open_tournament(event) {
-    event.preventDefault();
-    const url = event.currentTarget.href;
-    const tab = window.open("about:blank", "_blank");
-    if (!tab)
+  // Chat panel: the stored messages of a chat around the clicked message, with "Load earlier/later".
+  let chat_names = {};  // known chats of the results: {chat id: {n: name, u: url}}
+  let chat_tourn = null, chat_selected = null, chat_msgs = [], chat_more = {before: false, after: false};
+
+  function open_chat(event, link) {
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.button)
       return;
-    tab.opener = null;
-    $.getJSON(url.replace("/tournament/", "/api/tournament/"))
-      .done(() => tab.location = url)
-      .fail(() => tab.location = url.replace("/tournament/", "/broadcast/-/-/"));
+    event.preventDefault();
+    chat_tourn = link.dataset.tourn;
+    chat_selected = Number(link.dataset.msg);
+    chat_msgs = [];
+    setVisible('#chat_panel', true, "d-flex");
+    $('#chat_name').text(chat_names[chat_tourn]?.n || chat_tourn);
+    $('#chat_start').text("");
+    $('#chat_msgs').html('<div class="text-muted p-2">Loading&hellip;</div>');
+    const tourn = chat_tourn;
+    $.post('/comms/chat', {tourn: tourn, msg: chat_selected})
+      .done(data => {
+        if (tourn != chat_tourn)
+          return;
+        show_chat_header(data.chat);
+        chat_msgs = data.msgs;
+        chat_more = {before: data.more_before, after: data.more_after};
+        render_chat();
+        const selected = $(`#cm${chat_selected}`)[0];
+        const box = $('#chat_msgs')[0];
+        if (selected)
+          box.scrollTop = selected.offsetTop - box.clientHeight / 2;
+        else
+          box.scrollTop = box.scrollHeight;
+      })
+      .fail(xhr => {
+        if (tourn == chat_tourn)
+          $('#chat_msgs').html(`<div class="text-danger p-2">Failed to load the chat (${xhr.status}).</div>`);
+      });
+  }
+
+  function show_chat_header(chat) {
+    const name = escapeHtml(chat.name);
+    $('#chat_name').html(chat.url ? `<a href="${escapeHtml(safeUrl(chat.url))}" target="_blank">${name}</a>` : name);
+    $('#chat_start').text(chat.start ? `${chat.start} UTC` : "");
+    if (chat.url && !chat_names[chat.id]) {
+      chat_names[chat.id] = {n: chat.name, u: chat.url};
+      $('#msgs_table').DataTable().rows().invalidate('data').draw(false);
+    }
+  }
+
+  function load_more_chat(direction) {
+    if (!chat_msgs.length)
+      return;
+    const tourn = chat_tourn;
+    const anchor = direction == "before" ? chat_msgs[0].id : chat_msgs[chat_msgs.length - 1].id;
+    $(`#chat_${direction}`).prop("disabled", true);
+    $.post('/comms/chat', {tourn: tourn, msg: anchor, direction: direction})
+      .done(data => {
+        if (tourn != chat_tourn)
+          return;
+        const box = $('#chat_msgs')[0];
+        if (direction == "before") {
+          const old_first = $(`#cm${anchor}`)[0];
+          const offset = old_first.offsetTop - box.scrollTop;
+          chat_msgs = data.msgs.concat(chat_msgs);
+          chat_more.before = data.more_before;
+          render_chat();
+          box.scrollTop = $(`#cm${anchor}`)[0].offsetTop - offset;
+        } else {
+          chat_msgs = chat_msgs.concat(data.msgs);
+          chat_more.after = data.more_after;
+          render_chat();
+        }
+      })
+      .fail(() => $(`#chat_${direction}`).prop("disabled", false));
+  }
+
+  function render_chat() {
+    const button = (direction, text) =>
+      `<button id="chat_${direction}" class="btn btn-secondary w-100 py-0 my-1" onclick="load_more_chat('${direction}')">${text}</button>`;
+    let html = chat_more.before ? button("before", "Load earlier") : "";
+    let day = "";
+    for (const m of chat_msgs) {
+      const time = new Date(m.tm).toISOString();
+      if (time.substring(0, 10) != day) {
+        day = time.substring(0, 10);
+        html += `<div class="text-center text-muted small my-1">${day}</div>`;
+      }
+      const cls = m.id == chat_selected ? "border border-success rounded" : "";
+      html += `<div id="cm${Number(m.id)}" class="px-1 ${cls}" style="${WORD_BREAK}">` +
+              `<span class="text-muted user-select-none me-1" title="${time.substring(11, 19)} UTC">${time.substring(11, 16)}</span>` +
+              `${userlink(m.u, {cls: "text-info"})} ${messageText(m)}</div>`;
+    }
+    if (!chat_msgs.length)
+      html += '<div class="text-muted p-2">No messages.</div>';
+    html += chat_more.after ? button("after", "Load later") : "";
+    $('#chat_msgs').html(html);
+  }
+
+  function close_chat() {
+    chat_tourn = null;
+    setVisible('#chat_panel', false, "d-flex");
   }
 </script>
 {% endblock %}

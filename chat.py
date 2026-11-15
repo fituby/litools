@@ -15,7 +15,7 @@ from elements import load_mod_log, load_timeout_log, get_mod_log, add_timeout_ms
 from elements import ModActionType, ModAction, UserData
 from chat_message import Message
 from chat_tournament import Tournament
-from database import Messages, db
+from database import Messages, Chats, db
 from consts import *
 
 
@@ -36,6 +36,24 @@ tournament_teams = [
 
 arena_tournament_page = "https://lichess.org/tournament/"
 swiss_tournament_page = "https://lichess.org/swiss/"
+
+
+class ChatInfo:
+    def __init__(self, tourn_id, t_type=TournType.Unknown, name=None, url=None, startsAt=None):
+        self.id = tourn_id
+        self.t_type = t_type
+        self.name = name
+        self.url = url
+        self.startsAt = startsAt
+        self.user_flairs = {}
+
+    def to_data(self):
+        data = {'id': self.id, 'name': self.name or self.id}
+        if self.url:
+            data['url'] = self.url
+        if self.startsAt:
+            data['start'] = f"{self.startsAt:%Y-%m-%d %H:%M}"
+        return data
 
 
 class ChatAnalysis:
@@ -957,8 +975,119 @@ class ChatAnalysis:
             limit = int(num_msgs)
         except:
             limit = 100
-        msgs = [[f'{msg.time:%Y-%m-%d %H:%M}', msg.tournament, msg.username, html.escape(msg.text)]
-                for msg in Messages.select().where(where).order_by(*order_by).limit(limit).execute()]
+        rows = list(Messages.select().where(where).order_by(*order_by).limit(limit).execute())
+        msgs = [[msg.id, f'{msg.time:%Y-%m-%d %H:%M}', msg.tournament, msg.username, html.escape(msg.text)] for msg in rows]
+        return {'msgs': msgs, 'chats': self.get_chat_names({msg.tournament for msg in rows})}
+
+    def get_chat_names(self, chat_ids):
+        """Names and links of the chats that are known (in memory or in the chats table), by chat id."""
+        names = {}
+        for tourn_id in chat_ids:
+            tourn = self.tournaments.get(tourn_id)
+            if tourn:
+                names[tourn_id] = {'n': tourn.name, 'u': tourn.chat_link()}
+        unknown = [tourn_id for tourn_id in chat_ids if tourn_id not in names]
+        for i in range(0, len(unknown), 500):
+            for row in Chats.select().where(Chats.id.in_(unknown[i:i + 500]) & (Chats.type != TournType.Unknown.value)):
+                names[row.id] = {'n': row.name, 'u': row.url}
+        return names
+
+    def get_chat_info(self, tourn_id, non_mod):
+        """Name and link of a chat: of a tournament in memory, from the chats table, or else asked from Lichess and saved."""
+        tourn = self.tournaments.get(tourn_id)
+        if tourn:
+            return ChatInfo(tourn.id, tourn.t_type, tourn.name, tourn.chat_link(), tourn.startsAt)
+        now = datetime.now(tz=tz.tzutc()).replace(tzinfo=None)
+        row = Chats.get_or_none(Chats.id == tourn_id)
+        if row and (row.type != TournType.Unknown.value or now - row.checkedAt < timedelta(days=CHAT_UNKNOWN_RECHECK)):
+            return ChatInfo(row.id, TournType(row.type), row.name, row.url, row.startsAt)
+        try:
+            tourn = ChatAnalysis.lookup_chat(tourn_id, non_mod)
+        except Exception as exception:
+            log_exception(exception)
+            return ChatInfo(tourn_id)
+        if tourn:
+            tourn.save_chat()
+            return ChatInfo(tourn.id, tourn.t_type, tourn.name, tourn.chat_link(), tourn.startsAt)
+        if tourn is None:
+            Chats.replace(id=tourn_id, type=TournType.Unknown.value, checkedAt=now).execute()
+        return ChatInfo(tourn_id)
+
+    @staticmethod
+    def lookup_chat(tourn_id, non_mod):
+        """Asks Lichess what the chat is: returns a Tournament, None if Lichess doesn't know the id, False on other errors."""
+        def broadcast_round(data):
+            r = data['round']
+            r_data = {'id': r['id'], 'createdBy': "lichess", 'nbPlayers': 0, 'startsAt': r.get('startsAt'),
+                      'name': f"{r['name']} | {data['tour']['name']}", 'status': "finished" if r.get('finished') else "unknown"}
+            return Tournament(r_data, TournType.Study, r.get('url', f"https://lichess.org/broadcast/-/-/{r['id']}"))
+
+        for api_type, url, create in [
+                (ApiType.ApiTournamentId, f"https://lichess.org/api/tournament/{tourn_id}",
+                 lambda data: Tournament(data, TournType.Arena)),
+                (ApiType.ApiSwiss, f"https://lichess.org/api/swiss/{tourn_id}", lambda data: Tournament(data, TournType.Swiss)),
+                (ApiType.ApiBroadcastRound, f"https://lichess.org/api/broadcast/-/-/{tourn_id}", broadcast_round)]:
+            r = non_mod.api.get(api_type, url, token=None)
+            if r.status_code == 404:
+                continue
+            if r.status_code != 200:
+                return False
+            return create(r.json())
+        return None
+
+    def get_chat_messages(self, tourn_id, msg_id, direction, non_mod):
+        """Stored messages of a chat for /comms: around msg_id (the last ones if there is none),
+        or, with direction "before"/"after", the ones before/after msg_id."""
+        info = self.get_chat_info(tourn_id, non_mod)
+        in_chat = Messages.tournament == tourn_id
+        anchor = Messages.get_or_none((Messages.id == msg_id) & in_chat) if msg_id is not None else None
+
+        def earlier(n):
+            where = in_chat
+            if anchor:
+                where &= (Messages.time < anchor.time) | ((Messages.time == anchor.time) & (Messages.id < anchor.id))
+            rows = list(Messages.select().where(where).order_by(-Messages.time, -Messages.id).limit(n + 1))
+            return rows[:n][::-1], len(rows) > n
+
+        def later(n):
+            where = in_chat & ((Messages.time > anchor.time) | ((Messages.time == anchor.time) & (Messages.id > anchor.id)))
+            rows = list(Messages.select().where(where).order_by(Messages.time, Messages.id).limit(n + 1))
+            return rows[:n], len(rows) > n
+
+        data = {'chat': info.to_data()}
+        if direction == "before" and anchor:
+            rows, data['more_before'] = earlier(COMMS_CHAT_MORE)
+        elif direction == "after" and anchor:
+            rows, data['more_after'] = later(COMMS_CHAT_MORE)
+        elif direction:
+            rows = []
+        elif anchor:
+            rows_before, data['more_before'] = earlier(COMMS_CHAT_AROUND)
+            rows_after, data['more_after'] = later(COMMS_CHAT_AROUND)
+            rows = [*rows_before, anchor, *rows_after]
+        else:
+            rows, data['more_before'] = earlier(2 * COMMS_CHAT_AROUND)
+            data['more_after'] = False
+        data['msgs'] = self.evaluate_stored_messages(rows, info)
+        return data
+
+    def evaluate_stored_messages(self, rows, info):
+        """Message data of database rows; messages of a tournament in memory are already evaluated."""
+        tourn = self.tournaments.get(info.id)
+        with self.msg_lock:
+            known = {msg.db_id: msg for msg in tourn.messages if msg.db_id is not None and msg.score is not None} \
+                if tourn else {}
+            re_usernames = tourn.re_usernames.copy() if tourn else []
+        msgs = []
+        for row in rows:
+            msg = known.get(row.id)
+            if msg is None:
+                msg = Message({'u': row.username, 't': row.text, 'r': row.removed, 'd': row.disabled}, tourn or info,
+                              row.time, row.delay, row.id, row.timeout)
+                msg.evaluate(re_usernames)
+            msg_data = msg.to_data()
+            msg_data['id'] = row.id
+            msgs.append(msg_data)
         return msgs
 
     def prepare_reports(self):
@@ -1040,6 +1169,7 @@ class ChatAnalysis:
         with db.atomic():
             with self.msg_lock:
                 Messages.delete().where(Messages.time < old_dt).execute()
+                Chats.delete().where(Chats.checkedAt < old_dt).execute()
 
     def get_calendar_arenas(self, non_mod, now_utc):
         if self.next_calendar_update is None or now_utc >= self.next_calendar_update:

@@ -7,7 +7,7 @@ from elements import log, log_exception, Error500
 from chat_re import ReUser, Lang
 from chat_message import Message
 from api import ApiType
-from database import Messages, db
+from database import Messages, Chats, db
 from consts import *
 
 
@@ -34,7 +34,7 @@ class Tournament:
         else:
             self.startsAt = datetime.fromtimestamp(startsAt // 1000, tz=tz.tzutc())
         if t_type == TournType.Arena:
-            self.name = tourney['fullName'].rstrip('Arena').strip()
+            self.name = tourney['fullName'].strip().removesuffix(' Arena').strip()
             finishesAt = tourney.get('finishesAt')
             if finishesAt:
                 self.finishesAt = datetime.fromtimestamp(finishesAt // 1000, tz=tz.tzutc())
@@ -61,6 +61,7 @@ class Tournament:
         self.reports = ""
         self.multiline_reports = ""
         self.is_sync_with_db = False
+        self.is_chat_saved = False
         self.keep_max_messages = False
 
     def update(self, tourn):
@@ -211,6 +212,8 @@ class Tournament:
                 else:
                     newest_messages, deleted_messages = self.process_tourn_messages(r.text, now_utc, delay)
                 Tournament.update_db(newest_messages)
+            if newest_messages and not self.is_chat_saved:
+                self.save_chat()
             new_messages.extend(newest_messages)
             self.last_update = now_utc
         except Exception as exception:
@@ -322,6 +325,18 @@ class Tournament:
                                          text=msg.text, removed=msg.is_removed, disabled=msg.is_disabled,
                                          timeout=msg.is_timed_out, tournament=msg.tournament.id)
                 msg.db_id = msg_db.id
+
+    def chat_link(self):
+        return self.link or (f'https://lichess.org/{self.get_endpoint()}/{self.id}' if self.get_endpoint() else None)
+
+    def save_chat(self):
+        try:
+            Chats.replace(id=self.id, type=self.t_type.value, name=self.name, url=self.chat_link(),
+                          startsAt=self.startsAt.replace(tzinfo=None),
+                          checkedAt=datetime.now(tz=tz.tzutc()).replace(tzinfo=None)).execute()
+            self.is_chat_saved = True
+        except Exception as exception:
+            log_exception(exception)
 
     def set_max_messages(self, flag, chat):
         old_flag = self.keep_max_messages

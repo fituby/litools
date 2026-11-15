@@ -376,6 +376,22 @@ def query_comms(mod):
     return msgs
 
 
+@app.route('/comms/chat', methods=['POST'])
+@with_mod(update_seenAt=True, allow=Mod.is_mod)
+def comms_chat(mod):
+    tourn_id = request.form.get("tourn", "")
+    if not chat.re_chat_id.match(tourn_id):
+        return Response(status=400)
+    try:
+        msg_id = int(request.form.get("msg", ""))
+    except ValueError:
+        msg_id = None
+    direction = request.form.get("direction")
+    if direction not in (None, "before", "after"):
+        return Response(status=400)
+    return chat.get_chat_messages(tourn_id, msg_id, direction, non_mod)
+
+
 @app.route('/fp/', methods=['GET'])
 @app.route('/fp', methods=['GET'])
 @with_mod(page=True, update_theme=True, update_seenAt=True, allow=Mod.is_alt)
