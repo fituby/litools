@@ -279,7 +279,7 @@ function renderTournamentItem(t, monitored) {
   const disabled = !monitored && t.swiss_off;
   const count = (!t.swiss_off || t.n) ? String(t.n).padStart(3, "0") : "&minus;&minus;&minus;";
   const num = t.n > 0
-    ? `<button class="${t.n < 100 ? "btn-secondary" : "btn-primary"} align-baseline flex-grow-0 px-1 py-0" ` +
+    ? `<button class="btn ${t.n < 100 ? "btn-secondary" : "btn-primary"} align-baseline flex-grow-0 px-1 py-0" ` +
       `onclick="select_message(event,'T${Number(t.first)}')">${count}</button>`
     : `<span class="px-1">${count}</span>`;
   const prefix = monitored ? "tt" : "t";

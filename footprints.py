@@ -569,7 +569,7 @@ def process_game(args):
                 with open(cached_file) as f:
                     d = json.load(f)
             else:
-                url = "https://explorer.lichess.ovh/lichess"
+                url = "https://explorer.lichess.org/lichess"
                 r = mod.api.get(ApiType.ExplorerLichess, url, token=mod.token, params=params)
                 if r.status_code != 200:
                     msg = f"status {r.status_code}"

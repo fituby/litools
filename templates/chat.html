@@ -197,6 +197,7 @@
   let update_frequency_val = {{ update_frequency|tojson }};
   let next_report_id_to_select = 0;
   let last_multiline_reports = [];
+  let multiline_order = [];
 
   $(function() {
     onEnter("#tournament_link", add_tournament);
@@ -299,11 +300,30 @@
     msg_users.clear();
     for (const m of selected_chat?.msgs || [])
       msg_users.set(String(m.id), m.u);
-    last_multiline_reports = multiline_reports;
+    last_multiline_reports = stable_multiline_order(multiline_reports);
     $('#chat_reports').html(renderGlobalErrors(errors) + reports.map(renderReport).join(""));
-    $('#multiline_chat_reports').html(multiline_reports.map(renderMultiReport).join(""));
+    $('#multiline_chat_reports').html(last_multiline_reports.map(renderMultiReport).join(""));
     $('#update_time').text(data_chats["time"]);
     filter_out();
+  }
+
+  // The block id is the id of the user's last message, so it changes when the user writes again; the first one doesn't.
+  function multiline_key(report) {
+    const first = report.msgs.find(m => m !== null);
+    return first ? Number(first.id) : -Number(report.id);
+  }
+
+  // The blocks already shown keep their order; a new block is placed before the first block with a lower score.
+  function stable_multiline_order(reports) {
+    const pos = new Map(multiline_order.map((key, i) => [key, i]));
+    const ordered = reports.filter(r => pos.has(multiline_key(r)))
+      .sort((a, b) => pos.get(multiline_key(a)) - pos.get(multiline_key(b)));
+    for (const r of reports.filter(r => !pos.has(multiline_key(r)))) {
+      const i = ordered.findIndex(x => x.score < r.score);
+      ordered.splice(i < 0 ? ordered.length : i, 0, r);
+    }
+    multiline_order = ordered.map(multiline_key);
+    return ordered;
   }
 
   // Outlines the report of the selected message.
