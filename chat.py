@@ -43,6 +43,7 @@ class ChatAnalysis:
         [f"{y}\\s*(?:г|л|y|j)|{datetime.now().year - y}" for y in range(6, 12)])), re.IGNORECASE)
     re_tourn_id = re.compile(r"^\w{8}$")
     re_chat_id = re.compile(r"^[\w-]{1,64}$")  # ids of studies/broadcasts taken from pasted links
+    re_page_init_data = re.compile(r'<script[^>]*\bid="page-init-data"[^>]*>(.*?)</script>', re.S)
 
     def __init__(self):
         self.tournaments = {}
@@ -52,6 +53,8 @@ class ChatAnalysis:
         self.last_refresh: datetime = None
         self.last_tournaments_update: datetime = None
         self.last_teams_update: datetime = None
+        self.next_calendar_update: datetime = None
+        self.calendar_arenas = []
         self.errors = []
         self.warnings = []
         self.i_update_frequency = 1  # len(API_CHAT_REFRESH_PERIOD) - 1
@@ -152,12 +155,17 @@ class ChatAnalysis:
                     is_ongoing = tourn.is_ongoing(now_utc)
                     if self.update_count == 0 and not is_ongoing:
                         continue
-                    if not is_ongoing:
+                    if not is_ongoing and tourn.is_distant(now_utc):
+                        if not tourn.is_distant_check_due(now_utc):
+                            continue
+                    elif not is_ongoing:
                         hash_num = sum(ord(ch) for ch in tourn_id)
                         update_period = tourn.update_period(now_utc)
                         if self.update_count % update_period != hash_num % update_period:
                             continue
                 self.update_chat(tourn_id, room_mod, auto_mod, now_utc)
+                if tourn.is_distant(now_utc):
+                    tourn.schedule_distant_check(now_utc)
         except Exception as exception:
             log_exception(exception)
             self.add_error(f"ERROR at {now_utc:%Y-%m-%d %H:%M} UTC: {exception}", True, 2)
@@ -1026,6 +1034,23 @@ class ChatAnalysis:
             with self.msg_lock:
                 Messages.delete().where(Messages.time < old_dt).execute()
 
+    def get_calendar_arenas(self, non_mod, now_utc):
+        if self.next_calendar_update is None or now_utc >= self.next_calendar_update:
+            try:
+                url = "https://lichess.org/tournament/calendar"
+                r = non_mod.api.get(ApiType.TournamentCalendar, url, token=None)
+                if r.status_code != 200:
+                    raise Exception(f"ERROR /tournament/calendar: Status Code {r.status_code}")
+                page_data = ChatAnalysis.re_page_init_data.search(r.text)
+                if not page_data:
+                    raise Exception("ERROR /tournament/calendar: no tournament data")
+                self.calendar_arenas = json.loads(page_data.group(1))['data']['tournaments']
+                self.next_calendar_update = now_utc + timedelta(seconds=PERIOD_UPDATE_CALENDAR)
+            except Exception as exception:
+                log_exception(exception)
+                self.next_calendar_update = now_utc + timedelta(seconds=PERIOD_RETRY_CALENDAR)
+        return self.calendar_arenas
+
     def get_current_tournaments(self, non_mod):
         now_utc = datetime.now(tz=tz.tzutc())
         do_teams_update = (not self.last_teams_update) or (delta_s(now_utc, self.last_teams_update) >= PERIOD_UPDATE_TEAMS)
@@ -1052,6 +1077,17 @@ class ChatAnalysis:
                 tourn = Tournament(arena, TournType.Arena)
                 if tourn.is_active(now_utc):
                     tournaments.append(tourn)
+        # Scheduled arenas, which /api/tournament lists only a few hours before they start
+        known_ids = {tourn.id for tourn in tournaments}
+        for arena in self.get_calendar_arenas(non_mod, now_utc):
+            try:
+                if arena['id'] not in known_ids:
+                    tourn = Tournament(arena, TournType.Arena, is_calendar=True)
+                    if tourn.is_active(now_utc):
+                        known_ids.add(tourn.id)
+                        tournaments.append(tourn)
+            except Exception as exception:
+                log_exception(exception)
         # Swiss
         if do_teams_update:
             swiss_ids = set()

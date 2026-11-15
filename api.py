@@ -32,6 +32,7 @@ class ApiType:
     ApiTournamentId = Endpoint('api/tournament/id')
     ApiSwiss = Endpoint('api/swiss')
     ApiTournament = Endpoint('api/tournament')
+    TournamentCalendar = Endpoint('tournament/calendar')
     TournamentId = Endpoint('tournament', API_TOURNEY_PAGE_DELAY)
     ApiRoomChat = Endpoint('api/room/chat', API_TOURNEY_PAGE_DELAY)
     PlayerTop = Endpoint('api/player/top')

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from dateutil import tz
 import json
+import random
 from elements import Reason, TournType, deltaseconds, delta_s, deltaperiod, get_client_id, shorten, add_timeout_msg
 from elements import log, log_exception, Error500
 from chat_re import ReUser, Lang
@@ -11,8 +12,10 @@ from consts import *
 
 
 class Tournament:
-    def __init__(self, tourney, t_type, link="", is_monitored=False):
+    def __init__(self, tourney, t_type, link="", is_monitored=False, is_calendar=False):
         self.t_type = t_type
+        self.is_calendar = is_calendar
+        self.next_distant_check: datetime = None
         self.id = tourney['id']
         self.is_official = (tourney['createdBy'] in ["lichess", "Lichess"])
         self.num_players = tourney['nbPlayers']
@@ -79,7 +82,7 @@ class Tournament:
     def is_active(self, now_utc):
         if not self.is_enabled:
             return False
-        if delta_s(self.startsAt, now_utc) >= CHAT_TOURNAMENT_STARTS_IN * 60:
+        if not self.is_calendar and delta_s(self.startsAt, now_utc) >= CHAT_TOURNAMENT_STARTS_IN * 60:
             return False
         finishes_at = self.finish_time_estimated()
         if finishes_at is not None:
@@ -104,6 +107,19 @@ class Tournament:
     def is_finished(self, now_utc):
         return (self.t_type == TournType.Arena and now_utc >= self.finishesAt) \
                or (self.t_type != TournType.Arena and self.finishesAt)
+
+    def is_distant(self, now_utc):
+        return self.is_calendar and delta_s(self.startsAt, now_utc) >= CHAT_CALENDAR_STARTS_IN * 60
+
+    def is_distant_check_due(self, now_utc):
+        if self.next_distant_check is None:
+            self.next_distant_check = now_utc + timedelta(seconds=random.uniform(*CHAT_DISTANT_FIRST_CHECK))
+        return now_utc >= self.next_distant_check
+
+    def schedule_distant_check(self, now_utc):
+        has_chat = any(not msg.is_official for msg in self.messages)
+        period = CHAT_DISTANT_ACTIVE_PERIOD if has_chat else CHAT_DISTANT_PERIOD
+        self.next_distant_check = now_utc + timedelta(seconds=period)
 
     def is_error_404_recently(self, now_utc):
         return self.last_error_404 is not None and delta_s(now_utc, self.last_error_404) < DELAY_ERROR_CHAT_404
