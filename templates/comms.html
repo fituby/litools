@@ -257,14 +257,14 @@
       const time = new Date(m.tm).toISOString();
       if (time.substring(0, 10) != day) {
         day = time.substring(0, 10);
-        html += `<div class="text-center text-muted small my-1">${day}</div>`;
+        html += dayLine(day);
       }
       const is_selected = m.id == chat_selected, is_user = m.u === user;
       const cls = is_selected ? "border border-success rounded" : "";
       const style = is_selected ? highlightStyle(0.3) : is_user ? highlightStyle(0.2) : "";
       const name = is_user ? `<b><u>${escapeHtml(m.u)}</u></b>` : escapeHtml(m.u);
       html += `<div id="cm${Number(m.id)}" class="px-1 ${cls}" style="${WORD_BREAK}${style}">` +
-              `<span class="text-muted user-select-none me-1" title="${time.substring(11, 19)} UTC">${time.substring(11, 16)}</span>` +
+              `<span class="text-muted user-select-none me-1" title="${timeTitle(m)}">${time.substring(11, 16)}</span>` +
               `<a class="text-info" href="https://lichess.org/@/${escapeHtml(m.u.toLowerCase())}" target="_blank">${name}</a> ` +
               `${messageText(m)}</div>`;
     }

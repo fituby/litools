@@ -67,6 +67,26 @@ function utcTime(ms) {
   return new Date(ms).toISOString().substring(11, 19);
 }
 
+function utcDate(ms) {
+  return new Date(ms).toISOString().substring(0, 10);
+}
+
+// Tooltip of a message time: when it was sent (between the previous download and the one that found it).
+function timeTitle(m) {
+  const day = utcDate(m.tm);
+  if (m.d == null)
+    return `${day} ${utcTime(m.tm)} UTC or before`;
+  const start_ms = m.tm - m.d * 1000;
+  const start_day = utcDate(start_ms);
+  return start_day == day ? `${day} ${utcTime(start_ms)}…${utcTime(m.tm)} UTC`
+                          : `${start_day} ${utcTime(start_ms)}…${day} ${utcTime(m.tm)} UTC`;
+}
+
+// The date line shown in a chat before the first message of each day.
+function dayLine(day) {
+  return `<div class="text-center text-muted small user-select-none my-1">${day}</div>`;
+}
+
 // Rounds half to even, like Python's round().
 function roundEven(x) {
   const r = Math.round(x);
@@ -79,8 +99,7 @@ function relativeTime(m, base_ms) {
   const a = Math.abs(ds);
   const dt = a < 60 ? `${a}s` : a < 300 ? `${Math.floor(a / 60)}m${String(a % 60).padStart(2, "0")}s` : `${roundEven(a / 60)}m`;
   const text = ds < 0 ? `&minus;${dt} ` : ds > 0 ? `+${dt} ` : "== ";
-  const title = m.d == null ? `${utcTime(m.tm)} or before` : `${utcTime(m.tm - m.d * 1000)}…${utcTime(m.tm)}`;
-  let html = `<abbr title="${title}" class="text-decoration-none user-select-none">${text}</abbr>`;
+  let html = `<abbr title="${timeTitle(m)}" class="text-decoration-none user-select-none">${text}</abbr>`;
   if (m.fl)
     html += flairElement(m.fl, 17);
   return html;
@@ -254,7 +273,14 @@ function renderSelection(sel) {
   const centered = {show_hidden: true, highlight: true, diff: sel.diff, centered: true};
   const msg_c = makeSelected(renderMessage(selected, {...centered, tag: 'C', selected: true}), sel.diff);
   const msg_f = makeSelected(renderMessage(selected, {...centered, tag: 'F', selection: true}), sel.diff);
-  const chat = sel.msgs.map(m => m.id == sel.id ? ` ${msg_c} ` : renderMessage(m, {...opts, tag: 'C'})).join("");
+  let day = "";
+  const chat = sel.msgs.map(m => {
+    const html = m.id == sel.id ? ` ${msg_c} ` : renderMessage(m, {...opts, tag: 'C'});
+    if (m.tm == null || utcDate(m.tm) == day)
+      return html;
+    day = utcDate(m.tm);
+    return dayLine(day) + html;
+  }).join("");
   const user_msgs = sel.msgs.filter(m => m.u == selected.u)
     .map(m => m.id == sel.id ? msg_f : renderMessage(m, {...opts, tag: 'F', selection: true})).join("");
   const list_start = sel.more ? "" : '<hr class="text-primary my-1" style="border:1px solid;">';

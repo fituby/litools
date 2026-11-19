@@ -1,6 +1,6 @@
 import os
 
-LITOOLS_VERSION = "v1.9.2"
+LITOOLS_VERSION = "v1.9.3"
 
 # Chat
 CHAT_EXTRA_TEAMS = [t.strip() for t in os.getenv("CHAT_EXTRA_TEAMS", "").split(",") if t.strip()]
